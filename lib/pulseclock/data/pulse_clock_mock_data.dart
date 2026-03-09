@@ -125,3 +125,185 @@ RequestDetailModel requestDetailFor(RequestEntryType type) {
       );
   }
 }
+
+List<AttendanceRecord> attendanceHistoryRecords({DateTime? now}) {
+  final DateTime today = _dateOnly(now ?? DateTime.now());
+
+  final List<AttendanceRecord> records = <AttendanceRecord>[
+    AttendanceRecord(
+      id: 'WRK-1001',
+      date: today,
+      clockInTime: '08:01 AM',
+      clockOutTime: '05:10 PM',
+      workHours: '9h 9m',
+      status: AttendanceRecordStatus.completed,
+    ),
+    AttendanceRecord(
+      id: 'WRK-1002',
+      date: today.subtract(const Duration(days: 1)),
+      clockInTime: '08:08 AM',
+      clockOutTime: '--',
+      workHours: '--',
+      status: AttendanceRecordStatus.missedPunch,
+      note: 'Clock Out was not captured.',
+    ),
+    AttendanceRecord(
+      id: 'WRK-1003',
+      date: today.subtract(const Duration(days: 2)),
+      clockInTime: '08:15 AM',
+      clockOutTime: '04:59 PM',
+      workHours: '8h 44m',
+      status: AttendanceRecordStatus.correctionPending,
+      note: 'Correction requested for late Clock In.',
+    ),
+    AttendanceRecord(
+      id: 'WRK-1004',
+      date: today.subtract(const Duration(days: 3)),
+      clockInTime: '--',
+      clockOutTime: '--',
+      workHours: '--',
+      status: AttendanceRecordStatus.onLeave,
+      note: 'Annual leave approved.',
+    ),
+    AttendanceRecord(
+      id: 'WRK-1005',
+      date: today.subtract(const Duration(days: 4)),
+      clockInTime: '07:56 AM',
+      clockOutTime: '05:03 PM',
+      workHours: '9h 7m',
+      status: AttendanceRecordStatus.completed,
+    ),
+    AttendanceRecord(
+      id: 'WRK-1006',
+      date: today.subtract(const Duration(days: 6)),
+      clockInTime: '08:09 AM',
+      clockOutTime: '05:02 PM',
+      workHours: '8h 53m',
+      status: AttendanceRecordStatus.completed,
+    ),
+    AttendanceRecord(
+      id: 'WRK-1007',
+      date: today.subtract(const Duration(days: 8)),
+      clockInTime: '08:21 AM',
+      clockOutTime: '--',
+      workHours: '--',
+      status: AttendanceRecordStatus.missedPunch,
+      note: 'Shift ended but Clock Out was not done.',
+    ),
+    AttendanceRecord(
+      id: 'WRK-1008',
+      date: today.subtract(const Duration(days: 10)),
+      clockInTime: '08:02 AM',
+      clockOutTime: '04:57 PM',
+      workHours: '8h 55m',
+      status: AttendanceRecordStatus.completed,
+    ),
+    AttendanceRecord(
+      id: 'WRK-1009',
+      date: DateTime(today.year, today.month, 1).subtract(
+        const Duration(days: 2),
+      ),
+      clockInTime: '--',
+      clockOutTime: '--',
+      workHours: '--',
+      status: AttendanceRecordStatus.onLeave,
+      note: 'Sick leave.',
+    ),
+    AttendanceRecord(
+      id: 'WRK-1010',
+      date: DateTime(today.year, today.month, 1).subtract(
+        const Duration(days: 4),
+      ),
+      clockInTime: '08:05 AM',
+      clockOutTime: '05:00 PM',
+      workHours: '8h 55m',
+      status: AttendanceRecordStatus.completed,
+    ),
+    AttendanceRecord(
+      id: 'WRK-1011',
+      date: DateTime(today.year, today.month, 1).subtract(
+        const Duration(days: 6),
+      ),
+      clockInTime: '08:33 AM',
+      clockOutTime: '05:04 PM',
+      workHours: '8h 31m',
+      status: AttendanceRecordStatus.correctionPending,
+      note: 'Correction submitted for late Clock In.',
+    ),
+    AttendanceRecord(
+      id: 'WRK-1012',
+      date: DateTime(today.year, today.month, 1).subtract(
+        const Duration(days: 8),
+      ),
+      clockInTime: '08:11 AM',
+      clockOutTime: '--',
+      workHours: '--',
+      status: AttendanceRecordStatus.missedPunch,
+      note: 'Missing Clock Out event.',
+    ),
+  ];
+
+  records.sort((AttendanceRecord a, AttendanceRecord b) {
+    return b.date.compareTo(a.date);
+  });
+
+  return records;
+}
+
+List<AttendanceRecord> filterAttendanceHistoryRecords({
+  required List<AttendanceRecord> records,
+  required HistoryDateRangeFilter dateRange,
+  required HistoryStatusFilter statusFilter,
+  DateTime? now,
+}) {
+  final DateTime today = _dateOnly(now ?? DateTime.now());
+  final _DateWindow window = _windowForDateRange(today, dateRange);
+  final AttendanceRecordStatus? selectedStatus = statusFilter.statusOrNull;
+
+  return records.where((AttendanceRecord record) {
+    final DateTime recordDate = _dateOnly(record.date);
+    final bool inWindow =
+        !recordDate.isBefore(window.start) && recordDate.isBefore(window.end);
+    final bool statusMatches =
+        selectedStatus == null || record.status == selectedStatus;
+    return inWindow && statusMatches;
+  }).toList(growable: false);
+}
+
+_DateWindow _windowForDateRange(DateTime today, HistoryDateRangeFilter filter) {
+  switch (filter) {
+    case HistoryDateRangeFilter.today:
+      return _DateWindow(
+        start: today,
+        end: today.add(const Duration(days: 1)),
+      );
+    case HistoryDateRangeFilter.yesterday:
+      final DateTime start = today.subtract(const Duration(days: 1));
+      return _DateWindow(start: start, end: start.add(const Duration(days: 1)));
+    case HistoryDateRangeFilter.thisWeek:
+      final DateTime start = today.subtract(Duration(days: today.weekday - 1));
+      return _DateWindow(start: start, end: start.add(const Duration(days: 7)));
+    case HistoryDateRangeFilter.lastWeek:
+      final DateTime end = today.subtract(Duration(days: today.weekday - 1));
+      return _DateWindow(start: end.subtract(const Duration(days: 7)), end: end);
+    case HistoryDateRangeFilter.thisMonth:
+      final DateTime start = DateTime(today.year, today.month, 1);
+      final DateTime end = DateTime(today.year, today.month + 1, 1);
+      return _DateWindow(start: start, end: end);
+    case HistoryDateRangeFilter.lastMonth:
+      final DateTime start = DateTime(today.year, today.month - 1, 1);
+      final DateTime end = DateTime(today.year, today.month, 1);
+      return _DateWindow(start: start, end: end);
+  }
+}
+
+DateTime _dateOnly(DateTime dateTime) {
+  return DateTime(dateTime.year, dateTime.month, dateTime.day);
+}
+
+class _DateWindow {
+  const _DateWindow({required this.start, required this.end});
+
+  final DateTime start;
+  final DateTime end;
+}

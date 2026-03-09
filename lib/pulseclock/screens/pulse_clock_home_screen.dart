@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
+import 'package:pulseclock/pulseclock/screens/attendance_history_screen.dart';
 import 'package:pulseclock/pulseclock/screens/clock_confirmation_screen.dart';
 import 'package:pulseclock/pulseclock/screens/request_detail_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
@@ -108,11 +109,7 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
           onPrimaryActionPressed: _onPrimaryActionPressed,
         );
       case 1:
-        return const PlaceholderTab(
-          title: 'History',
-          message: 'Attendance history will appear here.',
-          icon: Icons.calendar_today_outlined,
-        );
+        return const AttendanceHistoryScreen();
       case 2:
         return RequestsTab(onSelect: _openRequestDetail);
       case 3:

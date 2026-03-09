@@ -5,7 +5,97 @@ enum AttendanceStatus { offDuty, onDuty }
 
 enum RequestEntryType { missedPunch, correctionPending, leaveDetails }
 
+enum AttendanceRecordStatus {
+  completed,
+  missedPunch,
+  correctionPending,
+  onLeave,
+}
+
+enum HistoryDateRangeFilter {
+  today,
+  yesterday,
+  thisWeek,
+  lastWeek,
+  thisMonth,
+  lastMonth,
+}
+
+enum HistoryStatusFilter {
+  all,
+  completed,
+  missedPunch,
+  correctionPending,
+  onLeave,
+}
+
 enum ClockActionMode { clockIn, clockOut }
+
+extension AttendanceRecordStatusLabels on AttendanceRecordStatus {
+  String get label {
+    switch (this) {
+      case AttendanceRecordStatus.completed:
+        return 'Completed';
+      case AttendanceRecordStatus.missedPunch:
+        return 'Missed Punch';
+      case AttendanceRecordStatus.correctionPending:
+        return 'Correction Pending';
+      case AttendanceRecordStatus.onLeave:
+        return 'On Leave';
+    }
+  }
+}
+
+extension HistoryDateRangeFilterLabels on HistoryDateRangeFilter {
+  String get label {
+    switch (this) {
+      case HistoryDateRangeFilter.today:
+        return 'Today';
+      case HistoryDateRangeFilter.yesterday:
+        return 'Yesterday';
+      case HistoryDateRangeFilter.thisWeek:
+        return 'This Week';
+      case HistoryDateRangeFilter.lastWeek:
+        return 'Last Week';
+      case HistoryDateRangeFilter.thisMonth:
+        return 'This Month';
+      case HistoryDateRangeFilter.lastMonth:
+        return 'Last Month';
+    }
+  }
+}
+
+extension HistoryStatusFilterLabels on HistoryStatusFilter {
+  String get label {
+    switch (this) {
+      case HistoryStatusFilter.all:
+        return 'All';
+      case HistoryStatusFilter.completed:
+        return 'Completed';
+      case HistoryStatusFilter.missedPunch:
+        return 'Missed Punch';
+      case HistoryStatusFilter.correctionPending:
+        return 'Correction Pending';
+      case HistoryStatusFilter.onLeave:
+        return 'On Leave';
+    }
+  }
+
+  AttendanceRecordStatus? get statusOrNull {
+    switch (this) {
+      case HistoryStatusFilter.all:
+        return null;
+      case HistoryStatusFilter.completed:
+        return AttendanceRecordStatus.completed;
+      case HistoryStatusFilter.missedPunch:
+        return AttendanceRecordStatus.missedPunch;
+      case HistoryStatusFilter.correctionPending:
+        return AttendanceRecordStatus.correctionPending;
+      case HistoryStatusFilter.onLeave:
+        return AttendanceRecordStatus.onLeave;
+    }
+  }
+}
 
 extension ClockActionModeLabels on ClockActionMode {
   String get title {
@@ -132,4 +222,24 @@ class RequestDetailModel {
 
   final String title;
   final StatusCardModel statusCard;
+}
+
+class AttendanceRecord {
+  const AttendanceRecord({
+    required this.id,
+    required this.date,
+    required this.clockInTime,
+    required this.clockOutTime,
+    required this.workHours,
+    required this.status,
+    this.note,
+  });
+
+  final String id;
+  final DateTime date;
+  final String clockInTime;
+  final String clockOutTime;
+  final String workHours;
+  final AttendanceRecordStatus status;
+  final String? note;
 }

@@ -418,6 +418,234 @@ class DetailInfoRow extends StatelessWidget {
   }
 }
 
+class HistoryStatusBadge extends StatelessWidget {
+  const HistoryStatusBadge({super.key, required this.status});
+
+  final AttendanceRecordStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final _StatusBadgeStyle style = _styleForHistoryStatus(status);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: style.backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        status.label,
+        style: PulseClockTextStyles.cardSubtitle.copyWith(
+          color: style.foregroundColor,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+class HistoryFilterChipBar<T> extends StatelessWidget {
+  const HistoryFilterChipBar({
+    super.key,
+    required this.items,
+    required this.selectedValue,
+    required this.labelBuilder,
+    required this.onSelected,
+  });
+
+  final List<T> items;
+  final T selectedValue;
+  final String Function(T item) labelBuilder;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: items.map((T item) {
+          final bool isSelected = item == selectedValue;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(labelBuilder(item)),
+              selected: isSelected,
+              onSelected: (_) => onSelected(item),
+              labelStyle: PulseClockTextStyles.cardSubtitle.copyWith(
+                color: isSelected
+                    ? PulseClockColors.surface
+                    : PulseClockColors.textPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+              side: BorderSide(
+                color: isSelected
+                    ? PulseClockColors.actionBlue
+                    : PulseClockColors.cardBorder,
+              ),
+              selectedColor: PulseClockColors.actionBlue,
+              backgroundColor: PulseClockColors.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              showCheckmark: false,
+            ),
+          );
+        }).toList(growable: false),
+      ),
+    );
+  }
+}
+
+class HistoryRecordCard extends StatelessWidget {
+  const HistoryRecordCard({super.key, required this.record, this.onTap});
+
+  final AttendanceRecord record;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SurfaceCard(
+        borderRadius: 14,
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        dateLabel(record.date),
+                        style: PulseClockTextStyles.cardTitle.copyWith(
+                          fontSize: 20,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        weekdayName(record.date),
+                        style: PulseClockTextStyles.cardSubtitle.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                HistoryStatusBadge(status: record.status),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _HistoryMetricCell(
+                    label: 'Clock In',
+                    value: record.clockInTime,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _HistoryMetricCell(
+                    label: 'Clock Out',
+                    value: record.clockOutTime,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _HistoryMetricCell(
+                    label: 'Work Hours',
+                    value: record.workHours,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HistoryMetricCell extends StatelessWidget {
+  const _HistoryMetricCell({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: PulseClockColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: PulseClockTextStyles.summaryLabel.copyWith(fontSize: 12),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: PulseClockTextStyles.cardSubtitle.copyWith(
+              color: PulseClockColors.textPrimary,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+_StatusBadgeStyle _styleForHistoryStatus(AttendanceRecordStatus status) {
+  switch (status) {
+    case AttendanceRecordStatus.completed:
+      return const _StatusBadgeStyle(
+        backgroundColor: Color(0x1F15803D),
+        foregroundColor: Color(0xFF0F8A43),
+      );
+    case AttendanceRecordStatus.missedPunch:
+      return const _StatusBadgeStyle(
+        backgroundColor: Color(0x22C81E3A),
+        foregroundColor: Color(0xFFC81E3A),
+      );
+    case AttendanceRecordStatus.correctionPending:
+      return const _StatusBadgeStyle(
+        backgroundColor: Color(0x22B45309),
+        foregroundColor: Color(0xFFB45309),
+      );
+    case AttendanceRecordStatus.onLeave:
+      return const _StatusBadgeStyle(
+        backgroundColor: Color(0x226B21A8),
+        foregroundColor: Color(0xFF6B21A8),
+      );
+  }
+}
+
+class _StatusBadgeStyle {
+  const _StatusBadgeStyle({
+    required this.backgroundColor,
+    required this.foregroundColor,
+  });
+
+  final Color backgroundColor;
+  final Color foregroundColor;
+}
+
 Color _brightenColor(Color color, double delta) {
   final HSLColor hsl = HSLColor.fromColor(color);
   final double nextLightness = (hsl.lightness + delta).clamp(0.0, 1.0);
