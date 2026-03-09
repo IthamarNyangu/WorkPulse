@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
+import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
 class ClockConfirmationScreen extends StatefulWidget {
@@ -14,6 +17,8 @@ class ClockConfirmationScreen extends StatefulWidget {
 }
 
 class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
+  static const Duration _loadingIndicatorDelay = Duration(milliseconds: 250);
+
   static const ClockLocationSnapshot _mockLocation = ClockLocationSnapshot(
     coordinates: '-15.3875, 28.3228',
     accuracyMeters: 8.0,
@@ -21,6 +26,9 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
   );
 
   late final TextEditingController _commentController;
+  bool _isSubmitting = false;
+  bool _showLoadingIndicator = false;
+  Timer? _loadingTimer;
 
   @override
   void initState() {
@@ -30,11 +38,54 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
 
   @override
   void dispose() {
+    _loadingTimer?.cancel();
     _commentController.dispose();
     super.dispose();
   }
 
-  void _confirm() {
+  Future<void> _confirm() async {
+    if (_isSubmitting) {
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _showLoadingIndicator = false;
+    });
+    _loadingTimer = Timer(_loadingIndicatorDelay, () {
+      if (!mounted || !_isSubmitting) {
+        return;
+      }
+      setState(() {
+        _showLoadingIndicator = true;
+      });
+    });
+
+    try {
+      await _submitConfirmation();
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to confirm action right now. Please try again.'),
+        ),
+      );
+      setState(() {
+        _isSubmitting = false;
+        _showLoadingIndicator = false;
+      });
+      return;
+    } finally {
+      _loadingTimer?.cancel();
+      _loadingTimer = null;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
     final String comment = _commentController.text.trim();
     Navigator.of(context).pop(
       ClockConfirmationResult(
@@ -45,10 +96,17 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
     );
   }
 
+  Future<void> _submitConfirmation() async {
+    // Placeholder for future API/location work. Kept async to preserve UX flow.
+    await Future<void>.value();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final DateTime now = DateTime.now();
+
     return Scaffold(
-      backgroundColor: PulseClockColors.appBackground,
+      backgroundColor: PulseClockColors.appBackgroundSolid,
       appBar: AppBar(
         title: Text(widget.mode.title),
         backgroundColor: PulseClockColors.surface,
@@ -57,11 +115,13 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
         elevation: 0,
       ),
       body: Container(
+        constraints: const BoxConstraints.expand(),
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF111827), Color(0x995A1622)],
+            colors: [Color(0xFF1F2B45), PulseClockColors.appBackgroundSolid],
+            stops: [0.0, 0.5],
           ),
         ),
         child: SafeArea(
@@ -76,9 +136,9 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ClockLocationCard(snapshot: _mockLocation),
-                const SizedBox(height: 16),
-                const ClockMapPlaceholderCard(),
+                ConfirmationDateTimeHeader(now: now),
+                const SizedBox(height: 24),
+                ClockMapPlaceholderCard(snapshot: _mockLocation),
                 const SizedBox(height: 16),
                 SurfaceCard(
                   child: Column(
@@ -93,6 +153,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
                       const SizedBox(height: 10),
                       TextField(
                         controller: _commentController,
+                        enabled: !_isSubmitting,
                         maxLines: 3,
                         decoration: InputDecoration(
                           hintText: 'Add a note for this attendance action',
@@ -129,13 +190,15 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
                 const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _confirm,
-                    icon: Icon(widget.mode.icon, size: 24),
-                    label: Text(widget.mode.confirmLabel),
+                  child: ElevatedButton(
+                    onPressed: _isSubmitting ? null : _confirm,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: widget.mode.color,
                       foregroundColor: PulseClockColors.surface,
+                      disabledBackgroundColor: widget.mode.color.withOpacity(
+                        0.65,
+                      ),
+                      disabledForegroundColor: PulseClockColors.surface,
                       textStyle: PulseClockTextStyles.primaryAction.copyWith(
                         fontSize: 20,
                       ),
@@ -149,13 +212,38 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
                         ),
                       ),
                     ),
+                    child: _ConfirmButtonContent(
+                      mode: widget.mode,
+                      showLoadingIndicator: _showLoadingIndicator,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
-                  child: TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                  child: OutlinedButton(
+                    onPressed: _isSubmitting
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: PulseClockColors.onBackgroundPrimary,
+                      backgroundColor: const Color(0x22000000),
+                      side: BorderSide.none,
+                      disabledForegroundColor: PulseClockColors
+                          .onBackgroundSecondary
+                          .withOpacity(0.75),
+                      disabledBackgroundColor: const Color(0x16000000),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      textStyle: PulseClockTextStyles.contextAction.copyWith(
+                        color: PulseClockColors.onBackgroundPrimary,
+                        fontSize: 17,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          PulseClockDimensions.cardRadius,
+                        ),
+                      ),
+                    ),
                     child: const Text('Cancel'),
                   ),
                 ),
@@ -168,62 +256,67 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
   }
 }
 
-class ClockLocationCard extends StatelessWidget {
-  const ClockLocationCard({super.key, required this.snapshot});
+class _ConfirmButtonContent extends StatelessWidget {
+  const _ConfirmButtonContent({
+    required this.mode,
+    required this.showLoadingIndicator,
+  });
 
-  final ClockLocationSnapshot snapshot;
+  final ClockActionMode mode;
+  final bool showLoadingIndicator;
 
   @override
   Widget build(BuildContext context) {
-    final bool isInsideGeofence = snapshot.isInsideGeofence;
-    final String geofenceLabel = isInsideGeofence
-        ? 'Inside Geofence'
-        : 'Outside Geofence';
-    final Color geofenceColor = isInsideGeofence
-        ? PulseClockColors.statusOnDutyAccent
-        : PulseClockColors.statusMissedAccent;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (showLoadingIndicator)
+          const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.4,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                PulseClockColors.surface,
+              ),
+            ),
+          )
+        else
+          Icon(mode.icon, size: 24),
+        const SizedBox(width: 10),
+        Text(mode.confirmLabel),
+      ],
+    );
+  }
+}
 
-    return SurfaceCard(
+class ConfirmationDateTimeHeader extends StatelessWidget {
+  const ConfirmationDateTimeHeader({super.key, required this.now});
+
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context) {
+    final String weekdayShort = weekdayName(now).substring(0, 3);
+
+    return Center(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.my_location_outlined,
-                color: PulseClockColors.textPrimary,
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Location Snapshot',
-                style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
-              ),
-            ],
+          Text(
+            _time24Label(now),
+            style: PulseClockTextStyles.timeOnBackground.copyWith(
+              fontSize: 34,
+              color: PulseClockColors.onBackgroundPrimary,
+              letterSpacing: -0.6,
+            ),
           ),
-          const SizedBox(height: 12),
-          DetailInfoRow(label: 'Coordinates', value: snapshot.coordinates),
-          const SizedBox(height: 8),
-          DetailInfoRow(
-            label: 'GPS Accuracy',
-            value: '+/-${snapshot.accuracyMeters.toStringAsFixed(1)} m',
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Geofence',
-                  style: PulseClockTextStyles.cardSubtitle,
-                ),
-              ),
-              Text(
-                geofenceLabel,
-                style: PulseClockTextStyles.cardSubtitle.copyWith(
-                  color: geofenceColor,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
+          const SizedBox(height: 2),
+          Text(
+            '$weekdayShort ${dateLabel(now)}',
+            style: PulseClockTextStyles.weekdayOnBackground.copyWith(
+              color: PulseClockColors.onBackgroundPrimary,
+              fontSize: 16,
+            ),
           ),
         ],
       ),
@@ -232,10 +325,15 @@ class ClockLocationCard extends StatelessWidget {
 }
 
 class ClockMapPlaceholderCard extends StatelessWidget {
-  const ClockMapPlaceholderCard({super.key});
+  const ClockMapPlaceholderCard({super.key, required this.snapshot});
+
+  // Kept for hot-reload compatibility while snapshot details are hidden.
+  final ClockLocationSnapshot snapshot;
 
   @override
   Widget build(BuildContext context) {
+    assert(snapshot.coordinates.isNotEmpty);
+
     return SurfaceCard(
       padding: EdgeInsets.zero,
       child: ClipRRect(
@@ -278,4 +376,10 @@ class ClockMapPlaceholderCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _time24Label(DateTime now) {
+  final String hour = now.hour.toString().padLeft(2, '0');
+  final String minute = now.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
 }

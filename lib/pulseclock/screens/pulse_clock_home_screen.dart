@@ -295,7 +295,7 @@ class HomeTabContent extends StatelessWidget {
           const Spacer(),
           const Center(
             child: Text(
-              'App Version:demo',
+              'App Version: demo',
               style: TextStyle(
                 fontSize: 11,
                 color: PulseClockColors.onBackgroundSecondary,
