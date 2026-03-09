@@ -1,0 +1,451 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
+import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
+import 'package:pulseclock/pulseclock/screens/clock_confirmation_screen.dart';
+import 'package:pulseclock/pulseclock/screens/request_detail_screen.dart';
+import 'package:pulseclock/pulseclock/styles.dart';
+import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
+import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
+
+class PulseClockHomeScreen extends StatefulWidget {
+  const PulseClockHomeScreen({super.key});
+
+  @override
+  State<PulseClockHomeScreen> createState() => _PulseClockHomeScreenState();
+}
+
+class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
+  AttendanceStatus _status = AttendanceStatus.offDuty;
+  int _selectedNavIndex = 0;
+  late DateTime _now;
+  Timer? _clockTimer;
+  DateTime? _punchInAt;
+  DateTime? _punchOutAt;
+  Duration? _lastWorkedDuration;
+
+  @override
+  void initState() {
+    super.initState();
+    _now = DateTime.now();
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _now = DateTime.now();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
+  }
+
+  void _onPrimaryActionPressed() async {
+    final ClockActionMode mode = _status == AttendanceStatus.offDuty
+        ? ClockActionMode.clockIn
+        : ClockActionMode.clockOut;
+
+    final ClockConfirmationResult? result = await Navigator.of(context)
+        .push<ClockConfirmationResult>(
+          MaterialPageRoute<ClockConfirmationResult>(
+            builder: (BuildContext context) =>
+                ClockConfirmationScreen(mode: mode),
+          ),
+        );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    setState(() {
+      if (result.mode == ClockActionMode.clockIn) {
+        _status = AttendanceStatus.onDuty;
+        _punchInAt = result.timestamp;
+        _punchOutAt = null;
+        _lastWorkedDuration = null;
+      } else {
+        _status = AttendanceStatus.offDuty;
+        _punchOutAt = result.timestamp;
+        if (_punchInAt != null && !_punchOutAt!.isBefore(_punchInAt!)) {
+          _lastWorkedDuration = _punchOutAt!.difference(_punchInAt!);
+        } else {
+          _lastWorkedDuration = Duration.zero;
+        }
+      }
+    });
+  }
+
+  void _openRequestDetail(RequestEntryType type) {
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return RequestDetailScreen(type: type);
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
+
+  Widget _buildTabContent() {
+    switch (_selectedNavIndex) {
+      case 0:
+        return HomeTabContent(
+          now: _now,
+          status: _status,
+          statusCard: _statusCardForHome(),
+          summary: _summaryForHome(),
+          onPrimaryActionPressed: _onPrimaryActionPressed,
+        );
+      case 1:
+        return const PlaceholderTab(
+          title: 'History',
+          message: 'Attendance history will appear here.',
+          icon: Icons.calendar_today_outlined,
+        );
+      case 2:
+        return RequestsTab(onSelect: _openRequestDetail);
+      case 3:
+        return const PlaceholderTab(
+          title: 'Profile',
+          message: 'Profile settings will appear here.',
+          icon: Icons.location_on_outlined,
+        );
+      default:
+        return HomeTabContent(
+          now: _now,
+          status: _status,
+          statusCard: _statusCardForHome(),
+          summary: _summaryForHome(),
+          onPrimaryActionPressed: _onPrimaryActionPressed,
+        );
+    }
+  }
+
+  StatusCardModel _statusCardForHome() {
+    switch (_status) {
+      case AttendanceStatus.offDuty:
+        return StatusCardModel(
+          title: 'Off Duty',
+          subtitle: _punchOutAt != null
+              ? 'Last clock out at ${timeLabel(_punchOutAt!)}'
+              : 'Ready to start your workday',
+          icon: Icons.access_time_outlined,
+          backgroundColor: PulseClockColors.statusOffDutyBg,
+          accentColor: PulseClockColors.statusOffDutyAccent,
+        );
+      case AttendanceStatus.onDuty:
+        return StatusCardModel(
+          title: 'On Duty',
+          subtitle: _punchInAt != null
+              ? 'You clocked in at ${timeLabel(_punchInAt!)}'
+              : 'You are currently on duty',
+          icon: Icons.check_circle_outline,
+          backgroundColor: PulseClockColors.statusOnDutyBg,
+          accentColor: PulseClockColors.statusOnDutyAccent,
+        );
+    }
+  }
+
+  SummaryModel _summaryForHome() {
+    final String punchInLabel = _punchInAt == null
+        ? '--'
+        : timeLabel(_punchInAt!);
+    final String punchOutLabel = _punchOutAt == null
+        ? '--'
+        : timeLabel(_punchOutAt!);
+
+    Duration workedDuration = Duration.zero;
+    if (_status == AttendanceStatus.onDuty && _punchInAt != null) {
+      workedDuration = _now.difference(_punchInAt!);
+    } else if (_lastWorkedDuration != null) {
+      workedDuration = _lastWorkedDuration!;
+    }
+
+    return SummaryModel(
+      punchIn: punchInLabel,
+      punchOut: punchOutLabel,
+      workHours: durationLabel(workedDuration),
+    );
+  }
+
+  Widget _buildBackgroundLayer(BuildContext context) {
+    const double backgroundOpacity = 0.12;
+
+    if (_selectedNavIndex == 0) {
+      return Positioned(
+        top: -48,
+        right: -170,
+        child: IgnorePointer(
+          child: Opacity(
+            opacity: backgroundOpacity,
+            child: Image.asset(
+              'assets/images/workpulse-bg.png',
+              width: MediaQuery.sizeOf(context).width * 1.45,
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Opacity(
+          opacity: backgroundOpacity,
+          child: Image.asset(
+            'assets/images/workpulse-bg.png',
+            fit: BoxFit.cover,
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: PulseClockColors.appBackground,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF111827), Color(0x995A1622)],
+          ),
+        ),
+        child: Stack(
+          children: [
+            _buildBackgroundLayer(context),
+            SafeArea(child: _buildTabContent()),
+          ],
+        ),
+      ),
+      bottomNavigationBar: PulseBottomNavigation(
+        currentIndex: _selectedNavIndex,
+        onTap: (int index) {
+          setState(() {
+            _selectedNavIndex = index;
+          });
+        },
+      ),
+    );
+  }
+}
+
+class HomeTabContent extends StatelessWidget {
+  const HomeTabContent({
+    super.key,
+    required this.now,
+    required this.status,
+    required this.statusCard,
+    required this.summary,
+    required this.onPrimaryActionPressed,
+  });
+
+  final DateTime now;
+  final AttendanceStatus status;
+  final StatusCardModel statusCard;
+  final SummaryModel summary;
+  final VoidCallback onPrimaryActionPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final PrimaryActionModel primaryAction = primaryActionFor(status);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        PulseClockDimensions.horizontalPadding,
+        PulseClockDimensions.topPadding,
+        PulseClockDimensions.horizontalPadding,
+        28,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const HeaderSection(employeeName: 'Ithamar'),
+          const SizedBox(height: 50),
+          LiveTimeSection(now: now),
+          const SizedBox(height: 20),
+          StatusCardSection(model: statusCard),
+          const SizedBox(height: 16),
+          PrimaryActionButtonSection(
+            model: primaryAction,
+            onPressed: onPrimaryActionPressed,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            "Today's Summary",
+            style: PulseClockTextStyles.sectionTitleOnBackground.copyWith(
+              fontSize: 18,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SummaryCardsRow(summary: summary, status: status),
+          const Spacer(),
+          const Center(
+            child: Text(
+              'App Version:demo',
+              style: TextStyle(
+                fontSize: 11,
+                color: PulseClockColors.onBackgroundSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class RequestsTab extends StatelessWidget {
+  const RequestsTab({super.key, required this.onSelect});
+
+  final ValueChanged<RequestEntryType> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        PulseClockDimensions.horizontalPadding,
+        PulseClockDimensions.topPadding,
+        PulseClockDimensions.horizontalPadding,
+        28,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Requests', style: PulseClockTextStyles.headerTitle),
+          const SizedBox(height: 6),
+          const Text(
+            'Select an item to view its details.',
+            style: PulseClockTextStyles.headerSubtitle,
+          ),
+          const SizedBox(height: 20),
+          RequestOptionCard(
+            type: RequestEntryType.missedPunch,
+            onTap: onSelect,
+          ),
+          const SizedBox(height: 12),
+          RequestOptionCard(
+            type: RequestEntryType.correctionPending,
+            onTap: onSelect,
+          ),
+          const SizedBox(height: 12),
+          RequestOptionCard(
+            type: RequestEntryType.leaveDetails,
+            onTap: onSelect,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class PlaceholderTab extends StatelessWidget {
+  const PlaceholderTab({
+    super.key,
+    required this.title,
+    required this.message,
+    required this.icon,
+  });
+
+  final String title;
+  final String message;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        PulseClockDimensions.horizontalPadding,
+        PulseClockDimensions.topPadding,
+        PulseClockDimensions.horizontalPadding,
+        28,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: PulseClockTextStyles.headerTitle),
+          const SizedBox(height: 20),
+          SurfaceCard(
+            child: Row(
+              children: [
+                Icon(icon, color: PulseClockColors.textSecondary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: PulseClockTextStyles.cardSubtitle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class RequestOptionCard extends StatelessWidget {
+  const RequestOptionCard({super.key, required this.type, required this.onTap});
+
+  final RequestEntryType type;
+  final ValueChanged<RequestEntryType> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final RequestEntryModel model = requestEntryFor(type);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onTap(type),
+      child: SurfaceCard(
+        borderRadius: 14,
+        padding: const EdgeInsets.all(14),
+        color: model.backgroundColor,
+        child: Row(
+          children: [
+            Icon(model.icon, color: model.accentColor, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    model.title,
+                    style: PulseClockTextStyles.cardTitle.copyWith(
+                      color: model.accentColor,
+                      fontSize: 22,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    model.subtitle,
+                    style: PulseClockTextStyles.cardSubtitle,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: PulseClockColors.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
