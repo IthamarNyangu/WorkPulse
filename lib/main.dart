@@ -12,7 +12,7 @@ class PulseClockApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'PulseClock',
+      title: 'WorkPulse',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,

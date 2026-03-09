@@ -100,7 +100,13 @@ class StatusCardSection extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(model.subtitle, style: PulseClockTextStyles.cardSubtitle),
+                Text(
+                  model.subtitle,
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    color: model.accentColor.withOpacity(0.8),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),

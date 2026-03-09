@@ -13,20 +13,20 @@ abstract final class PulseClockColors {
   static const Color textPrimary = Color(0xFF0E1B3D);
   static const Color textSecondary = Color(0xFF55637D);
 
-  static const Color statusOffDutyBg = Color(0xFFF2F4F8);
-  static const Color statusOffDutyAccent = Color(0xFF334155);
+  static const Color statusOffDutyBg = Color(0xFFECF1F8);
+  static const Color statusOffDutyAccent = Color(0xFF2F3E52);
 
-  static const Color statusOnDutyBg = Color(0xFFE8F5EC);
-  static const Color statusOnDutyAccent = Color(0xFF15803D);
+  static const Color statusOnDutyBg = Color(0xFFE4F7EC);
+  static const Color statusOnDutyAccent = Color(0xFF0F8A43);
 
-  static const Color statusMissedBg = Color(0xFFFFEEF0);
-  static const Color statusMissedAccent = Color(0xFFD92D20);
+  static const Color statusMissedBg = Color(0xFFFFE8EE);
+  static const Color statusMissedAccent = Color(0xFFC81E3A);
 
-  static const Color statusPendingBg = Color(0xFFFFF7E8);
-  static const Color statusPendingAccent = Color(0xFFC2410C);
+  static const Color statusPendingBg = Color(0xFFFFF1D9);
+  static const Color statusPendingAccent = Color(0xFFB45309);
 
-  static const Color statusLeaveBg = Color(0xFFF4EDFF);
-  static const Color statusLeaveAccent = Color(0xFF6D28D9);
+  static const Color statusLeaveBg = Color(0xFFF1E9FF);
+  static const Color statusLeaveAccent = Color(0xFF6B21A8);
 
   static const Color actionBlue = Color(0xFF2563EB);
   static const Color actionRed = Color(0xFFEC1D36);

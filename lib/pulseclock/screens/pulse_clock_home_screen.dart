@@ -116,11 +116,7 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
       case 2:
         return RequestsTab(onSelect: _openRequestDetail);
       case 3:
-        return const PlaceholderTab(
-          title: 'Profile',
-          message: 'Profile settings will appear here.',
-          icon: Icons.location_on_outlined,
-        );
+        return const ProfileTab();
       default:
         return HomeTabContent(
           now: _now,
@@ -180,19 +176,23 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
   }
 
   Widget _buildBackgroundLayer(BuildContext context) {
-    const double backgroundOpacity = 0.12;
-
     if (_selectedNavIndex == 0) {
       return Positioned(
         top: -48,
         right: -170,
         child: IgnorePointer(
           child: Opacity(
-            opacity: backgroundOpacity,
-            child: Image.asset(
-              'assets/images/workpulse-bg.png',
-              width: MediaQuery.sizeOf(context).width * 1.45,
-              fit: BoxFit.contain,
+            opacity: 0.09,
+            child: ColorFiltered(
+              colorFilter: const ColorFilter.mode(
+                Color(0x70000000),
+                BlendMode.darken,
+              ),
+              child: Image.asset(
+                'assets/images/workpulse-bg.png',
+                width: MediaQuery.sizeOf(context).width * 1.45,
+                fit: BoxFit.contain,
+              ),
             ),
           ),
         ),
@@ -202,10 +202,16 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
     return Positioned.fill(
       child: IgnorePointer(
         child: Opacity(
-          opacity: backgroundOpacity,
-          child: Image.asset(
-            'assets/images/workpulse-bg.png',
-            fit: BoxFit.cover,
+          opacity: 0.1,
+          child: ColorFiltered(
+            colorFilter: const ColorFilter.mode(
+              Color(0x55000000),
+              BlendMode.darken,
+            ),
+            child: Image.asset(
+              'assets/images/workpulse-bg.png',
+              fit: BoxFit.cover,
+            ),
           ),
         ),
       ),
@@ -293,16 +299,6 @@ class HomeTabContent extends StatelessWidget {
           const SizedBox(height: 12),
           SummaryCardsRow(summary: summary, status: status),
           const Spacer(),
-          const Center(
-            child: Text(
-              'App Version: Demo',
-              style: TextStyle(
-                fontSize: 11,
-                color: PulseClockColors.onBackgroundSecondary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -346,6 +342,58 @@ class RequestsTab extends StatelessWidget {
           RequestOptionCard(
             type: RequestEntryType.leaveDetails,
             onTap: onSelect,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ProfileTab extends StatelessWidget {
+  const ProfileTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        PulseClockDimensions.horizontalPadding,
+        PulseClockDimensions.topPadding,
+        PulseClockDimensions.horizontalPadding,
+        28,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Profile', style: PulseClockTextStyles.headerTitle),
+          const SizedBox(height: 20),
+          const SurfaceCard(
+            child: Row(
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  color: PulseClockColors.textSecondary,
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Profile settings will appear here.',
+                    style: PulseClockTextStyles.cardSubtitle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          const Center(
+            child: Text(
+              'Version demo',
+              style: TextStyle(
+                fontSize: 10,
+                color: Color(0x9FF2D4D7),
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.2,
+              ),
+            ),
           ),
         ],
       ),
@@ -434,7 +482,10 @@ class RequestOptionCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     model.subtitle,
-                    style: PulseClockTextStyles.cardSubtitle,
+                    style: PulseClockTextStyles.cardSubtitle.copyWith(
+                      color: model.accentColor.withOpacity(0.8),
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
