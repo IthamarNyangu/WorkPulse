@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 abstract final class PulseClockColors {
-  static const Color appBackground = Color(0xFFCC2028);
-  static const Color appBackgroundDeep = Color(0xFFB91B24);
+  static const Color appBackgroundSolid = Color(0xFF7A1E2C);
+  static const Color appBackground = Color(0x997A1E2C);
+  static const Color appBackgroundDeep = Color(0x995A1622);
   static const Color surface = Color(0xFFFFFFFF);
   static const Color surfaceMuted = Color(0xFFF6F8FC);
   static const Color cardBorder = Color(0x1A0E1B3D);
@@ -69,14 +70,14 @@ abstract final class PulseClockTextStyles {
   );
 
   static const TextStyle dateOnBackground = TextStyle(
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: FontWeight.w700,
     color: PulseClockColors.onBackgroundPrimary,
     letterSpacing: -0.4,
   );
 
   static const TextStyle timeOnBackground = TextStyle(
-    fontSize: 44,
+    fontSize: 40,
     fontWeight: FontWeight.w800,
     color: PulseClockColors.onBackgroundPrimary,
     letterSpacing: -1,

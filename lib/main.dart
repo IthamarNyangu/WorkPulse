@@ -18,7 +18,7 @@ class PulseClockApp extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: PulseClockColors.appBackground,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: PulseClockColors.appBackground,
+          seedColor: PulseClockColors.appBackgroundSolid,
           brightness: Brightness.light,
         ),
       ),

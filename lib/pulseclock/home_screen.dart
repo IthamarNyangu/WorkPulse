@@ -3,30 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 
-enum AttendanceStatus {
-  offDuty,
-  onDuty,
-  missedPunch,
-  correctionPending,
-  onLeave,
-}
+enum AttendanceStatus { offDuty, onDuty }
 
-extension AttendanceStatusLabel on AttendanceStatus {
-  String get label {
-    switch (this) {
-      case AttendanceStatus.offDuty:
-        return 'Off Duty';
-      case AttendanceStatus.onDuty:
-        return 'On Duty';
-      case AttendanceStatus.missedPunch:
-        return 'Missed Punch';
-      case AttendanceStatus.correctionPending:
-        return 'Correction Pending';
-      case AttendanceStatus.onLeave:
-        return 'On Leave';
-    }
-  }
-}
+enum RequestEntryType { missedPunch, correctionPending, leaveDetails }
 
 class PulseClockHomeScreen extends StatefulWidget {
   const PulseClockHomeScreen({super.key});
@@ -63,33 +42,95 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
 
   void _onPrimaryActionPressed() {
     setState(() {
-      switch (_status) {
-        case AttendanceStatus.offDuty:
-          _status = AttendanceStatus.onDuty;
-        case AttendanceStatus.onDuty:
-          _status = AttendanceStatus.offDuty;
-        case AttendanceStatus.missedPunch:
-          _status = AttendanceStatus.correctionPending;
-        case AttendanceStatus.correctionPending:
-        case AttendanceStatus.onLeave:
-          break;
-      }
+      _status = _status == AttendanceStatus.offDuty
+          ? AttendanceStatus.onDuty
+          : AttendanceStatus.offDuty;
     });
   }
 
-  void _onRequestCorrection() {
-    setState(() {
-      _status = AttendanceStatus.correctionPending;
-    });
+  void _openRequestDetail(RequestEntryType type) {
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return RequestDetailScreen(type: type);
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
+
+  Widget _buildTabContent() {
+    switch (_selectedNavIndex) {
+      case 0:
+        return HomeTabContent(
+          now: _now,
+          status: _status,
+          onPrimaryActionPressed: _onPrimaryActionPressed,
+        );
+      case 1:
+        return const PlaceholderTab(
+          title: 'History',
+          message: 'Attendance history will appear here.',
+          icon: Icons.calendar_today_outlined,
+        );
+      case 2:
+        return RequestsTab(onSelect: _openRequestDetail);
+      case 3:
+        return const PlaceholderTab(
+          title: 'Profile',
+          message: 'Profile settings will appear here.',
+          icon: Icons.location_on_outlined,
+        );
+      default:
+        return HomeTabContent(
+          now: _now,
+          status: _status,
+          onPrimaryActionPressed: _onPrimaryActionPressed,
+        );
+    }
+  }
+
+  Widget _buildBackgroundLayer(BuildContext context) {
+    const double backgroundOpacity = 0.12;
+
+    if (_selectedNavIndex == 0) {
+      return Positioned(
+        top: -48,
+        right: -170,
+        child: IgnorePointer(
+          child: Opacity(
+            opacity: backgroundOpacity,
+            child: Image.asset(
+              'assets/images/workpulse-bg.png',
+              width: MediaQuery.sizeOf(context).width * 1.45,
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Opacity(
+          opacity: backgroundOpacity,
+          child: Image.asset(
+            'assets/images/workpulse-bg.png',
+            fit: BoxFit.cover,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final StatusCardModel statusCard = _statusCardFor(_status);
-    final PrimaryActionModel primaryAction = _primaryActionFor(_status);
-    final SummaryModel summary = _summaryFor(_status);
-    final bool showContextualCard = _hasContextualCard(_status);
-
     return Scaffold(
       backgroundColor: PulseClockColors.appBackground,
       body: Container(
@@ -97,59 +138,14 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              PulseClockColors.appBackground,
-              PulseClockColors.appBackgroundDeep,
-            ],
+            colors: [Color(0xFF111827), Color(0x995A1622)],
           ),
         ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(
-              PulseClockDimensions.horizontalPadding,
-              PulseClockDimensions.topPadding,
-              PulseClockDimensions.horizontalPadding,
-              28,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const HeaderSection(employeeName: 'Sarah'),
-                const SizedBox(height: 18),
-                LiveTimeSection(now: _now),
-                const SizedBox(height: 20),
-                MockStatusSwitcher(
-                  currentStatus: _status,
-                  onChanged: (AttendanceStatus value) {
-                    setState(() {
-                      _status = value;
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                StatusCardSection(model: statusCard),
-                const SizedBox(height: 16),
-                PrimaryActionButtonSection(
-                  model: primaryAction,
-                  onPressed: _onPrimaryActionPressed,
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  "Today's Summary",
-                  style: PulseClockTextStyles.sectionTitleOnBackground,
-                ),
-                const SizedBox(height: 12),
-                SummaryCardsRow(summary: summary, status: _status),
-                if (showContextualCard) ...[
-                  const SizedBox(height: 16),
-                  ContextualCardsSection(
-                    status: _status,
-                    onRequestCorrection: _onRequestCorrection,
-                  ),
-                ],
-              ],
-            ),
-          ),
+        child: Stack(
+          children: [
+            _buildBackgroundLayer(context),
+            SafeArea(child: _buildTabContent()),
+          ],
         ),
       ),
       bottomNavigationBar: PulseBottomNavigation(
@@ -164,6 +160,330 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
   }
 }
 
+class HomeTabContent extends StatelessWidget {
+  const HomeTabContent({
+    super.key,
+    required this.now,
+    required this.status,
+    required this.onPrimaryActionPressed,
+  });
+
+  final DateTime now;
+  final AttendanceStatus status;
+  final VoidCallback onPrimaryActionPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final StatusCardModel statusCard = _statusCardFor(status);
+    final PrimaryActionModel primaryAction = _primaryActionFor(status);
+    final SummaryModel summary = _summaryFor(status);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        PulseClockDimensions.horizontalPadding,
+        PulseClockDimensions.topPadding,
+        PulseClockDimensions.horizontalPadding,
+        28,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const HeaderSection(employeeName: 'Ithamar'),
+          const SizedBox(height: 50),
+          LiveTimeSection(now: now),
+          const SizedBox(height: 20),
+          StatusCardSection(model: statusCard),
+          const SizedBox(height: 16),
+          PrimaryActionButtonSection(
+            model: primaryAction,
+            onPressed: onPrimaryActionPressed,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            "Today's Summary",
+            style: PulseClockTextStyles.sectionTitleOnBackground.copyWith(
+              fontSize: 18,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SummaryCardsRow(summary: summary, status: status),
+          const Spacer(),
+          const Center(
+            child: Text(
+              'App Version:demo',
+              style: TextStyle(
+                fontSize: 11,
+                color: PulseClockColors.onBackgroundSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class RequestsTab extends StatelessWidget {
+  const RequestsTab({super.key, required this.onSelect});
+
+  final ValueChanged<RequestEntryType> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        PulseClockDimensions.horizontalPadding,
+        PulseClockDimensions.topPadding,
+        PulseClockDimensions.horizontalPadding,
+        28,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Requests', style: PulseClockTextStyles.headerTitle),
+          const SizedBox(height: 6),
+          const Text(
+            'Select an item to view its details.',
+            style: PulseClockTextStyles.headerSubtitle,
+          ),
+          const SizedBox(height: 20),
+          RequestOptionCard(
+            type: RequestEntryType.missedPunch,
+            onTap: onSelect,
+          ),
+          const SizedBox(height: 12),
+          RequestOptionCard(
+            type: RequestEntryType.correctionPending,
+            onTap: onSelect,
+          ),
+          const SizedBox(height: 12),
+          RequestOptionCard(
+            type: RequestEntryType.leaveDetails,
+            onTap: onSelect,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class PlaceholderTab extends StatelessWidget {
+  const PlaceholderTab({
+    super.key,
+    required this.title,
+    required this.message,
+    required this.icon,
+  });
+
+  final String title;
+  final String message;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        PulseClockDimensions.horizontalPadding,
+        PulseClockDimensions.topPadding,
+        PulseClockDimensions.horizontalPadding,
+        28,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: PulseClockTextStyles.headerTitle),
+          const SizedBox(height: 20),
+          SurfaceCard(
+            child: Row(
+              children: [
+                Icon(icon, color: PulseClockColors.textSecondary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: PulseClockTextStyles.cardSubtitle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class RequestOptionCard extends StatelessWidget {
+  const RequestOptionCard({super.key, required this.type, required this.onTap});
+
+  final RequestEntryType type;
+  final ValueChanged<RequestEntryType> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final RequestEntryModel model = _requestEntryFor(type);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onTap(type),
+      child: SurfaceCard(
+        padding: const EdgeInsets.all(14),
+        color: model.backgroundColor,
+        child: Row(
+          children: [
+            Icon(model.icon, color: model.accentColor, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    model.title,
+                    style: PulseClockTextStyles.cardTitle.copyWith(
+                      color: model.accentColor,
+                      fontSize: 22,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    model.subtitle,
+                    style: PulseClockTextStyles.cardSubtitle,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: PulseClockColors.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class RequestDetailScreen extends StatelessWidget {
+  const RequestDetailScreen({super.key, required this.type});
+
+  final RequestEntryType type;
+
+  @override
+  Widget build(BuildContext context) {
+    final RequestDetailModel detail = _requestDetailFor(type);
+
+    return Scaffold(
+      backgroundColor: PulseClockColors.appBackground,
+      appBar: AppBar(
+        title: Text(detail.title),
+        backgroundColor: PulseClockColors.surface,
+        foregroundColor: PulseClockColors.textPrimary,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              PulseClockColors.appBackground,
+              PulseClockColors.appBackgroundDeep,
+            ],
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              PulseClockDimensions.horizontalPadding,
+              PulseClockDimensions.topPadding,
+              PulseClockDimensions.horizontalPadding,
+              28,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                StatusCardSection(model: detail.statusCard),
+                const SizedBox(height: 16),
+                SurfaceCard(child: RequestDetailBody(type: type)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class RequestDetailBody extends StatelessWidget {
+  const RequestDetailBody({super.key, required this.type});
+
+  final RequestEntryType type;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (type) {
+      case RequestEntryType.missedPunch:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const DetailInfoRow(label: 'Issue Date', value: 'March 6, 2026'),
+            const SizedBox(height: 12),
+            const Text(
+              'Submit a correction request with your actual clock-out time.',
+              style: PulseClockTextStyles.cardSubtitle,
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Correction request flow coming soon.'),
+                  ),
+                );
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: PulseClockColors.actionBlue,
+                padding: EdgeInsets.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                'Submit Correction Request',
+                style: PulseClockTextStyles.contextAction,
+              ),
+            ),
+          ],
+        );
+      case RequestEntryType.correctionPending:
+        return const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DetailInfoRow(label: 'Request Date', value: 'March 5, 2026'),
+            SizedBox(height: 12),
+            DetailInfoRow(label: 'Status', value: 'Pending Review'),
+            SizedBox(height: 12),
+            Text(
+              'Your attendance correction is currently with your manager.',
+              style: PulseClockTextStyles.cardSubtitle,
+            ),
+          ],
+        );
+      case RequestEntryType.leaveDetails:
+        return const Column(
+          children: [
+            LeaveDetailRow(label: 'Leave Type', value: 'Annual Leave'),
+            SizedBox(height: 12),
+            LeaveDetailRow(label: 'Duration', value: 'Full Day'),
+            SizedBox(height: 12),
+            LeaveDetailRow(label: 'Balance Remaining', value: '12 days'),
+          ],
+        );
+    }
+  }
+}
+
 class HeaderSection extends StatelessWidget {
   const HeaderSection({super.key, required this.employeeName});
 
@@ -174,7 +494,7 @@ class HeaderSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('PulseClock', style: PulseClockTextStyles.headerTitle),
+        const Text('WorkPulse', style: PulseClockTextStyles.headerTitle),
         const SizedBox(height: 6),
         Text(
           'Welcome back, $employeeName',
@@ -233,55 +553,6 @@ class LiveTimeSection extends StatelessWidget {
   }
 }
 
-class MockStatusSwitcher extends StatelessWidget {
-  const MockStatusSwitcher({
-    super.key,
-    required this.currentStatus,
-    required this.onChanged,
-  });
-
-  final AttendanceStatus currentStatus;
-  final ValueChanged<AttendanceStatus> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Mock Status', style: PulseClockTextStyles.switcherLabel),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: AttendanceStatus.values.map((AttendanceStatus status) {
-            final bool selected = status == currentStatus;
-            return ChoiceChip(
-              label: Text(status.label),
-              selected: selected,
-              onSelected: (_) => onChanged(status),
-              showCheckmark: false,
-              selectedColor: PulseClockColors.surface,
-              backgroundColor: PulseClockColors.surface.withOpacity(0.18),
-              side: BorderSide(
-                color: selected
-                    ? PulseClockColors.surface
-                    : PulseClockColors.surface.withOpacity(0.48),
-              ),
-              labelStyle: TextStyle(
-                color: selected
-                    ? PulseClockColors.appBackground
-                    : PulseClockColors.surface,
-                fontWeight: FontWeight.w600,
-              ),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-}
-
 class StatusCardSection extends StatelessWidget {
   const StatusCardSection({super.key, required this.model});
 
@@ -290,11 +561,12 @@ class StatusCardSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SurfaceCard(
+      padding: const EdgeInsets.all(14),
       color: model.backgroundColor,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(model.icon, color: model.accentColor, size: 24),
+          Icon(model.icon, color: model.accentColor, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -304,6 +576,7 @@ class StatusCardSection extends StatelessWidget {
                   model.title,
                   style: PulseClockTextStyles.cardTitle.copyWith(
                     color: model.accentColor,
+                    fontSize: 22,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -381,36 +654,36 @@ class _PrimaryActionButtonSectionState
               overflow: TextOverflow.ellipsis,
             ),
             style: baseStyle.copyWith(
-              backgroundColor: MaterialStateProperty.resolveWith((
-                Set<MaterialState> states,
+              backgroundColor: WidgetStateProperty.resolveWith((
+                Set<WidgetState> states,
               ) {
-                if (states.contains(MaterialState.hovered)) {
+                if (states.contains(WidgetState.hovered)) {
                   return _brightenColor(widget.model.backgroundColor, 0.06);
                 }
-                if (states.contains(MaterialState.pressed)) {
+                if (states.contains(WidgetState.pressed)) {
                   return _brightenColor(widget.model.backgroundColor, -0.03);
                 }
                 return widget.model.backgroundColor;
               }),
-              elevation: MaterialStateProperty.resolveWith((
-                Set<MaterialState> states,
+              elevation: WidgetStateProperty.resolveWith((
+                Set<WidgetState> states,
               ) {
-                if (states.contains(MaterialState.pressed)) {
+                if (states.contains(WidgetState.pressed)) {
                   return 6;
                 }
-                if (states.contains(MaterialState.hovered)) {
+                if (states.contains(WidgetState.hovered)) {
                   return 14;
                 }
                 return 10;
               }),
-              shadowColor: MaterialStateProperty.all(const Color(0x5A000000)),
-              overlayColor: MaterialStateProperty.resolveWith((
-                Set<MaterialState> states,
+              shadowColor: WidgetStateProperty.all(const Color(0x5A000000)),
+              overlayColor: WidgetStateProperty.resolveWith((
+                Set<WidgetState> states,
               ) {
-                if (states.contains(MaterialState.hovered)) {
+                if (states.contains(WidgetState.hovered)) {
                   return Colors.white.withOpacity(0.09);
                 }
-                if (states.contains(MaterialState.pressed)) {
+                if (states.contains(WidgetState.pressed)) {
                   return Colors.black.withOpacity(0.08);
                 }
                 return null;
@@ -491,108 +764,6 @@ class SummaryCard extends StatelessWidget {
   }
 }
 
-class ContextualCardsSection extends StatelessWidget {
-  const ContextualCardsSection({
-    super.key,
-    required this.status,
-    required this.onRequestCorrection,
-  });
-
-  final AttendanceStatus status;
-  final VoidCallback onRequestCorrection;
-
-  @override
-  Widget build(BuildContext context) {
-    switch (status) {
-      case AttendanceStatus.offDuty:
-        return const SizedBox.shrink();
-      case AttendanceStatus.onDuty:
-        return const SizedBox.shrink();
-      case AttendanceStatus.missedPunch:
-        return SurfaceCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Icon(
-                    Icons.assignment_late_outlined,
-                    color: PulseClockColors.statusMissedAccent,
-                  ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Action Required',
-                      style: PulseClockTextStyles.cardTitle,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Submit a correction request for March 6, 2026',
-                style: PulseClockTextStyles.cardSubtitle,
-              ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: onRequestCorrection,
-                style: TextButton.styleFrom(
-                  foregroundColor: PulseClockColors.actionBlue,
-                  padding: EdgeInsets.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text(
-                  'Request Correction ->',
-                  style: PulseClockTextStyles.contextAction,
-                ),
-              ),
-            ],
-          ),
-        );
-      case AttendanceStatus.correctionPending:
-        return SurfaceCard(
-          child: const Row(
-            children: [
-              Icon(
-                Icons.pending_actions_outlined,
-                color: PulseClockColors.statusPendingAccent,
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Pending Review',
-                      style: PulseClockTextStyles.cardTitle,
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Correction for March 5, 2026',
-                      style: PulseClockTextStyles.cardSubtitle,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      case AttendanceStatus.onLeave:
-        return SurfaceCard(
-          child: const Column(
-            children: [
-              LeaveDetailRow(label: 'Leave Type', value: 'Annual Leave'),
-              SizedBox(height: 12),
-              LeaveDetailRow(label: 'Duration', value: 'Full Day'),
-              SizedBox(height: 12),
-              LeaveDetailRow(label: 'Balance Remaining', value: '12 days'),
-            ],
-          ),
-        );
-    }
-  }
-}
-
 class PulseBottomNavigation extends StatelessWidget {
   const PulseBottomNavigation({
     super.key,
@@ -605,33 +776,42 @@ class PulseBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BottomNavigationBar(
-      currentIndex: currentIndex,
-      onTap: onTap,
-      type: BottomNavigationBarType.fixed,
-      backgroundColor: PulseClockColors.surface,
-      selectedItemColor: PulseClockColors.navSelected,
-      unselectedItemColor: PulseClockColors.navUnselected,
-      selectedFontSize: 12,
-      unselectedFontSize: 12,
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.access_time_outlined),
-          label: 'Home',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.calendar_today_outlined),
-          label: 'History',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.description_outlined),
-          label: 'Requests',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.location_on_outlined),
-          label: 'Profile',
-        ),
-      ],
+    return Theme(
+      data: Theme.of(context).copyWith(
+        splashFactory: NoSplash.splashFactory,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+      ),
+      child: BottomNavigationBar(
+        currentIndex: currentIndex,
+        onTap: onTap,
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: PulseClockColors.surface,
+        selectedItemColor: PulseClockColors.navSelected,
+        unselectedItemColor: PulseClockColors.navUnselected,
+        selectedFontSize: 12,
+        unselectedFontSize: 12,
+        enableFeedback: false,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.access_time_outlined),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_today_outlined),
+            label: 'History',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.description_outlined),
+            label: 'Requests',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.location_on_outlined),
+            label: 'Profile',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -666,6 +846,29 @@ class SurfaceCard extends StatelessWidget {
 
 class LeaveDetailRow extends StatelessWidget {
   const LeaveDetailRow({super.key, required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: Text(label, style: PulseClockTextStyles.cardSubtitle)),
+        Text(
+          value,
+          style: PulseClockTextStyles.cardSubtitle.copyWith(
+            color: PulseClockColors.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class DetailInfoRow extends StatelessWidget {
+  const DetailInfoRow({super.key, required this.label, required this.value});
 
   final String label;
   final String value;
@@ -729,6 +932,29 @@ class SummaryModel {
   final String workHours;
 }
 
+class RequestEntryModel {
+  const RequestEntryModel({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.backgroundColor,
+    required this.accentColor,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color backgroundColor;
+  final Color accentColor;
+}
+
+class RequestDetailModel {
+  const RequestDetailModel({required this.title, required this.statusCard});
+
+  final String title;
+  final StatusCardModel statusCard;
+}
+
 StatusCardModel _statusCardFor(AttendanceStatus status) {
   switch (status) {
     case AttendanceStatus.offDuty:
@@ -747,29 +973,13 @@ StatusCardModel _statusCardFor(AttendanceStatus status) {
         backgroundColor: PulseClockColors.statusOnDutyBg,
         accentColor: PulseClockColors.statusOnDutyAccent,
       );
-    case AttendanceStatus.missedPunch:
+    default:
       return const StatusCardModel(
-        title: 'Missed Punch',
-        subtitle: 'You missed clocking out yesterday',
-        icon: Icons.cancel_outlined,
-        backgroundColor: PulseClockColors.statusMissedBg,
-        accentColor: PulseClockColors.statusMissedAccent,
-      );
-    case AttendanceStatus.correctionPending:
-      return const StatusCardModel(
-        title: 'Correction Pending',
-        subtitle: 'Your attendance correction is under review',
-        icon: Icons.error_outline,
-        backgroundColor: PulseClockColors.statusPendingBg,
-        accentColor: PulseClockColors.statusPendingAccent,
-      );
-    case AttendanceStatus.onLeave:
-      return const StatusCardModel(
-        title: 'On Leave',
-        subtitle: 'Annual Leave (Full Day)',
-        icon: Icons.beach_access_outlined,
-        backgroundColor: PulseClockColors.statusLeaveBg,
-        accentColor: PulseClockColors.statusLeaveAccent,
+        title: 'Off Duty',
+        subtitle: 'Ready to start your workday',
+        icon: Icons.access_time_outlined,
+        backgroundColor: PulseClockColors.statusOffDutyBg,
+        accentColor: PulseClockColors.statusOffDutyAccent,
       );
   }
 }
@@ -790,24 +1000,10 @@ PrimaryActionModel _primaryActionFor(AttendanceStatus status) {
         backgroundColor: PulseClockColors.actionRed,
         foregroundColor: PulseClockColors.surface,
       );
-    case AttendanceStatus.missedPunch:
+    default:
       return const PrimaryActionModel(
-        label: 'Request Correction',
-        icon: Icons.assignment_late_outlined,
-        backgroundColor: PulseClockColors.actionBlue,
-        foregroundColor: PulseClockColors.surface,
-      );
-    case AttendanceStatus.correctionPending:
-      return const PrimaryActionModel(
-        label: 'View Request',
-        icon: Icons.visibility_outlined,
-        backgroundColor: PulseClockColors.actionBlue,
-        foregroundColor: PulseClockColors.surface,
-      );
-    case AttendanceStatus.onLeave:
-      return const PrimaryActionModel(
-        label: 'View Leave Details',
-        icon: Icons.remove_red_eye_outlined,
+        label: 'Clock In',
+        icon: Icons.access_time_outlined,
         backgroundColor: PulseClockColors.actionBlue,
         foregroundColor: PulseClockColors.surface,
       );
@@ -828,20 +1024,98 @@ SummaryModel _summaryFor(AttendanceStatus status) {
         punchOut: '--',
         workHours: '3h 42m',
       );
-    case AttendanceStatus.missedPunch:
-      return const SummaryModel(
-        punchIn: '09:02 AM',
-        punchOut: '--',
-        workHours: '0h 0m',
-      );
-    case AttendanceStatus.correctionPending:
+    default:
       return const SummaryModel(
         punchIn: '--',
         punchOut: '--',
         workHours: '0h 0m',
       );
-    case AttendanceStatus.onLeave:
-      return const SummaryModel(punchIn: '--', punchOut: '--', workHours: '--');
+  }
+}
+
+RequestEntryModel _requestEntryFor(RequestEntryType type) {
+  switch (type) {
+    case RequestEntryType.missedPunch:
+      return const RequestEntryModel(
+        title: 'Missed Punch',
+        subtitle: 'You missed clocking out yesterday',
+        icon: Icons.cancel_outlined,
+        backgroundColor: PulseClockColors.statusMissedBg,
+        accentColor: PulseClockColors.statusMissedAccent,
+      );
+    case RequestEntryType.correctionPending:
+      return const RequestEntryModel(
+        title: 'Correction Pending',
+        subtitle: 'Your attendance correction is under review',
+        icon: Icons.pending_actions_outlined,
+        backgroundColor: PulseClockColors.statusPendingBg,
+        accentColor: PulseClockColors.statusPendingAccent,
+      );
+    case RequestEntryType.leaveDetails:
+      return const RequestEntryModel(
+        title: 'Leave Details',
+        subtitle: 'Annual Leave (Full Day)',
+        icon: Icons.beach_access_outlined,
+        backgroundColor: PulseClockColors.statusLeaveBg,
+        accentColor: PulseClockColors.statusLeaveAccent,
+      );
+    default:
+      return const RequestEntryModel(
+        title: 'Missed Punch',
+        subtitle: 'You missed clocking out yesterday',
+        icon: Icons.cancel_outlined,
+        backgroundColor: PulseClockColors.statusMissedBg,
+        accentColor: PulseClockColors.statusMissedAccent,
+      );
+  }
+}
+
+RequestDetailModel _requestDetailFor(RequestEntryType type) {
+  switch (type) {
+    case RequestEntryType.missedPunch:
+      return const RequestDetailModel(
+        title: 'Missed Punch',
+        statusCard: StatusCardModel(
+          title: 'Action Required',
+          subtitle: 'Submit a correction request for March 6, 2026',
+          icon: Icons.assignment_late_outlined,
+          backgroundColor: PulseClockColors.statusMissedBg,
+          accentColor: PulseClockColors.statusMissedAccent,
+        ),
+      );
+    case RequestEntryType.correctionPending:
+      return const RequestDetailModel(
+        title: 'Correction Pending',
+        statusCard: StatusCardModel(
+          title: 'Pending Review',
+          subtitle: 'Correction for March 5, 2026',
+          icon: Icons.pending_actions_outlined,
+          backgroundColor: PulseClockColors.statusPendingBg,
+          accentColor: PulseClockColors.statusPendingAccent,
+        ),
+      );
+    case RequestEntryType.leaveDetails:
+      return const RequestDetailModel(
+        title: 'Leave Details',
+        statusCard: StatusCardModel(
+          title: 'On Leave',
+          subtitle: 'Annual Leave (Full Day)',
+          icon: Icons.beach_access_outlined,
+          backgroundColor: PulseClockColors.statusLeaveBg,
+          accentColor: PulseClockColors.statusLeaveAccent,
+        ),
+      );
+    default:
+      return const RequestDetailModel(
+        title: 'Missed Punch',
+        statusCard: StatusCardModel(
+          title: 'Action Required',
+          subtitle: 'Submit a correction request for March 6, 2026',
+          icon: Icons.assignment_late_outlined,
+          backgroundColor: PulseClockColors.statusMissedBg,
+          accentColor: PulseClockColors.statusMissedAccent,
+        ),
+      );
   }
 }
 
@@ -859,7 +1133,21 @@ String _weekdayName(DateTime now) {
 }
 
 String _dateLabel(DateTime now) {
-  return '${_twoDigits(now.day)}-${_twoDigits(now.month)}-${now.year}';
+  const List<String> monthAbbreviations = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${_twoDigits(now.day)} ${monthAbbreviations[now.month - 1]} ${now.year}';
 }
 
 String _timeLabel(DateTime now) {
@@ -872,18 +1160,6 @@ Color _brightenColor(Color color, double delta) {
   final HSLColor hsl = HSLColor.fromColor(color);
   final double nextLightness = (hsl.lightness + delta).clamp(0.0, 1.0);
   return hsl.withLightness(nextLightness).toColor();
-}
-
-bool _hasContextualCard(AttendanceStatus status) {
-  switch (status) {
-    case AttendanceStatus.offDuty:
-    case AttendanceStatus.onDuty:
-      return false;
-    case AttendanceStatus.missedPunch:
-    case AttendanceStatus.correctionPending:
-    case AttendanceStatus.onLeave:
-      return true;
-  }
 }
 
 String _twoDigits(int value) {
