@@ -6,7 +6,7 @@ import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 import 'package:pulseclock/pulseclock/screens/attendance_history_screen.dart';
 import 'package:pulseclock/pulseclock/screens/clock_confirmation_screen.dart';
 import 'package:pulseclock/pulseclock/screens/correction_request_detail_screen.dart';
-import 'package:pulseclock/pulseclock/screens/correction_request_form_screen.dart';
+import 'package:pulseclock/pulseclock/screens/missed_punch_requests_screen.dart';
 import 'package:pulseclock/pulseclock/screens/request_detail_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
@@ -110,60 +110,7 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
     );
   }
 
-  Future<void> _openCorrectionFormFromRequests() async {
-    final AttendanceRecord? record = _mockStore.latestMissedPunchRecord;
-    if (record == null) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No missed punch record found.')),
-      );
-      return;
-    }
-
-    final CorrectionType? initialType = record.clockOutTime == '--'
-        ? CorrectionType.clockOut
-        : null;
-
-    final bool? submitted = await Navigator.of(context).push<bool>(
-      PageRouteBuilder<bool>(
-        pageBuilder:
-            (
-              BuildContext context,
-              Animation<double> animation,
-              Animation<double> secondaryAnimation,
-            ) {
-              return CorrectionRequestFormScreen(
-                attendanceRecordId: record.id,
-                affectedDate: record.date,
-                issueSummary: _issueSummaryFor(record),
-                initialCorrectionType: initialType,
-              );
-            },
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-      ),
-    );
-
-    if (!mounted || submitted != true) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Correction request submitted.')),
-    );
-  }
-
-  void _openPendingCorrectionDetails() {
-    final CorrectionRequest? pending = _mockStore.latestPendingCorrectionRequest;
-    if (pending == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No pending correction request found.')),
-      );
-      return;
-    }
-
+  void _openMissedPunchRequests() {
     Navigator.of(context).push(
       PageRouteBuilder<void>(
         pageBuilder:
@@ -172,7 +119,27 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
               Animation<double> animation,
               Animation<double> secondaryAnimation,
             ) {
-              return CorrectionRequestDetailScreen(requestId: pending.id);
+              return const MissedPunchRequestsScreen();
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
+
+  void _openPendingCorrectionDetails() {
+    final CorrectionRequest? pending = _mockStore.latestPendingCorrectionRequest;
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return CorrectionRequestDetailScreen(
+                initialRequestId: pending?.id,
+              );
             },
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
@@ -194,9 +161,9 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
         return const AttendanceHistoryScreen();
       case 2:
         return RequestsTab(
-          missedPunchRecord: _mockStore.latestMissedPunchRecord,
-          pendingRequest: _mockStore.latestPendingCorrectionRequest,
-          onOpenMissedPunch: _openCorrectionFormFromRequests,
+          missedPunchCount: _mockStore.missedPunchRecords.length,
+          pendingRequestCount: _mockStore.pendingCorrectionRequests.length,
+          onOpenMissedPunch: _openMissedPunchRequests,
           onOpenPendingCorrection: _openPendingCorrectionDetails,
           onOpenLeaveDetails: () => _openRequestDetail(RequestEntryType.leaveDetails),
         );
@@ -393,27 +360,27 @@ class HomeTabContent extends StatelessWidget {
 class RequestsTab extends StatelessWidget {
   const RequestsTab({
     super.key,
-    required this.missedPunchRecord,
-    required this.pendingRequest,
+    required this.missedPunchCount,
+    required this.pendingRequestCount,
     required this.onOpenMissedPunch,
     required this.onOpenPendingCorrection,
     required this.onOpenLeaveDetails,
   });
 
-  final AttendanceRecord? missedPunchRecord;
-  final CorrectionRequest? pendingRequest;
+  final int missedPunchCount;
+  final int pendingRequestCount;
   final VoidCallback onOpenMissedPunch;
   final VoidCallback onOpenPendingCorrection;
   final VoidCallback onOpenLeaveDetails;
 
   @override
   Widget build(BuildContext context) {
-    final String missedPunchSubtitle = missedPunchRecord == null
+    final String missedPunchSubtitle = missedPunchCount == 0
         ? 'No missed punch records to correct right now.'
-        : 'Missing Clock Out on ${dateLabel(missedPunchRecord!.date)}';
-    final String pendingSubtitle = pendingRequest == null
+        : '$missedPunchCount missed punch record${missedPunchCount == 1 ? '' : 's'} available.';
+    final String pendingSubtitle = pendingRequestCount == 0
         ? 'No pending correction requests.'
-        : 'Submitted for ${dateLabel(pendingRequest!.affectedDate)}';
+        : '$pendingRequestCount pending correction request${pendingRequestCount == 1 ? '' : 's'}.';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -610,17 +577,4 @@ class RequestOptionCard extends StatelessWidget {
       ),
     );
   }
-}
-
-String _issueSummaryFor(AttendanceRecord record) {
-  if (record.note != null && record.note!.trim().isNotEmpty) {
-    return record.note!;
-  }
-  if (record.clockOutTime == '--') {
-    return 'Missing Clock Out for ${dateLabel(record.date)}';
-  }
-  if (record.clockInTime == '--') {
-    return 'Missing Clock In for ${dateLabel(record.date)}';
-  }
-  return 'Attendance correction requested for ${dateLabel(record.date)}';
 }

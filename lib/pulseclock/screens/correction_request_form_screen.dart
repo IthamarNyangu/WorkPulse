@@ -12,12 +12,20 @@ class CorrectionRequestFormScreen extends StatefulWidget {
     required this.affectedDate,
     required this.issueSummary,
     this.initialCorrectionType,
+    this.existingRequestId,
+    this.initialCorrectedClockInTime,
+    this.initialCorrectedClockOutTime,
+    this.initialReason,
   });
 
   final String attendanceRecordId;
   final DateTime affectedDate;
   final String issueSummary;
   final CorrectionType? initialCorrectionType;
+  final String? existingRequestId;
+  final String? initialCorrectedClockInTime;
+  final String? initialCorrectedClockOutTime;
+  final String? initialReason;
 
   @override
   State<CorrectionRequestFormScreen> createState() =>
@@ -45,14 +53,64 @@ class _CorrectionRequestFormScreenState extends State<CorrectionRequestFormScree
         _selectedType == CorrectionType.both;
   }
 
+  bool get _hasClockInRecord {
+    final String? value = _sourceRecord?.clockInTime;
+    return value != null && value.trim().isNotEmpty && value != '--';
+  }
+
+  bool get _isMissingClockOut {
+    return _sourceRecord?.clockOutTime == '--' && _hasClockInRecord;
+  }
+
+  bool get _isMissingClockIn {
+    final String? clockIn = _sourceRecord?.clockInTime;
+    final String? clockOut = _sourceRecord?.clockOutTime;
+    final bool hasClockOut =
+        clockOut != null && clockOut.trim().isNotEmpty && clockOut != '--';
+    return (clockIn == null || clockIn.trim().isEmpty || clockIn == '--') &&
+        hasClockOut;
+  }
+
+  List<CorrectionType> get _availableCorrectionTypes {
+    if (_isMissingClockOut) {
+      return const <CorrectionType>[
+        CorrectionType.clockOut,
+        CorrectionType.both,
+      ];
+    }
+    if (_isMissingClockIn) {
+      return const <CorrectionType>[
+        CorrectionType.clockIn,
+        CorrectionType.both,
+      ];
+    }
+    return CorrectionType.values;
+  }
+
   @override
   void initState() {
     super.initState();
     _sourceRecord = _store.attendanceRecordById(widget.attendanceRecordId);
-    final bool shouldPreselectClockOut = _sourceRecord?.clockOutTime == '--';
-    _selectedType =
+    if (widget.initialCorrectedClockInTime != null) {
+      _clockInController.text = widget.initialCorrectedClockInTime!.trim();
+    }
+    if (widget.initialCorrectedClockOutTime != null) {
+      _clockOutController.text = widget.initialCorrectedClockOutTime!.trim();
+    }
+    if (widget.initialReason != null) {
+      _reasonController.text = widget.initialReason!.trim();
+    }
+
+    final bool shouldPreselectClockOut = _isMissingClockOut;
+    final CorrectionType initialType =
         widget.initialCorrectionType ??
         (shouldPreselectClockOut ? CorrectionType.clockOut : CorrectionType.both);
+    _selectedType = _availableCorrectionTypes.contains(initialType)
+        ? initialType
+        : (_isMissingClockIn
+              ? CorrectionType.both
+              : _availableCorrectionTypes.first);
+    _syncPrefilledClockIn();
   }
 
   @override
@@ -119,6 +177,7 @@ class _CorrectionRequestFormScreenState extends State<CorrectionRequestFormScree
         reason: _reasonController.text.trim(),
         correctedClockInTime: _needsClockIn ? _clockInController.text.trim() : null,
         correctedClockOutTime: _needsClockOut ? _clockOutController.text.trim() : null,
+        existingRequestId: widget.existingRequestId,
       );
 
       if (!mounted) {
@@ -136,6 +195,14 @@ class _CorrectionRequestFormScreenState extends State<CorrectionRequestFormScree
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Unable to submit correction request.')),
       );
+    }
+  }
+
+  void _syncPrefilledClockIn() {
+    if (_isMissingClockOut && _needsClockIn && _hasClockInRecord) {
+      if (_clockInController.text.trim().isEmpty) {
+        _clockInController.text = _sourceRecord!.clockInTime;
+      }
     }
   }
 
@@ -183,6 +250,15 @@ class _CorrectionRequestFormScreenState extends State<CorrectionRequestFormScree
                           label: 'Affected Date',
                           value: dateLabel(widget.affectedDate),
                         ),
+                        if ((_selectedType == CorrectionType.clockOut ||
+                                _selectedType == CorrectionType.both) &&
+                            _hasClockInRecord) ...<Widget>[
+                          const SizedBox(height: 10),
+                          DetailInfoRow(
+                            label: 'Clocked In Time',
+                            value: _sourceRecord!.clockInTime,
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         Text(
                           'Issue Summary',
@@ -213,7 +289,7 @@ class _CorrectionRequestFormScreenState extends State<CorrectionRequestFormScree
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: CorrectionType.values.map((
+                          children: _availableCorrectionTypes.map((
                             CorrectionType type,
                           ) {
                             return ChoiceChip(
@@ -224,6 +300,7 @@ class _CorrectionRequestFormScreenState extends State<CorrectionRequestFormScree
                                   : (_) {
                                       setState(() {
                                         _selectedType = type;
+                                        _syncPrefilledClockIn();
                                       });
                                     },
                               labelStyle: PulseClockTextStyles.cardSubtitle.copyWith(
@@ -317,48 +394,48 @@ class _CorrectionRequestFormScreenState extends State<CorrectionRequestFormScree
                             return null;
                           },
                         ),
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _isSubmitting ? null : _submit,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: PulseClockColors.actionBlue,
+                              foregroundColor: PulseClockColors.surface,
+                              disabledBackgroundColor: PulseClockColors.actionBlue
+                                  .withOpacity(0.65),
+                              disabledForegroundColor: PulseClockColors.surface,
+                              textStyle: PulseClockTextStyles.primaryAction.copyWith(
+                                fontSize: 20,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 16,
+                                horizontal: 18,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  PulseClockDimensions.cardRadius,
+                                ),
+                              ),
+                            ),
+                            child: _isSubmitting
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.4,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        PulseClockColors.surface,
+                                      ),
+                                    ),
+                                  )
+                                : const Text('Submit'),
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isSubmitting ? null : _submit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: PulseClockColors.actionBlue,
-                        foregroundColor: PulseClockColors.surface,
-                        disabledBackgroundColor: PulseClockColors.actionBlue
-                            .withOpacity(0.65),
-                        disabledForegroundColor: PulseClockColors.surface,
-                        textStyle: PulseClockTextStyles.primaryAction.copyWith(
-                          fontSize: 20,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 16,
-                          horizontal: 18,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(
-                            PulseClockDimensions.cardRadius,
-                          ),
-                        ),
-                      ),
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.4,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  PulseClockColors.surface,
-                                ),
-                              ),
-                            )
-                          : const Text('Submit'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
                     child: TextButton(

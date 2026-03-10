@@ -337,6 +337,21 @@ class WorkPulseMockStore extends ChangeNotifier {
     );
   }
 
+  List<AttendanceRecord> get missedPunchRecords {
+    final List<AttendanceRecord> records = _attendanceRecords
+        .where(
+          (AttendanceRecord record) =>
+              record.status == AttendanceRecordStatus.missedPunch,
+        )
+        .toList();
+    records.sort((AttendanceRecord a, AttendanceRecord b) {
+      return a.date.compareTo(b.date);
+    });
+    return List<AttendanceRecord>.unmodifiable(
+      records,
+    );
+  }
+
   AttendanceRecord? get latestMissedPunchRecord {
     for (final AttendanceRecord record in _attendanceRecords) {
       if (record.status == AttendanceRecordStatus.missedPunch) {
@@ -380,12 +395,50 @@ class WorkPulseMockStore extends ChangeNotifier {
     required String reason,
     String? correctedClockInTime,
     String? correctedClockOutTime,
+    String? existingRequestId,
   }) {
     final AttendanceRecord? existingRecord = attendanceRecordById(
       attendanceRecordId,
     );
     if (existingRecord == null) {
       throw ArgumentError('Attendance record not found for ID: $attendanceRecordId');
+    }
+
+    if (existingRequestId != null) {
+      final int existingRequestIndex = _correctionRequests.indexWhere(
+        (CorrectionRequest request) => request.id == existingRequestId,
+      );
+      if (existingRequestIndex >= 0) {
+        final CorrectionRequest currentRequest =
+            _correctionRequests[existingRequestIndex];
+        if (currentRequest.attendanceRecordId != attendanceRecordId) {
+          throw ArgumentError(
+            'Correction request does not belong to attendance record: $attendanceRecordId',
+          );
+        }
+
+        final CorrectionRequest updatedRequest = CorrectionRequest(
+          id: currentRequest.id,
+          attendanceRecordId: attendanceRecordId,
+          affectedDate: existingRecord.date,
+          issueSummary: issueSummary,
+          correctionType: correctionType,
+          reason: reason,
+          status: CorrectionRequestStatus.pending,
+          submittedAt: DateTime.now(),
+          correctedClockInTime: correctedClockInTime,
+          correctedClockOutTime: correctedClockOutTime,
+        );
+
+        _correctionRequests.removeAt(existingRequestIndex);
+        _correctionRequests.insert(0, updatedRequest);
+        _markAttendanceAsCorrectionPending(
+          attendanceRecordId: attendanceRecordId,
+          issueSummary: issueSummary,
+        );
+        notifyListeners();
+        return updatedRequest;
+      }
     }
 
     final String requestId = 'CR-${_correctionSequence.toString().padLeft(4, '0')}';

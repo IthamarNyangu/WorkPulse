@@ -6,33 +6,25 @@ import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
-class CorrectionRequestDetailScreen extends StatefulWidget {
-  const CorrectionRequestDetailScreen({super.key, this.initialRequestId});
-
-  final String? initialRequestId;
+class MissedPunchRequestsScreen extends StatefulWidget {
+  const MissedPunchRequestsScreen({super.key});
 
   @override
-  State<CorrectionRequestDetailScreen> createState() =>
-      _CorrectionRequestDetailScreenState();
+  State<MissedPunchRequestsScreen> createState() =>
+      _MissedPunchRequestsScreenState();
 }
 
-class _CorrectionRequestDetailScreenState
-    extends State<CorrectionRequestDetailScreen> {
+class _MissedPunchRequestsScreenState extends State<MissedPunchRequestsScreen> {
   static const int _pageSize = 4;
 
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
-  final Set<String> _expandedRequestIds = <String>{};
+  final Set<String> _expandedRecordIds = <String>{};
   int _currentPage = 0;
 
   @override
   void initState() {
     super.initState();
     _store.addListener(_onStoreChanged);
-
-    if (widget.initialRequestId != null) {
-      _expandedRequestIds.add(widget.initialRequestId!);
-      _currentPage = _pageForRequest(widget.initialRequestId!);
-    }
   }
 
   @override
@@ -56,21 +48,41 @@ class _CorrectionRequestDetailScreenState
     });
   }
 
-  Future<void> _openUpdateRequestForm(CorrectionRequest request) async {
-    final AttendanceRecord? record = _store.attendanceRecordById(
-      request.attendanceRecordId,
-    );
-    if (record == null) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Attendance record no longer exists.')),
-      );
-      return;
+  List<AttendanceRecord> get _missedPunchRecords {
+    return _store.missedPunchRecords;
+  }
+
+  int get _totalPages {
+    final int count = _missedPunchRecords.length;
+    if (count == 0) {
+      return 1;
+    }
+    return ((count - 1) ~/ _pageSize) + 1;
+  }
+
+  List<AttendanceRecord> _recordsOnCurrentPage() {
+    final List<AttendanceRecord> all = _missedPunchRecords;
+    if (all.isEmpty) {
+      return const <AttendanceRecord>[];
     }
 
-    final bool? updated = await Navigator.of(context).push<bool>(
+    final int start = _currentPage * _pageSize;
+    if (start >= all.length) {
+      return const <AttendanceRecord>[];
+    }
+
+    final int end = (start + _pageSize) > all.length
+        ? all.length
+        : start + _pageSize;
+    return all.sublist(start, end);
+  }
+
+  Future<void> _openCorrectionForm(AttendanceRecord record) async {
+    final CorrectionType initialType = record.clockOutTime == '--'
+        ? CorrectionType.clockOut
+        : CorrectionType.both;
+
+    final bool? submitted = await Navigator.of(context).push<bool>(
       PageRouteBuilder<bool>(
         pageBuilder:
             (
@@ -80,13 +92,9 @@ class _CorrectionRequestDetailScreenState
             ) {
               return CorrectionRequestFormScreen(
                 attendanceRecordId: record.id,
-                affectedDate: request.affectedDate,
-                issueSummary: request.issueSummary,
-                initialCorrectionType: CorrectionType.both,
-                existingRequestId: request.id,
-                initialCorrectedClockInTime: request.correctedClockInTime,
-                initialCorrectedClockOutTime: request.correctedClockOutTime,
-                initialReason: request.reason,
+                affectedDate: record.date,
+                issueSummary: _issueSummaryFor(record),
+                initialCorrectionType: initialType,
               );
             },
         transitionDuration: Duration.zero,
@@ -94,64 +102,24 @@ class _CorrectionRequestDetailScreenState
       ),
     );
 
-    if (!mounted || updated != true) {
+    if (!mounted || submitted != true) {
       return;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Correction request updated.')),
+      const SnackBar(content: Text('Correction request submitted.')),
     );
-  }
-
-  List<CorrectionRequest> get _pendingRequests {
-    return _store.pendingCorrectionRequests;
-  }
-
-  int get _totalPages {
-    final int count = _pendingRequests.length;
-    if (count == 0) {
-      return 1;
-    }
-    return ((count - 1) ~/ _pageSize) + 1;
-  }
-
-  int _pageForRequest(String requestId) {
-    final List<CorrectionRequest> requests = _pendingRequests;
-    final int index = requests.indexWhere(
-      (CorrectionRequest request) => request.id == requestId,
-    );
-    if (index < 0) {
-      return 0;
-    }
-    return index ~/ _pageSize;
-  }
-
-  List<CorrectionRequest> _requestsOnCurrentPage() {
-    final List<CorrectionRequest> all = _pendingRequests;
-    if (all.isEmpty) {
-      return const <CorrectionRequest>[];
-    }
-
-    final int start = _currentPage * _pageSize;
-    if (start >= all.length) {
-      return const <CorrectionRequest>[];
-    }
-
-    final int end = (start + _pageSize) > all.length
-        ? all.length
-        : start + _pageSize;
-    return all.sublist(start, end);
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<CorrectionRequest> currentPageRequests = _requestsOnCurrentPage();
-    final bool hasRequests = _pendingRequests.isNotEmpty;
+    final List<AttendanceRecord> currentPageRecords = _recordsOnCurrentPage();
+    final bool hasRecords = _missedPunchRecords.isNotEmpty;
 
     return Scaffold(
       backgroundColor: PulseClockColors.appBackground,
       appBar: AppBar(
-        title: const Text('Correction Requests'),
+        title: const Text('Missed Punches'),
         backgroundColor: PulseClockColors.surface,
         foregroundColor: PulseClockColors.textPrimary,
         surfaceTintColor: Colors.transparent,
@@ -181,7 +149,7 @@ class _CorrectionRequestDetailScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Pending Requests',
+                  'Missed Punch Records',
                   style: PulseClockTextStyles.headerSubtitle.copyWith(
                     color: PulseClockColors.onBackgroundPrimary,
                     fontSize: 17,
@@ -190,40 +158,37 @@ class _CorrectionRequestDetailScreenState
                 ),
                 const SizedBox(height: 10),
                 Expanded(
-                  child: hasRequests
+                  child: hasRecords
                       ? ListView.separated(
-                          itemCount: currentPageRequests.length,
+                          itemCount: currentPageRecords.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 10),
                           itemBuilder: (BuildContext context, int index) {
-                            final CorrectionRequest request =
-                                currentPageRequests[index];
-                            final bool isExpanded = _expandedRequestIds.contains(
-                              request.id,
+                            final AttendanceRecord record =
+                                currentPageRecords[index];
+                            final bool isExpanded = _expandedRecordIds.contains(
+                              record.id,
                             );
 
-                            return _PendingCorrectionCard(
-                              key: ValueKey<String>('pending_${request.id}'),
-                              request: request,
+                            return _MissedPunchCard(
+                              key: ValueKey<String>('missed_${record.id}'),
+                              record: record,
                               isExpanded: isExpanded,
-                              onUpdateToBoth: request.correctionType ==
-                                      CorrectionType.clockIn
-                                  ? () => _openUpdateRequestForm(request)
-                                  : null,
                               onExpansionChanged: (bool expanded) {
                                 setState(() {
                                   if (expanded) {
-                                    _expandedRequestIds.add(request.id);
+                                    _expandedRecordIds.add(record.id);
                                   } else {
-                                    _expandedRequestIds.remove(request.id);
+                                    _expandedRecordIds.remove(record.id);
                                   }
                                 });
                               },
+                              onRequestCorrection: () => _openCorrectionForm(record),
                             );
                           },
                         )
-                      : const _NoPendingRequestState(),
+                      : const _NoMissedPunchState(),
                 ),
-                if (hasRequests && _totalPages > 1) ...<Widget>[
+                if (hasRecords && _totalPages > 1) ...<Widget>[
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -272,19 +237,19 @@ class _CorrectionRequestDetailScreenState
   }
 }
 
-class _PendingCorrectionCard extends StatelessWidget {
-  const _PendingCorrectionCard({
+class _MissedPunchCard extends StatelessWidget {
+  const _MissedPunchCard({
     super.key,
-    required this.request,
+    required this.record,
     required this.isExpanded,
-    required this.onUpdateToBoth,
     required this.onExpansionChanged,
+    required this.onRequestCorrection,
   });
 
-  final CorrectionRequest request;
+  final AttendanceRecord record;
   final bool isExpanded;
-  final VoidCallback? onUpdateToBoth;
   final ValueChanged<bool> onExpansionChanged;
+  final VoidCallback onRequestCorrection;
 
   @override
   Widget build(BuildContext context) {
@@ -301,95 +266,49 @@ class _PendingCorrectionCard extends StatelessWidget {
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              DetailInfoRow(
-                label: 'Affected Date',
-                value: dateLabel(request.affectedDate),
-              ),
-              const SizedBox(height: 6),
-              DetailInfoRow(label: 'Status', value: request.status.label),
+              DetailInfoRow(label: 'Affected Date', value: dateLabel(record.date)),
               const SizedBox(height: 6),
               DetailInfoRow(
                 label: 'Correction Type',
-                value: request.correctionType.label,
+                value: _missedClockTypeLabel(record),
               ),
             ],
           ),
           children: [
             const Divider(color: PulseClockColors.cardBorder),
             const SizedBox(height: 10),
-            DetailInfoRow(
-              label: 'Corrected Clock In',
-              value: request.correctedClockInTime ?? '--',
-            ),
-            const SizedBox(height: 8),
-            DetailInfoRow(
-              label: 'Corrected Clock Out',
-              value: request.correctedClockOutTime ?? '--',
-            ),
-            const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Issue Summary',
+                'Fill correction details in the form.',
                 textAlign: TextAlign.left,
                 style: PulseClockTextStyles.cardSubtitle.copyWith(
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-            const SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                request.issueSummary,
-                textAlign: TextAlign.left,
-                style: PulseClockTextStyles.cardSubtitle,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Reason',
-                textAlign: TextAlign.left,
-                style: PulseClockTextStyles.cardSubtitle.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                request.reason,
-                textAlign: TextAlign.left,
-                style: PulseClockTextStyles.cardSubtitle,
-              ),
-            ),
-            if (onUpdateToBoth != null) ...<Widget>[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: onUpdateToBoth,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: PulseClockColors.actionBlue,
-                    foregroundColor: PulseClockColors.surface,
-                    textStyle: PulseClockTextStyles.contextAction.copyWith(
-                      color: PulseClockColors.surface,
-                      fontSize: 15,
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        PulseClockDimensions.cardRadius,
-                      ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onRequestCorrection,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: PulseClockColors.actionBlue,
+                  foregroundColor: PulseClockColors.surface,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  textStyle: PulseClockTextStyles.contextAction.copyWith(
+                    color: PulseClockColors.surface,
+                    fontSize: 16,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      PulseClockDimensions.cardRadius,
                     ),
                   ),
-                  child: const Text('Update to Both'),
                 ),
+                child: const Text('Continue to Correction Form'),
               ),
-            ],
+            ),
           ],
         ),
       ),
@@ -397,8 +316,8 @@ class _PendingCorrectionCard extends StatelessWidget {
   }
 }
 
-class _NoPendingRequestState extends StatelessWidget {
-  const _NoPendingRequestState();
+class _NoMissedPunchState extends StatelessWidget {
+  const _NoMissedPunchState();
 
   @override
   Widget build(BuildContext context) {
@@ -407,13 +326,13 @@ class _NoPendingRequestState extends StatelessWidget {
         child: Row(
           children: [
             const Icon(
-              Icons.hourglass_empty_rounded,
+              Icons.task_alt_rounded,
               color: PulseClockColors.textSecondary,
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'No pending correction requests available.',
+                'No missed punches available.',
                 style: PulseClockTextStyles.cardSubtitle.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -424,4 +343,39 @@ class _NoPendingRequestState extends StatelessWidget {
       ),
     );
   }
+}
+
+CorrectionType _suggestedCorrectionType(AttendanceRecord record) {
+  if (record.clockOutTime == '--') {
+    return CorrectionType.clockOut;
+  }
+  if (record.clockInTime == '--') {
+    return CorrectionType.clockIn;
+  }
+  return CorrectionType.both;
+}
+
+String _missedClockTypeLabel(AttendanceRecord record) {
+  final CorrectionType type = _suggestedCorrectionType(record);
+  switch (type) {
+    case CorrectionType.clockIn:
+      return 'Missed Clock In';
+    case CorrectionType.clockOut:
+      return 'Missed Clock Out';
+    case CorrectionType.both:
+      return 'Missed Clock In & Clock Out';
+  }
+}
+
+String _issueSummaryFor(AttendanceRecord record) {
+  if (record.note != null && record.note!.trim().isNotEmpty) {
+    return record.note!;
+  }
+  if (record.clockOutTime == '--') {
+    return 'Missing Clock Out for ${dateLabel(record.date)}';
+  }
+  if (record.clockInTime == '--') {
+    return 'Missing Clock In for ${dateLabel(record.date)}';
+  }
+  return 'Attendance correction requested for ${dateLabel(record.date)}';
 }
