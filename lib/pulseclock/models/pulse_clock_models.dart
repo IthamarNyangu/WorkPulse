@@ -29,6 +29,10 @@ enum HistoryStatusFilter {
   onLeave,
 }
 
+enum CorrectionType { clockIn, clockOut, both }
+
+enum CorrectionRequestStatus { pending }
+
 enum ClockActionMode { clockIn, clockOut }
 
 extension AttendanceRecordStatusLabels on AttendanceRecordStatus {
@@ -93,6 +97,28 @@ extension HistoryStatusFilterLabels on HistoryStatusFilter {
         return AttendanceRecordStatus.correctionPending;
       case HistoryStatusFilter.onLeave:
         return AttendanceRecordStatus.onLeave;
+    }
+  }
+}
+
+extension CorrectionTypeLabels on CorrectionType {
+  String get label {
+    switch (this) {
+      case CorrectionType.clockIn:
+        return 'Clock In';
+      case CorrectionType.clockOut:
+        return 'Clock Out';
+      case CorrectionType.both:
+        return 'Both';
+    }
+  }
+}
+
+extension CorrectionRequestStatusLabels on CorrectionRequestStatus {
+  String get label {
+    switch (this) {
+      case CorrectionRequestStatus.pending:
+        return 'Pending';
     }
   }
 }
@@ -242,4 +268,50 @@ class AttendanceRecord {
   final String workHours;
   final AttendanceRecordStatus status;
   final String? note;
+
+  AttendanceRecord copyWith({
+    String? id,
+    DateTime? date,
+    String? clockInTime,
+    String? clockOutTime,
+    String? workHours,
+    AttendanceRecordStatus? status,
+    String? note,
+  }) {
+    return AttendanceRecord(
+      id: id ?? this.id,
+      date: date ?? this.date,
+      clockInTime: clockInTime ?? this.clockInTime,
+      clockOutTime: clockOutTime ?? this.clockOutTime,
+      workHours: workHours ?? this.workHours,
+      status: status ?? this.status,
+      note: note ?? this.note,
+    );
+  }
+}
+
+class CorrectionRequest {
+  const CorrectionRequest({
+    required this.id,
+    required this.attendanceRecordId,
+    required this.affectedDate,
+    required this.issueSummary,
+    required this.correctionType,
+    required this.reason,
+    required this.status,
+    required this.submittedAt,
+    this.correctedClockInTime,
+    this.correctedClockOutTime,
+  });
+
+  final String id;
+  final String attendanceRecordId;
+  final DateTime affectedDate;
+  final String issueSummary;
+  final CorrectionType correctionType;
+  final String reason;
+  final CorrectionRequestStatus status;
+  final DateTime submittedAt;
+  final String? correctedClockInTime;
+  final String? correctedClockOutTime;
 }

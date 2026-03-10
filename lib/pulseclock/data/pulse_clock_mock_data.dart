@@ -307,3 +307,154 @@ class _DateWindow {
   final DateTime start;
   final DateTime end;
 }
+
+class WorkPulseMockStore extends ChangeNotifier {
+  WorkPulseMockStore._internal() {
+    _attendanceRecords = attendanceHistoryRecords();
+    _seedInitialPendingRequest();
+  }
+
+  static final WorkPulseMockStore instance = WorkPulseMockStore._internal();
+
+  late final List<AttendanceRecord> _attendanceRecords;
+  final List<CorrectionRequest> _correctionRequests = <CorrectionRequest>[];
+  int _correctionSequence = 1;
+
+  List<AttendanceRecord> get attendanceRecords {
+    return List<AttendanceRecord>.unmodifiable(_attendanceRecords);
+  }
+
+  List<CorrectionRequest> get correctionRequests {
+    return List<CorrectionRequest>.unmodifiable(_correctionRequests);
+  }
+
+  List<CorrectionRequest> get pendingCorrectionRequests {
+    return List<CorrectionRequest>.unmodifiable(
+      _correctionRequests.where(
+        (CorrectionRequest request) =>
+            request.status == CorrectionRequestStatus.pending,
+      ),
+    );
+  }
+
+  AttendanceRecord? get latestMissedPunchRecord {
+    for (final AttendanceRecord record in _attendanceRecords) {
+      if (record.status == AttendanceRecordStatus.missedPunch) {
+        return record;
+      }
+    }
+    return null;
+  }
+
+  CorrectionRequest? get latestPendingCorrectionRequest {
+    for (final CorrectionRequest request in _correctionRequests) {
+      if (request.status == CorrectionRequestStatus.pending) {
+        return request;
+      }
+    }
+    return null;
+  }
+
+  AttendanceRecord? attendanceRecordById(String id) {
+    for (final AttendanceRecord record in _attendanceRecords) {
+      if (record.id == id) {
+        return record;
+      }
+    }
+    return null;
+  }
+
+  CorrectionRequest? correctionRequestById(String id) {
+    for (final CorrectionRequest request in _correctionRequests) {
+      if (request.id == id) {
+        return request;
+      }
+    }
+    return null;
+  }
+
+  CorrectionRequest submitCorrectionRequest({
+    required String attendanceRecordId,
+    required String issueSummary,
+    required CorrectionType correctionType,
+    required String reason,
+    String? correctedClockInTime,
+    String? correctedClockOutTime,
+  }) {
+    final AttendanceRecord? existingRecord = attendanceRecordById(
+      attendanceRecordId,
+    );
+    if (existingRecord == null) {
+      throw ArgumentError('Attendance record not found for ID: $attendanceRecordId');
+    }
+
+    final String requestId = 'CR-${_correctionSequence.toString().padLeft(4, '0')}';
+    _correctionSequence += 1;
+
+    final CorrectionRequest request = CorrectionRequest(
+      id: requestId,
+      attendanceRecordId: attendanceRecordId,
+      affectedDate: existingRecord.date,
+      issueSummary: issueSummary,
+      correctionType: correctionType,
+      reason: reason,
+      status: CorrectionRequestStatus.pending,
+      submittedAt: DateTime.now(),
+      correctedClockInTime: correctedClockInTime,
+      correctedClockOutTime: correctedClockOutTime,
+    );
+
+    _correctionRequests.insert(0, request);
+    _markAttendanceAsCorrectionPending(
+      attendanceRecordId: attendanceRecordId,
+      issueSummary: issueSummary,
+    );
+    notifyListeners();
+
+    return request;
+  }
+
+  void _markAttendanceAsCorrectionPending({
+    required String attendanceRecordId,
+    required String issueSummary,
+  }) {
+    final int index = _attendanceRecords.indexWhere(
+      (AttendanceRecord record) => record.id == attendanceRecordId,
+    );
+    if (index < 0) {
+      return;
+    }
+
+    _attendanceRecords[index] = _attendanceRecords[index].copyWith(
+      status: AttendanceRecordStatus.correctionPending,
+      note: issueSummary,
+    );
+  }
+
+  void _seedInitialPendingRequest() {
+    final AttendanceRecord pendingRecord = _attendanceRecords.firstWhere(
+      (AttendanceRecord record) =>
+          record.status == AttendanceRecordStatus.correctionPending,
+      orElse: () => _attendanceRecords.first,
+    );
+
+    if (pendingRecord.status != AttendanceRecordStatus.correctionPending) {
+      return;
+    }
+
+    _correctionRequests.add(
+      CorrectionRequest(
+        id: 'CR-0001',
+        attendanceRecordId: pendingRecord.id,
+        affectedDate: pendingRecord.date,
+        issueSummary: pendingRecord.note ?? 'Correction submitted.',
+        correctionType: CorrectionType.clockIn,
+        reason: 'Submitted for manager review.',
+        status: CorrectionRequestStatus.pending,
+        submittedAt: DateTime.now().subtract(const Duration(hours: 6)),
+        correctedClockInTime: '08:00 AM',
+      ),
+    );
+    _correctionSequence = 2;
+  }
+}

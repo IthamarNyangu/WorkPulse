@@ -15,14 +15,27 @@ class AttendanceHistoryScreen extends StatefulWidget {
 class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   HistoryDateRangeFilter _selectedDateRange = HistoryDateRangeFilter.thisWeek;
   HistoryStatusFilter _selectedStatus = HistoryStatusFilter.all;
+  final WorkPulseMockStore _store = WorkPulseMockStore.instance;
   late final DateTime _now;
-  late final List<AttendanceRecord> _allRecords;
 
   @override
   void initState() {
     super.initState();
     _now = DateTime.now();
-    _allRecords = attendanceHistoryRecords(now: _now);
+    _store.addListener(_onStoreChanged);
+  }
+
+  @override
+  void dispose() {
+    _store.removeListener(_onStoreChanged);
+    super.dispose();
+  }
+
+  void _onStoreChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
   }
 
   void _openRecordDetails(AttendanceRecord record) {
@@ -34,7 +47,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
               Animation<double> animation,
               Animation<double> secondaryAnimation,
             ) {
-              return AttendanceHistoryDetailScreen(record: record);
+              return AttendanceHistoryDetailScreen(recordId: record.id);
             },
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
@@ -45,7 +58,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final List<AttendanceRecord> filteredRecords = filterAttendanceHistoryRecords(
-      records: _allRecords,
+      records: _store.attendanceRecords,
       dateRange: _selectedDateRange,
       statusFilter: _selectedStatus,
       now: _now,

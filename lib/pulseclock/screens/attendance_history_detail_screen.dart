@@ -1,16 +1,105 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
+import 'package:pulseclock/pulseclock/screens/correction_request_form_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
-class AttendanceHistoryDetailScreen extends StatelessWidget {
-  const AttendanceHistoryDetailScreen({super.key, required this.record});
+class AttendanceHistoryDetailScreen extends StatefulWidget {
+  const AttendanceHistoryDetailScreen({super.key, required this.recordId});
 
-  final AttendanceRecord record;
+  final String recordId;
+
+  @override
+  State<AttendanceHistoryDetailScreen> createState() =>
+      _AttendanceHistoryDetailScreenState();
+}
+
+class _AttendanceHistoryDetailScreenState
+    extends State<AttendanceHistoryDetailScreen> {
+  final WorkPulseMockStore _store = WorkPulseMockStore.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _store.addListener(_onStoreChanged);
+  }
+
+  @override
+  void dispose() {
+    _store.removeListener(_onStoreChanged);
+    super.dispose();
+  }
+
+  void _onStoreChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+  }
+
+  Future<void> _openCorrectionForm(AttendanceRecord record) async {
+    final CorrectionType? initialType = record.clockOutTime == '--'
+        ? CorrectionType.clockOut
+        : null;
+
+    final bool? submitted = await Navigator.of(context).push<bool>(
+      PageRouteBuilder<bool>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return CorrectionRequestFormScreen(
+                attendanceRecordId: record.id,
+                affectedDate: record.date,
+                issueSummary: _issueSummaryFor(record),
+                initialCorrectionType: initialType,
+              );
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+
+    if (!mounted || submitted != true) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Correction request submitted.')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final AttendanceRecord? record = _store.attendanceRecordById(widget.recordId);
+
+    if (record == null) {
+      return Scaffold(
+        backgroundColor: PulseClockColors.appBackground,
+        appBar: AppBar(
+          title: const Text('Attendance Details'),
+          backgroundColor: PulseClockColors.surface,
+          foregroundColor: PulseClockColors.textPrimary,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+        ),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Attendance record is no longer available.',
+              style: PulseClockTextStyles.cardSubtitle,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
     final bool showCorrectionAction =
         record.status == AttendanceRecordStatus.missedPunch;
 
@@ -75,15 +164,9 @@ class AttendanceHistoryDetailScreen extends StatelessWidget {
                       const SizedBox(height: 10),
                       DetailInfoRow(label: 'Clock In', value: record.clockInTime),
                       const SizedBox(height: 10),
-                      DetailInfoRow(
-                        label: 'Clock Out',
-                        value: record.clockOutTime,
-                      ),
+                      DetailInfoRow(label: 'Clock Out', value: record.clockOutTime),
                       const SizedBox(height: 10),
-                      DetailInfoRow(
-                        label: 'Work Hours',
-                        value: record.workHours,
-                      ),
+                      DetailInfoRow(label: 'Work Hours', value: record.workHours),
                       if (record.note != null) ...<Widget>[
                         const SizedBox(height: 12),
                         const Divider(color: PulseClockColors.cardBorder),
@@ -95,10 +178,7 @@ class AttendanceHistoryDetailScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          record.note!,
-                          style: PulseClockTextStyles.cardSubtitle,
-                        ),
+                        Text(record.note!, style: PulseClockTextStyles.cardSubtitle),
                       ],
                     ],
                   ),
@@ -108,13 +188,7 @@ class AttendanceHistoryDetailScreen extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Correction request flow coming soon.'),
-                          ),
-                        );
-                      },
+                      onPressed: () => _openCorrectionForm(record),
                       icon: const Icon(Icons.edit_calendar_outlined),
                       label: const Text('Request Correction'),
                       style: ElevatedButton.styleFrom(
@@ -141,4 +215,17 @@ class AttendanceHistoryDetailScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+String _issueSummaryFor(AttendanceRecord record) {
+  if (record.note != null && record.note!.trim().isNotEmpty) {
+    return record.note!;
+  }
+  if (record.clockOutTime == '--') {
+    return 'Missing Clock Out for ${dateLabel(record.date)}';
+  }
+  if (record.clockInTime == '--') {
+    return 'Missing Clock In for ${dateLabel(record.date)}';
+  }
+  return 'Attendance correction requested for ${dateLabel(record.date)}';
 }
