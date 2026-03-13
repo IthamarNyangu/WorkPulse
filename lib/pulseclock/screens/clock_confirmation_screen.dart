@@ -87,12 +87,51 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
     }
 
     final String comment = _commentController.text.trim();
+    final ClockConfirmationResult result = ClockConfirmationResult(
+      mode: widget.mode,
+      timestamp: DateTime.now(),
+      comment: comment.isEmpty ? null : comment,
+    );
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        final bool isClockIn = widget.mode == ClockActionMode.clockIn;
+        return AlertDialog(
+          backgroundColor: const Color(0xFFFCFDFE),
+          surfaceTintColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 44, vertical: 24),
+          titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          contentPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          actionsPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: Text(
+            isClockIn ? 'Clock In Successful' : 'Clock Out Successful',
+            style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
+          ),
+          content: Text(
+            isClockIn
+                ? 'You have clocked in successfully.'
+                : 'You have clocked out successfully.',
+            style: PulseClockTextStyles.cardSubtitle.copyWith(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted) {
+      return;
+    }
+
     Navigator.of(context).pop(
-      ClockConfirmationResult(
-        mode: widget.mode,
-        timestamp: DateTime.now(),
-        comment: comment.isEmpty ? null : comment,
-      ),
+      result,
     );
   }
 

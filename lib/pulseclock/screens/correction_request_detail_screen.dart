@@ -145,7 +145,8 @@ class _CorrectionRequestDetailScreenState
 
   @override
   Widget build(BuildContext context) {
-    final List<CorrectionRequest> currentPageRequests = _requestsOnCurrentPage();
+    final List<CorrectionRequest> currentPageRequests =
+        _requestsOnCurrentPage();
     final bool hasRequests = _pendingRequests.isNotEmpty;
 
     return Scaffold(
@@ -193,19 +194,20 @@ class _CorrectionRequestDetailScreenState
                   child: hasRequests
                       ? ListView.separated(
                           itemCount: currentPageRequests.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 10),
                           itemBuilder: (BuildContext context, int index) {
                             final CorrectionRequest request =
                                 currentPageRequests[index];
-                            final bool isExpanded = _expandedRequestIds.contains(
-                              request.id,
-                            );
+                            final bool isExpanded = _expandedRequestIds
+                                .contains(request.id);
 
                             return _PendingCorrectionCard(
                               key: ValueKey<String>('pending_${request.id}'),
                               request: request,
                               isExpanded: isExpanded,
-                              onUpdateToBoth: request.correctionType ==
+                              onUpdateToBoth:
+                                  request.correctionType ==
                                       CorrectionType.clockIn
                                   ? () => _openUpdateRequestForm(request)
                                   : null,

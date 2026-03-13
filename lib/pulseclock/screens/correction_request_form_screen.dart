@@ -32,7 +32,8 @@ class CorrectionRequestFormScreen extends StatefulWidget {
       _CorrectionRequestFormScreenState();
 }
 
-class _CorrectionRequestFormScreenState extends State<CorrectionRequestFormScreen> {
+class _CorrectionRequestFormScreenState
+    extends State<CorrectionRequestFormScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _clockInController = TextEditingController();
   final TextEditingController _clockOutController = TextEditingController();
@@ -104,7 +105,9 @@ class _CorrectionRequestFormScreenState extends State<CorrectionRequestFormScree
     final bool shouldPreselectClockOut = _isMissingClockOut;
     final CorrectionType initialType =
         widget.initialCorrectionType ??
-        (shouldPreselectClockOut ? CorrectionType.clockOut : CorrectionType.both);
+        (shouldPreselectClockOut
+            ? CorrectionType.clockOut
+            : CorrectionType.both);
     _selectedType = _availableCorrectionTypes.contains(initialType)
         ? initialType
         : (_isMissingClockIn
@@ -171,12 +174,16 @@ class _CorrectionRequestFormScreenState extends State<CorrectionRequestFormScree
 
     try {
       _store.submitCorrectionRequest(
-        attendanceRecordId: _sourceRecord!.id,
+        attendanceRecordId: _sourceRecord.id,
         issueSummary: widget.issueSummary,
         correctionType: _selectedType,
         reason: _reasonController.text.trim(),
-        correctedClockInTime: _needsClockIn ? _clockInController.text.trim() : null,
-        correctedClockOutTime: _needsClockOut ? _clockOutController.text.trim() : null,
+        correctedClockInTime: _needsClockIn
+            ? _clockInController.text.trim()
+            : null,
+        correctedClockOutTime: _needsClockOut
+            ? _clockOutController.text.trim()
+            : null,
         existingRequestId: widget.existingRequestId,
       );
 
@@ -289,37 +296,39 @@ class _CorrectionRequestFormScreenState extends State<CorrectionRequestFormScree
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: _availableCorrectionTypes.map((
-                            CorrectionType type,
-                          ) {
-                            return ChoiceChip(
-                              label: Text(type.label),
-                              selected: _selectedType == type,
-                              onSelected: _isSubmitting
-                                  ? null
-                                  : (_) {
-                                      setState(() {
-                                        _selectedType = type;
-                                        _syncPrefilledClockIn();
-                                      });
-                                    },
-                              labelStyle: PulseClockTextStyles.cardSubtitle.copyWith(
-                                color: _selectedType == type
-                                    ? PulseClockColors.surface
-                                    : PulseClockColors.textPrimary,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                              selectedColor: PulseClockColors.actionBlue,
-                              backgroundColor: PulseClockColors.surfaceMuted,
-                              side: BorderSide(
-                                color: _selectedType == type
-                                    ? PulseClockColors.actionBlue
-                                    : PulseClockColors.cardBorder,
-                              ),
-                              showCheckmark: false,
-                            );
-                          }).toList(growable: false),
+                          children: _availableCorrectionTypes
+                              .map((CorrectionType type) {
+                                return ChoiceChip(
+                                  label: Text(type.label),
+                                  selected: _selectedType == type,
+                                  onSelected: _isSubmitting
+                                      ? null
+                                      : (_) {
+                                          setState(() {
+                                            _selectedType = type;
+                                            _syncPrefilledClockIn();
+                                          });
+                                        },
+                                  labelStyle: PulseClockTextStyles.cardSubtitle
+                                      .copyWith(
+                                        color: _selectedType == type
+                                            ? PulseClockColors.surface
+                                            : PulseClockColors.textPrimary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                      ),
+                                  selectedColor: PulseClockColors.actionBlue,
+                                  backgroundColor:
+                                      PulseClockColors.surfaceMuted,
+                                  side: BorderSide(
+                                    color: _selectedType == type
+                                        ? PulseClockColors.actionBlue
+                                        : PulseClockColors.cardBorder,
+                                  ),
+                                  showCheckmark: false,
+                                );
+                              })
+                              .toList(growable: false),
                         ),
                         if (_needsClockIn) ...<Widget>[
                           const SizedBox(height: 14),
@@ -402,12 +411,12 @@ class _CorrectionRequestFormScreenState extends State<CorrectionRequestFormScree
                             style: ElevatedButton.styleFrom(
                               backgroundColor: PulseClockColors.actionBlue,
                               foregroundColor: PulseClockColors.surface,
-                              disabledBackgroundColor: PulseClockColors.actionBlue
+                              disabledBackgroundColor: PulseClockColors
+                                  .actionBlue
                                   .withOpacity(0.65),
                               disabledForegroundColor: PulseClockColors.surface,
-                              textStyle: PulseClockTextStyles.primaryAction.copyWith(
-                                fontSize: 20,
-                              ),
+                              textStyle: PulseClockTextStyles.primaryAction
+                                  .copyWith(fontSize: 20),
                               padding: const EdgeInsets.symmetric(
                                 vertical: 16,
                                 horizontal: 18,

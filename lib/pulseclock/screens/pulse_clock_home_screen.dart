@@ -128,7 +128,6 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
   }
 
   void _openPendingCorrectionDetails() {
-    final CorrectionRequest? pending = _mockStore.latestPendingCorrectionRequest;
     Navigator.of(context).push(
       PageRouteBuilder<void>(
         pageBuilder:
@@ -137,9 +136,7 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
               Animation<double> animation,
               Animation<double> secondaryAnimation,
             ) {
-              return CorrectionRequestDetailScreen(
-                initialRequestId: pending?.id,
-              );
+              return const CorrectionRequestDetailScreen();
             },
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,

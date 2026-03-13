@@ -9,7 +9,8 @@ class AttendanceHistoryScreen extends StatefulWidget {
   const AttendanceHistoryScreen({super.key});
 
   @override
-  State<AttendanceHistoryScreen> createState() => _AttendanceHistoryScreenState();
+  State<AttendanceHistoryScreen> createState() =>
+      _AttendanceHistoryScreenState();
 }
 
 class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
@@ -57,12 +58,13 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final List<AttendanceRecord> filteredRecords = filterAttendanceHistoryRecords(
-      records: _store.attendanceRecords,
-      dateRange: _selectedDateRange,
-      statusFilter: _selectedStatus,
-      now: _now,
-    );
+    final List<AttendanceRecord> filteredRecords =
+        filterAttendanceHistoryRecords(
+          records: _store.attendanceRecords,
+          dateRange: _selectedDateRange,
+          statusFilter: _selectedStatus,
+          now: _now,
+        );
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -133,7 +135,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                 ? const _HistoryEmptyState()
                 : ListView.separated(
                     itemCount: filteredRecords.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (BuildContext context, int index) {
                       final AttendanceRecord record = filteredRecords[index];
                       return HistoryRecordCard(

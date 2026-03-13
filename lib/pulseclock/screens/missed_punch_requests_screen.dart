@@ -161,7 +161,8 @@ class _MissedPunchRequestsScreenState extends State<MissedPunchRequestsScreen> {
                   child: hasRecords
                       ? ListView.separated(
                           itemCount: currentPageRecords.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 10),
                           itemBuilder: (BuildContext context, int index) {
                             final AttendanceRecord record =
                                 currentPageRecords[index];
@@ -182,7 +183,8 @@ class _MissedPunchRequestsScreenState extends State<MissedPunchRequestsScreen> {
                                   }
                                 });
                               },
-                              onRequestCorrection: () => _openCorrectionForm(record),
+                              onRequestCorrection: () =>
+                                  _openCorrectionForm(record),
                             );
                           },
                         )
@@ -266,7 +268,10 @@ class _MissedPunchCard extends StatelessWidget {
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              DetailInfoRow(label: 'Affected Date', value: dateLabel(record.date)),
+              DetailInfoRow(
+                label: 'Affected Date',
+                value: dateLabel(record.date),
+              ),
               const SizedBox(height: 6),
               DetailInfoRow(
                 label: 'Correction Type',
