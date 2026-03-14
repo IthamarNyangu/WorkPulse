@@ -310,15 +310,23 @@ class _DateWindow {
 
 class WorkPulseMockStore extends ChangeNotifier {
   WorkPulseMockStore._internal() {
-    _attendanceRecords = attendanceHistoryRecords();
+    _baseAttendanceRecords = attendanceHistoryRecords();
+    _attendanceRecords.addAll(
+      _baseAttendanceRecords.map(_cloneAttendanceRecord),
+    );
+    _seedLeaveRequests();
     _seedInitialPendingRequest();
+    _rebuildAttendanceRecords();
   }
 
   static final WorkPulseMockStore instance = WorkPulseMockStore._internal();
 
-  late final List<AttendanceRecord> _attendanceRecords;
+  late final List<AttendanceRecord> _baseAttendanceRecords;
+  final List<AttendanceRecord> _attendanceRecords = <AttendanceRecord>[];
   final List<CorrectionRequest> _correctionRequests = <CorrectionRequest>[];
+  final List<LeaveRequest> _leaveRequests = <LeaveRequest>[];
   int _correctionSequence = 1;
+  int _leaveSequence = 1;
 
   List<AttendanceRecord> get attendanceRecords {
     return List<AttendanceRecord>.unmodifiable(_attendanceRecords);
@@ -326,6 +334,14 @@ class WorkPulseMockStore extends ChangeNotifier {
 
   List<CorrectionRequest> get correctionRequests {
     return List<CorrectionRequest>.unmodifiable(_correctionRequests);
+  }
+
+  List<LeaveRequest> get leaveRequests {
+    final List<LeaveRequest> requests = List<LeaveRequest>.from(_leaveRequests);
+    requests.sort((LeaveRequest a, LeaveRequest b) {
+      return b.submittedAt.compareTo(a.submittedAt);
+    });
+    return List<LeaveRequest>.unmodifiable(requests);
   }
 
   List<CorrectionRequest> get pendingCorrectionRequests {
@@ -388,6 +404,15 @@ class WorkPulseMockStore extends ChangeNotifier {
     return null;
   }
 
+  LeaveRequest? leaveRequestById(String id) {
+    for (final LeaveRequest request in _leaveRequests) {
+      if (request.id == id) {
+        return request;
+      }
+    }
+    return null;
+  }
+
   CorrectionRequest submitCorrectionRequest({
     required String attendanceRecordId,
     required String issueSummary,
@@ -432,10 +457,7 @@ class WorkPulseMockStore extends ChangeNotifier {
 
         _correctionRequests.removeAt(existingRequestIndex);
         _correctionRequests.insert(0, updatedRequest);
-        _markAttendanceAsCorrectionPending(
-          attendanceRecordId: attendanceRecordId,
-          issueSummary: issueSummary,
-        );
+        _rebuildAttendanceRecords();
         notifyListeners();
         return updatedRequest;
       }
@@ -458,30 +480,67 @@ class WorkPulseMockStore extends ChangeNotifier {
     );
 
     _correctionRequests.insert(0, request);
-    _markAttendanceAsCorrectionPending(
-      attendanceRecordId: attendanceRecordId,
-      issueSummary: issueSummary,
-    );
+    _rebuildAttendanceRecords();
     notifyListeners();
 
     return request;
   }
 
-  void _markAttendanceAsCorrectionPending({
-    required String attendanceRecordId,
-    required String issueSummary,
+  LeaveRequest submitLeaveRequest({
+    required LeaveType type,
+    required DateTime startDate,
+    required DateTime endDate,
+    required String reason,
   }) {
-    final int index = _attendanceRecords.indexWhere(
-      (AttendanceRecord record) => record.id == attendanceRecordId,
+    final String requestId = 'LR-${_leaveSequence.toString().padLeft(4, '0')}';
+    _leaveSequence += 1;
+
+    final LeaveRequest request = LeaveRequest(
+      id: requestId,
+      type: type,
+      startDate: _dateOnly(startDate),
+      endDate: _dateOnly(endDate),
+      reason: reason,
+      status: LeaveRequestStatus.pendingApproval,
+      submittedAt: DateTime.now(),
+    );
+
+    _leaveRequests.insert(0, request);
+    _rebuildAttendanceRecords();
+    notifyListeners();
+    return request;
+  }
+
+  LeaveRequest updatePendingLeaveRequest({
+    required String requestId,
+    required LeaveType type,
+    required DateTime startDate,
+    required DateTime endDate,
+    required String reason,
+  }) {
+    final int index = _leaveRequests.indexWhere(
+      (LeaveRequest request) => request.id == requestId,
     );
     if (index < 0) {
-      return;
+      throw ArgumentError('Leave request not found for ID: $requestId');
     }
 
-    _attendanceRecords[index] = _attendanceRecords[index].copyWith(
-      status: AttendanceRecordStatus.correctionPending,
-      note: issueSummary,
+    final LeaveRequest current = _leaveRequests[index];
+    if (current.status != LeaveRequestStatus.pendingApproval) {
+      throw ArgumentError('Only pending leave requests can be edited.');
+    }
+
+    final LeaveRequest updated = current.copyWith(
+      type: type,
+      startDate: _dateOnly(startDate),
+      endDate: _dateOnly(endDate),
+      reason: reason,
+      submittedAt: DateTime.now(),
     );
+    _leaveRequests[index] = updated;
+    _rebuildAttendanceRecords();
+    notifyListeners();
+    return updated;
   }
 
   void _seedInitialPendingRequest() {
@@ -510,4 +569,230 @@ class WorkPulseMockStore extends ChangeNotifier {
     );
     _correctionSequence = 2;
   }
+
+  void _seedLeaveRequests() {
+    final DateTime today = _dateOnly(DateTime.now());
+
+    _leaveRequests.addAll(<LeaveRequest>[
+      LeaveRequest(
+        id: 'LR-0001',
+        type: LeaveType.annualLeave,
+        startDate: today.add(const Duration(days: 2)),
+        endDate: today.add(const Duration(days: 3)),
+        reason: 'Family event out of town.',
+        status: LeaveRequestStatus.pendingApproval,
+        submittedAt: DateTime.now().subtract(const Duration(hours: 8)),
+      ),
+      LeaveRequest(
+        id: 'LR-0002',
+        type: LeaveType.sickLeave,
+        startDate: today.subtract(const Duration(days: 11)),
+        endDate: today.subtract(const Duration(days: 11)),
+        reason: 'Medical rest recommended by clinic.',
+        status: LeaveRequestStatus.approved,
+        submittedAt: DateTime.now().subtract(const Duration(days: 12)),
+      ),
+      LeaveRequest(
+        id: 'LR-0003',
+        type: LeaveType.other,
+        startDate: today.subtract(const Duration(days: 7)),
+        endDate: today.subtract(const Duration(days: 7)),
+        reason: 'Emergency personal matter.',
+        status: LeaveRequestStatus.rejected,
+        submittedAt: DateTime.now().subtract(const Duration(days: 8)),
+      ),
+      LeaveRequest(
+        id: 'LR-0004',
+        type: LeaveType.other,
+        startDate: today.add(const Duration(days: 6)),
+        endDate: today.add(const Duration(days: 6)),
+        reason: 'Community obligation.',
+        status: LeaveRequestStatus.pendingApproval,
+        submittedAt: DateTime.now().subtract(const Duration(days: 1)),
+      ),
+    ]);
+    _leaveSequence = 5;
+  }
+
+  void _rebuildAttendanceRecords() {
+    _attendanceRecords
+      ..clear()
+      ..addAll(_baseAttendanceRecords.map(_cloneAttendanceRecord));
+
+    _applyPendingCorrectionStatuses();
+
+    final DateTime today = _dateOnly(DateTime.now());
+    final List<LeaveRequest> orderedRequests = List<LeaveRequest>.from(
+      _leaveRequests,
+    );
+    orderedRequests.sort((LeaveRequest a, LeaveRequest b) {
+      return a.submittedAt.compareTo(b.submittedAt);
+    });
+
+    for (final LeaveRequest request in orderedRequests) {
+      final List<DateTime> dates = _datesInRange(request.startDate, request.endDate);
+      for (final DateTime date in dates) {
+        _applyLeaveRequestForDate(request: request, date: date, today: today);
+      }
+    }
+
+    _attendanceRecords.sort((AttendanceRecord a, AttendanceRecord b) {
+      return b.date.compareTo(a.date);
+    });
+  }
+
+  void _applyPendingCorrectionStatuses() {
+    for (final CorrectionRequest request in _correctionRequests) {
+      if (request.status != CorrectionRequestStatus.pending) {
+        continue;
+      }
+
+      final int index = _attendanceRecords.indexWhere(
+        (AttendanceRecord record) => record.id == request.attendanceRecordId,
+      );
+      if (index < 0) {
+        continue;
+      }
+
+      _attendanceRecords[index] = _attendanceRecords[index].copyWith(
+        status: AttendanceRecordStatus.correctionPending,
+        note: request.issueSummary,
+      );
+    }
+  }
+
+  void _applyLeaveRequestForDate({
+    required LeaveRequest request,
+    required DateTime date,
+    required DateTime today,
+  }) {
+    final int index = _attendanceRecords.indexWhere(
+      (AttendanceRecord record) => _dateOnly(record.date) == date,
+    );
+    final AttendanceRecord? existing = index >= 0 ? _attendanceRecords[index] : null;
+    final bool hasClockIn = existing != null && existing.clockInTime != '--';
+    final bool hasClockOut = existing != null && existing.clockOutTime != '--';
+
+    if (existing != null &&
+        (existing.status == AttendanceRecordStatus.correctionPending ||
+            _hasPendingCorrectionForAttendance(existing.id))) {
+      return;
+    }
+
+    if (request.status == LeaveRequestStatus.approved) {
+      _upsertLeaveAttendanceRecord(
+        existing: existing,
+        existingIndex: index,
+        request: request,
+        date: date,
+        status: AttendanceRecordStatus.onLeave,
+        workHours: '0h 0m',
+      );
+      return;
+    }
+
+    if (request.status == LeaveRequestStatus.pendingApproval) {
+      _upsertLeaveAttendanceRecord(
+        existing: existing,
+        existingIndex: index,
+        request: request,
+        date: date,
+        status: AttendanceRecordStatus.leavePending,
+        workHours: '0h 0m',
+      );
+      return;
+    }
+
+    if (date.isBefore(today) && !hasClockIn) {
+      _upsertLeaveAttendanceRecord(
+        existing: existing,
+        existingIndex: index,
+        request: request,
+        date: date,
+        status: AttendanceRecordStatus.absent,
+        workHours: '0h 0m',
+      );
+      return;
+    }
+
+    if (existing != null &&
+        existing.id.startsWith('LEAVE-') &&
+        !hasClockIn &&
+        !hasClockOut) {
+      _attendanceRecords.removeAt(index);
+    }
+  }
+
+  void _upsertLeaveAttendanceRecord({
+    required AttendanceRecord? existing,
+    required int existingIndex,
+    required LeaveRequest request,
+    required DateTime date,
+    required AttendanceRecordStatus status,
+    required String workHours,
+  }) {
+    final String note = '${request.type.label} (${request.status.label})';
+
+    if (existing == null) {
+      _attendanceRecords.add(
+        AttendanceRecord(
+          id: _leaveAttendanceId(date, request.id),
+          date: date,
+          clockInTime: '--',
+          clockOutTime: '--',
+          workHours: workHours,
+          status: status,
+          note: note,
+        ),
+      );
+      return;
+    }
+
+    if (existing.clockInTime != '--' && existing.clockOutTime != '--') {
+      return;
+    }
+
+    _attendanceRecords[existingIndex] = existing.copyWith(
+      status: status,
+      workHours: workHours,
+      note: note,
+    );
+  }
+
+  bool _hasPendingCorrectionForAttendance(String attendanceRecordId) {
+    for (final CorrectionRequest request in _correctionRequests) {
+      if (request.attendanceRecordId == attendanceRecordId &&
+          request.status == CorrectionRequestStatus.pending) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+AttendanceRecord _cloneAttendanceRecord(AttendanceRecord record) {
+  return record.copyWith();
+}
+
+List<DateTime> _datesInRange(DateTime startDate, DateTime endDate) {
+  final DateTime start = _dateOnly(startDate);
+  final DateTime end = _dateOnly(endDate);
+  if (end.isBefore(start)) {
+    return <DateTime>[start];
+  }
+
+  final List<DateTime> dates = <DateTime>[];
+  DateTime cursor = start;
+  while (!cursor.isAfter(end)) {
+    dates.add(cursor);
+    cursor = cursor.add(const Duration(days: 1));
+  }
+  return dates;
+}
+
+String _leaveAttendanceId(DateTime date, String requestId) {
+  final String yyyy = date.year.toString().padLeft(4, '0');
+  final String mm = date.month.toString().padLeft(2, '0');
+  final String dd = date.day.toString().padLeft(2, '0');
+  return 'LEAVE-$yyyy$mm$dd-$requestId';
 }

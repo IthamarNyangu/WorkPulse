@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/features/corrections/correction_form_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
-import 'package:pulseclock/pulseclock/screens/correction_request_form_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
@@ -52,7 +52,7 @@ class _AttendanceHistoryDetailScreenState
               Animation<double> animation,
               Animation<double> secondaryAnimation,
             ) {
-              return CorrectionRequestFormScreen(
+              return CorrectionFormScreen(
                 attendanceRecordId: record.id,
                 affectedDate: record.date,
                 issueSummary: _issueSummaryFor(record),

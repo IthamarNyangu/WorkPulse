@@ -1,1 +1,1 @@
-export 'screens/pulse_clock_home_screen.dart';
+export '../features/attendance/home/pulse_clock_home_screen.dart';

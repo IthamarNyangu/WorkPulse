@@ -1,23 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/features/corrections/correction_form_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
-import 'package:pulseclock/pulseclock/screens/correction_request_form_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
-class CorrectionRequestDetailScreen extends StatefulWidget {
-  const CorrectionRequestDetailScreen({super.key, this.initialRequestId});
+class CorrectionDetailsScreen extends StatefulWidget {
+  const CorrectionDetailsScreen({super.key, this.initialRequestId});
 
   final String? initialRequestId;
 
   @override
-  State<CorrectionRequestDetailScreen> createState() =>
-      _CorrectionRequestDetailScreenState();
+  State<CorrectionDetailsScreen> createState() => _CorrectionDetailsScreenState();
 }
 
-class _CorrectionRequestDetailScreenState
-    extends State<CorrectionRequestDetailScreen> {
+class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
   static const int _pageSize = 4;
 
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
@@ -56,7 +54,7 @@ class _CorrectionRequestDetailScreenState
     });
   }
 
-  Future<void> _openUpdateRequestForm(CorrectionRequest request) async {
+  Future<void> _openEditRequestForm(CorrectionRequest request) async {
     final AttendanceRecord? record = _store.attendanceRecordById(
       request.attendanceRecordId,
     );
@@ -78,11 +76,11 @@ class _CorrectionRequestDetailScreenState
               Animation<double> animation,
               Animation<double> secondaryAnimation,
             ) {
-              return CorrectionRequestFormScreen(
+              return CorrectionFormScreen(
                 attendanceRecordId: record.id,
                 affectedDate: request.affectedDate,
                 issueSummary: request.issueSummary,
-                initialCorrectionType: CorrectionType.both,
+                initialCorrectionType: request.correctionType,
                 existingRequestId: request.id,
                 initialCorrectedClockInTime: request.correctedClockInTime,
                 initialCorrectedClockOutTime: request.correctedClockOutTime,
@@ -145,8 +143,7 @@ class _CorrectionRequestDetailScreenState
 
   @override
   Widget build(BuildContext context) {
-    final List<CorrectionRequest> currentPageRequests =
-        _requestsOnCurrentPage();
+    final List<CorrectionRequest> currentPageRequests = _requestsOnCurrentPage();
     final bool hasRequests = _pendingRequests.isNotEmpty;
 
     return Scaffold(
@@ -194,23 +191,19 @@ class _CorrectionRequestDetailScreenState
                   child: hasRequests
                       ? ListView.separated(
                           itemCount: currentPageRequests.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 10),
+                          separatorBuilder: (_, __) => const SizedBox(height: 10),
                           itemBuilder: (BuildContext context, int index) {
                             final CorrectionRequest request =
                                 currentPageRequests[index];
-                            final bool isExpanded = _expandedRequestIds
-                                .contains(request.id);
+                            final bool isExpanded = _expandedRequestIds.contains(
+                              request.id,
+                            );
 
                             return _PendingCorrectionCard(
                               key: ValueKey<String>('pending_${request.id}'),
                               request: request,
                               isExpanded: isExpanded,
-                              onUpdateToBoth:
-                                  request.correctionType ==
-                                      CorrectionType.clockIn
-                                  ? () => _openUpdateRequestForm(request)
-                                  : null,
+                              onEditRequest: () => _openEditRequestForm(request),
                               onExpansionChanged: (bool expanded) {
                                 setState(() {
                                   if (expanded) {
@@ -279,13 +272,13 @@ class _PendingCorrectionCard extends StatelessWidget {
     super.key,
     required this.request,
     required this.isExpanded,
-    required this.onUpdateToBoth,
+    required this.onEditRequest,
     required this.onExpansionChanged,
   });
 
   final CorrectionRequest request;
   final bool isExpanded;
-  final VoidCallback? onUpdateToBoth;
+  final VoidCallback onEditRequest;
   final ValueChanged<bool> onExpansionChanged;
 
   @override
@@ -368,30 +361,28 @@ class _PendingCorrectionCard extends StatelessWidget {
                 style: PulseClockTextStyles.cardSubtitle,
               ),
             ),
-            if (onUpdateToBoth != null) ...<Widget>[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: onUpdateToBoth,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: PulseClockColors.actionBlue,
-                    foregroundColor: PulseClockColors.surface,
-                    textStyle: PulseClockTextStyles.contextAction.copyWith(
-                      color: PulseClockColors.surface,
-                      fontSize: 15,
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        PulseClockDimensions.cardRadius,
-                      ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onEditRequest,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: PulseClockColors.actionBlue,
+                  foregroundColor: PulseClockColors.surface,
+                  textStyle: PulseClockTextStyles.contextAction.copyWith(
+                    color: PulseClockColors.surface,
+                    fontSize: 15,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      PulseClockDimensions.cardRadius,
                     ),
                   ),
-                  child: const Text('Update to Both'),
                 ),
+                child: const Text('Edit Request'),
               ),
-            ],
+            ),
           ],
         ),
       ),

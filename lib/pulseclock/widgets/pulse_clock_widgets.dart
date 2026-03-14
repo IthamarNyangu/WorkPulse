@@ -628,10 +628,20 @@ _StatusBadgeStyle _styleForHistoryStatus(AttendanceRecordStatus status) {
         backgroundColor: Color(0x22B45309),
         foregroundColor: Color(0xFFB45309),
       );
+    case AttendanceRecordStatus.leavePending:
+      return const _StatusBadgeStyle(
+        backgroundColor: Color(0x228F5CF6),
+        foregroundColor: Color(0xFF7C3AED),
+      );
     case AttendanceRecordStatus.onLeave:
       return const _StatusBadgeStyle(
         backgroundColor: Color(0x226B21A8),
         foregroundColor: Color(0xFF6B21A8),
+      );
+    case AttendanceRecordStatus.absent:
+      return const _StatusBadgeStyle(
+        backgroundColor: Color(0x22B91C1C),
+        foregroundColor: Color(0xFFB91C1C),
       );
   }
 }

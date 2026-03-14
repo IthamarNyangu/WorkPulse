@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/features/attendance/history/attendance_history_detail_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
-import 'package:pulseclock/pulseclock/screens/attendance_history_detail_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 

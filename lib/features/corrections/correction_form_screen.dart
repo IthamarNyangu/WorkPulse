@@ -5,8 +5,8 @@ import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
-class CorrectionRequestFormScreen extends StatefulWidget {
-  const CorrectionRequestFormScreen({
+class CorrectionFormScreen extends StatefulWidget {
+  const CorrectionFormScreen({
     super.key,
     required this.attendanceRecordId,
     required this.affectedDate,
@@ -28,12 +28,10 @@ class CorrectionRequestFormScreen extends StatefulWidget {
   final String? initialReason;
 
   @override
-  State<CorrectionRequestFormScreen> createState() =>
-      _CorrectionRequestFormScreenState();
+  State<CorrectionFormScreen> createState() => _CorrectionFormScreenState();
 }
 
-class _CorrectionRequestFormScreenState
-    extends State<CorrectionRequestFormScreen> {
+class _CorrectionFormScreenState extends State<CorrectionFormScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _clockInController = TextEditingController();
   final TextEditingController _clockOutController = TextEditingController();

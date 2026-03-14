@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/features/corrections/correction_details_screen.dart';
+import 'package:pulseclock/features/corrections/correction_form_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
-import 'package:pulseclock/pulseclock/screens/correction_request_form_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
-class MissedPunchRequestsScreen extends StatefulWidget {
-  const MissedPunchRequestsScreen({super.key});
+class CorrectionListScreen extends StatefulWidget {
+  const CorrectionListScreen({super.key});
 
   @override
-  State<MissedPunchRequestsScreen> createState() =>
-      _MissedPunchRequestsScreenState();
+  State<CorrectionListScreen> createState() => _CorrectionListScreenState();
 }
 
-class _MissedPunchRequestsScreenState extends State<MissedPunchRequestsScreen> {
+class _CorrectionListScreenState extends State<CorrectionListScreen> {
   static const int _pageSize = 4;
 
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
@@ -77,6 +77,23 @@ class _MissedPunchRequestsScreenState extends State<MissedPunchRequestsScreen> {
     return all.sublist(start, end);
   }
 
+  void _openPendingCorrections() {
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return const CorrectionDetailsScreen();
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
+
   Future<void> _openCorrectionForm(AttendanceRecord record) async {
     final CorrectionType initialType = record.clockOutTime == '--'
         ? CorrectionType.clockOut
@@ -90,7 +107,7 @@ class _MissedPunchRequestsScreenState extends State<MissedPunchRequestsScreen> {
               Animation<double> animation,
               Animation<double> secondaryAnimation,
             ) {
-              return CorrectionRequestFormScreen(
+              return CorrectionFormScreen(
                 attendanceRecordId: record.id,
                 affectedDate: record.date,
                 issueSummary: _issueSummaryFor(record),
@@ -119,7 +136,7 @@ class _MissedPunchRequestsScreenState extends State<MissedPunchRequestsScreen> {
     return Scaffold(
       backgroundColor: PulseClockColors.appBackground,
       appBar: AppBar(
-        title: const Text('Missed Punches'),
+        title: const Text('Attendance Corrections'),
         backgroundColor: PulseClockColors.surface,
         foregroundColor: PulseClockColors.textPrimary,
         surfaceTintColor: Colors.transparent,
@@ -148,15 +165,31 @@ class _MissedPunchRequestsScreenState extends State<MissedPunchRequestsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Missed Punch Records',
+                        style: PulseClockTextStyles.headerSubtitle.copyWith(
+                          color: PulseClockColors.onBackgroundPrimary,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _openPendingCorrections,
+                      child: const Text('Pending Requests'),
+                    ),
+                  ],
+                ),
                 Text(
-                  'Missed Punch Records',
-                  style: PulseClockTextStyles.headerSubtitle.copyWith(
-                    color: PulseClockColors.onBackgroundPrimary,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
+                  '${_store.pendingCorrectionRequests.length} pending correction request${_store.pendingCorrectionRequests.length == 1 ? '' : 's'}',
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    color: PulseClockColors.onBackgroundSecondary,
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Expanded(
                   child: hasRecords
                       ? ListView.separated(

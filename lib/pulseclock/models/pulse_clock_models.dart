@@ -9,7 +9,9 @@ enum AttendanceRecordStatus {
   completed,
   missedPunch,
   correctionPending,
+  leavePending,
   onLeave,
+  absent,
 }
 
 enum HistoryDateRangeFilter {
@@ -26,12 +28,18 @@ enum HistoryStatusFilter {
   completed,
   missedPunch,
   correctionPending,
+  leavePending,
   onLeave,
+  absent,
 }
 
 enum CorrectionType { clockIn, clockOut, both }
 
 enum CorrectionRequestStatus { pending }
+
+enum LeaveType { annualLeave, sickLeave, other }
+
+enum LeaveRequestStatus { pendingApproval, approved, rejected }
 
 enum ClockActionMode { clockIn, clockOut }
 
@@ -44,8 +52,12 @@ extension AttendanceRecordStatusLabels on AttendanceRecordStatus {
         return 'Missed Punch';
       case AttendanceRecordStatus.correctionPending:
         return 'Correction Pending';
+      case AttendanceRecordStatus.leavePending:
+        return 'Leave Pending';
       case AttendanceRecordStatus.onLeave:
         return 'On Leave';
+      case AttendanceRecordStatus.absent:
+        return 'Absent';
     }
   }
 }
@@ -80,8 +92,12 @@ extension HistoryStatusFilterLabels on HistoryStatusFilter {
         return 'Missed Punch';
       case HistoryStatusFilter.correctionPending:
         return 'Correction Pending';
+      case HistoryStatusFilter.leavePending:
+        return 'Leave Pending';
       case HistoryStatusFilter.onLeave:
         return 'On Leave';
+      case HistoryStatusFilter.absent:
+        return 'Absent';
     }
   }
 
@@ -95,8 +111,12 @@ extension HistoryStatusFilterLabels on HistoryStatusFilter {
         return AttendanceRecordStatus.missedPunch;
       case HistoryStatusFilter.correctionPending:
         return AttendanceRecordStatus.correctionPending;
+      case HistoryStatusFilter.leavePending:
+        return AttendanceRecordStatus.leavePending;
       case HistoryStatusFilter.onLeave:
         return AttendanceRecordStatus.onLeave;
+      case HistoryStatusFilter.absent:
+        return AttendanceRecordStatus.absent;
     }
   }
 }
@@ -119,6 +139,32 @@ extension CorrectionRequestStatusLabels on CorrectionRequestStatus {
     switch (this) {
       case CorrectionRequestStatus.pending:
         return 'Pending';
+    }
+  }
+}
+
+extension LeaveTypeLabels on LeaveType {
+  String get label {
+    switch (this) {
+      case LeaveType.annualLeave:
+        return 'Annual Leave';
+      case LeaveType.sickLeave:
+        return 'Sick Leave';
+      case LeaveType.other:
+        return 'Other';
+    }
+  }
+}
+
+extension LeaveRequestStatusLabels on LeaveRequestStatus {
+  String get label {
+    switch (this) {
+      case LeaveRequestStatus.pendingApproval:
+        return 'Pending Approval';
+      case LeaveRequestStatus.approved:
+        return 'Approved';
+      case LeaveRequestStatus.rejected:
+        return 'Rejected';
     }
   }
 }
@@ -286,6 +332,46 @@ class AttendanceRecord {
       workHours: workHours ?? this.workHours,
       status: status ?? this.status,
       note: note ?? this.note,
+    );
+  }
+}
+
+class LeaveRequest {
+  const LeaveRequest({
+    required this.id,
+    required this.type,
+    required this.startDate,
+    required this.endDate,
+    required this.reason,
+    required this.status,
+    required this.submittedAt,
+  });
+
+  final String id;
+  final LeaveType type;
+  final DateTime startDate;
+  final DateTime endDate;
+  final String reason;
+  final LeaveRequestStatus status;
+  final DateTime submittedAt;
+
+  LeaveRequest copyWith({
+    String? id,
+    LeaveType? type,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? reason,
+    LeaveRequestStatus? status,
+    DateTime? submittedAt,
+  }) {
+    return LeaveRequest(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      reason: reason ?? this.reason,
+      status: status ?? this.status,
+      submittedAt: submittedAt ?? this.submittedAt,
     );
   }
 }
