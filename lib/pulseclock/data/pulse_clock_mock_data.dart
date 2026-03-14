@@ -543,6 +543,25 @@ class WorkPulseMockStore extends ChangeNotifier {
     return updated;
   }
 
+  LeaveRequest deletePendingLeaveRequest({required String requestId}) {
+    final int index = _leaveRequests.indexWhere(
+      (LeaveRequest request) => request.id == requestId,
+    );
+    if (index < 0) {
+      throw ArgumentError('Leave request not found for ID: $requestId');
+    }
+
+    final LeaveRequest current = _leaveRequests[index];
+    if (current.status != LeaveRequestStatus.pendingApproval) {
+      throw ArgumentError('Only pending leave requests can be deleted.');
+    }
+
+    final LeaveRequest removed = _leaveRequests.removeAt(index);
+    _rebuildAttendanceRecords();
+    notifyListeners();
+    return removed;
+  }
+
   void _seedInitialPendingRequest() {
     final AttendanceRecord pendingRecord = _attendanceRecords.firstWhere(
       (AttendanceRecord record) =>

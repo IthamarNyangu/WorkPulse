@@ -62,13 +62,69 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
     );
   }
 
+  Future<void> _confirmDeleteRequest(LeaveRequest request) async {
+    if (request.status != LeaveRequestStatus.pendingApproval) {
+      return;
+    }
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Request'),
+          content: const Text(
+            'This pending leave request will be removed from WorkPulse. Do you want to continue?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFB42318),
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || confirmed != true) {
+      return;
+    }
+
+    try {
+      _store.deletePendingLeaveRequest(requestId: request.id);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to delete leave request.')),
+      );
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Leave request deleted.')));
+    Navigator.of(context).pop(true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final LeaveRequest? request = _store.leaveRequestById(widget.requestId);
 
     if (request == null) {
       return Scaffold(
-        backgroundColor: PulseClockColors.appBackground,
+        backgroundColor: PulseClockColors.appBackgroundSolid,
         appBar: AppBar(
           title: const Text('Leave Request Details'),
           backgroundColor: PulseClockColors.surface,
@@ -93,7 +149,7 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
     final bool isSingleDay = _isSameDay(request.startDate, request.endDate);
 
     return Scaffold(
-      backgroundColor: PulseClockColors.appBackground,
+      backgroundColor: PulseClockColors.appBackgroundSolid,
       appBar: AppBar(
         title: const Text('Leave Request Details'),
         backgroundColor: PulseClockColors.surface,
@@ -102,16 +158,7 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
         elevation: 0,
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              PulseClockColors.appBackground,
-              PulseClockColors.appBackgroundDeep,
-            ],
-          ),
-        ),
+        color: PulseClockColors.appBackgroundSolid,
         child: SafeArea(
           top: false,
           child: SingleChildScrollView(
@@ -179,6 +226,31 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
                         ),
                       ),
                       child: const Text('Edit Request'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _confirmDeleteRequest(request),
+                      icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                      style: ElevatedButton.styleFrom(
+                        foregroundColor: const Color(0xFFB42318),
+                        backgroundColor: const Color(0xFFFDF4F4),
+                        elevation: 0,
+                        textStyle: PulseClockTextStyles.contextAction.copyWith(
+                          color: const Color(0xFFB42318),
+                          fontSize: 16,
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            PulseClockDimensions.cardRadius,
+                          ),
+                          side: const BorderSide(color: Color(0xFFF3B6B6)),
+                        ),
+                      ),
+                      label: const Text('Delete Request'),
                     ),
                   ),
                 ],
