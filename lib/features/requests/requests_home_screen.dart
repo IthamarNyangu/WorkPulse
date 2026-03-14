@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pulseclock/features/corrections/correction_list_screen.dart';
 import 'package:pulseclock/features/leave/leave_list_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
+import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
@@ -72,7 +73,12 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
   Widget build(BuildContext context) {
     final int missedCount = _store.missedPunchRecords.length;
     final int pendingCorrectionCount = _store.pendingCorrectionRequests.length;
-    final int leaveCount = _store.leaveRequests.length;
+    final int pendingLeaveCount = _store.leaveRequests
+        .where(
+          (LeaveRequest request) =>
+              request.status == LeaveRequestStatus.pendingApproval,
+        )
+        .length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -103,7 +109,8 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
           const SizedBox(height: 12),
           _RequestHubCard(
             title: 'Leave Requests',
-            subtitle: '$leaveCount total leave requests',
+            subtitle:
+                '$pendingLeaveCount pending leave request${pendingLeaveCount == 1 ? '' : 's'}',
             icon: Icons.event_available_outlined,
             backgroundColor: PulseClockColors.statusLeaveBg,
             accentColor: PulseClockColors.statusLeaveAccent,
@@ -151,6 +158,8 @@ class _RequestHubCard extends StatelessWidget {
                 children: [
                   Text(
                     title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: PulseClockTextStyles.cardTitle.copyWith(
                       color: accentColor,
                       fontSize: 22,
@@ -159,6 +168,8 @@ class _RequestHubCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: PulseClockTextStyles.cardSubtitle.copyWith(
                       color: accentColor.withOpacity(0.82),
                       fontWeight: FontWeight.w600,

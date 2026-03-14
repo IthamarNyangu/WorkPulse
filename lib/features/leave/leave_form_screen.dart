@@ -33,11 +33,11 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
     return end.difference(start).inDays + 1;
   }
 
-  String get _durationSummary {
+  String get _durationLabel {
     if (_durationDays <= 1) {
-      return 'Single-day leave';
+      return 'Single Day';
     }
-    return 'Duration: $_durationDays days';
+    return '$_durationDays Days';
   }
 
   @override
@@ -71,11 +71,15 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
       return;
     }
     final DateTime now = DateTime.now();
-    final DateTime firstDate = DateTime(now.year - 1, 1, 1);
+    final DateTime today = DateTime(now.year, now.month, now.day);
+    final DateTime firstDate = today;
     final DateTime lastDate = DateTime(now.year + 2, 12, 31);
+    final DateTime initialDate = _startDate.isBefore(firstDate)
+        ? firstDate
+        : _startDate;
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _startDate,
+      initialDate: initialDate,
       firstDate: firstDate,
       lastDate: lastDate,
     );
@@ -95,11 +99,15 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
       return;
     }
     final DateTime now = DateTime.now();
-    final DateTime firstDate = DateTime(now.year - 1, 1, 1);
+    final DateTime today = DateTime(now.year, now.month, now.day);
+    final DateTime firstDate = _startDate.isAfter(today) ? _startDate : today;
     final DateTime lastDate = DateTime(now.year + 2, 12, 31);
+    final DateTime initialDate = _endDate.isBefore(firstDate)
+        ? firstDate
+        : _endDate;
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _endDate,
+      initialDate: initialDate,
       firstDate: firstDate,
       lastDate: lastDate,
     );
@@ -240,6 +248,35 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
                             );
                           }).toList(growable: false),
                         ),
+                        if (_selectedType == LeaveType.annualLeave) ...<Widget>[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: PulseClockColors.surfaceMuted,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: PulseClockColors.cardBorder),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Annual Leave Balance',
+                                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                                    color: PulseClockColors.textPrimary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  '12 of 30 days remaining',
+                                  style: PulseClockTextStyles.cardSubtitle,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 14),
                         _DateField(
                           label: 'Start Date',
@@ -253,11 +290,9 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
                           onTap: _pickEndDate,
                         ),
                         const SizedBox(height: 10),
-                        Text(
-                          _durationSummary,
-                          style: PulseClockTextStyles.cardSubtitle.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                        DetailInfoRow(
+                          label: 'Leave Duration',
+                          value: _durationLabel,
                         ),
                         const SizedBox(height: 12),
                         TextFormField(

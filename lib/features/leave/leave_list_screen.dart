@@ -16,6 +16,8 @@ class LeaveListScreen extends StatefulWidget {
 
 class _LeaveListScreenState extends State<LeaveListScreen> {
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
+  _LeaveStatusFilter _selectedStatusFilter = _LeaveStatusFilter.all;
+  _LeaveTypeFilter _selectedTypeFilter = _LeaveTypeFilter.all;
 
   @override
   void initState() {
@@ -78,9 +80,50 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
     );
   }
 
+  bool _matchesStatusFilter(LeaveRequest request) {
+    switch (_selectedStatusFilter) {
+      case _LeaveStatusFilter.all:
+        return true;
+      case _LeaveStatusFilter.pendingApproval:
+        return request.status == LeaveRequestStatus.pendingApproval;
+      case _LeaveStatusFilter.approved:
+        return request.status == LeaveRequestStatus.approved;
+      case _LeaveStatusFilter.rejected:
+        return request.status == LeaveRequestStatus.rejected;
+    }
+  }
+
+  bool _matchesTypeFilter(LeaveRequest request) {
+    switch (_selectedTypeFilter) {
+      case _LeaveTypeFilter.all:
+        return true;
+      case _LeaveTypeFilter.annualLeave:
+        return request.type == LeaveType.annualLeave;
+      case _LeaveTypeFilter.sickLeave:
+        return request.type == LeaveType.sickLeave;
+      case _LeaveTypeFilter.other:
+        return request.type == LeaveType.other;
+    }
+  }
+
+  List<LeaveRequest> _filteredLeaveRequests() {
+    final Iterable<LeaveRequest> filtered = _store.leaveRequests.where((
+      LeaveRequest request,
+    ) {
+      return _matchesStatusFilter(request) && _matchesTypeFilter(request);
+    });
+
+    // Keep newest requests first for scalability and future pagination.
+    final List<LeaveRequest> sorted = filtered.toList();
+    sorted.sort((LeaveRequest a, LeaveRequest b) {
+      return b.submittedAt.compareTo(a.submittedAt);
+    });
+    return sorted;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final List<LeaveRequest> leaveRequests = _store.leaveRequests;
+    final List<LeaveRequest> leaveRequests = _filteredLeaveRequests();
 
     return Scaffold(
       backgroundColor: PulseClockColors.appBackground,
@@ -116,21 +159,71 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
               children: [
                 Row(
                   children: [
-                    Expanded(
-                      child: Text(
-                        'Manage Leave Requests',
-                        style: PulseClockTextStyles.headerSubtitle.copyWith(
-                          color: PulseClockColors.onBackgroundPrimary,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
+                    const Spacer(),
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: PulseClockColors.surface,
+                        backgroundColor: PulseClockColors.actionBlue,
+                        textStyle: PulseClockTextStyles.contextAction.copyWith(
+                          color: PulseClockColors.surface,
+                          fontSize: 15,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                    ),
-                    TextButton(
                       onPressed: () => _openLeaveForm(),
                       child: const Text('Submit Leave Request'),
                     ),
                   ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Status',
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    color: PulseClockColors.onBackgroundPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                HistoryFilterChipBar<_LeaveStatusFilter>(
+                  items: _LeaveStatusFilter.values,
+                  selectedValue: _selectedStatusFilter,
+                  labelBuilder: (_LeaveStatusFilter filter) => filter.label,
+                  onSelected: (_LeaveStatusFilter filter) {
+                    if (filter == _selectedStatusFilter) {
+                      return;
+                    }
+                    setState(() {
+                      _selectedStatusFilter = filter;
+                    });
+                  },
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Leave Type',
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    color: PulseClockColors.onBackgroundPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                HistoryFilterChipBar<_LeaveTypeFilter>(
+                  items: _LeaveTypeFilter.values,
+                  selectedValue: _selectedTypeFilter,
+                  labelBuilder: (_LeaveTypeFilter filter) => filter.label,
+                  onSelected: (_LeaveTypeFilter filter) {
+                    if (filter == _selectedTypeFilter) {
+                      return;
+                    }
+                    setState(() {
+                      _selectedTypeFilter = filter;
+                    });
+                  },
                 ),
                 const SizedBox(height: 10),
                 Expanded(
@@ -170,9 +263,12 @@ class LeaveRequestListCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool singleDay = _isSameDay(request.startDate, request.endDate);
-    final String dateText = singleDay
-        ? dateLabel(request.startDate)
-        : '${dateLabel(request.startDate)} - ${dateLabel(request.endDate)}';
+    final String dateText = _leaveDateRangeLabel(
+      request.startDate,
+      request.endDate,
+    );
+    final int durationDays = _leaveDurationDays(request.startDate, request.endDate);
+    final String durationText = singleDay ? 'Single Day' : '$durationDays Days';
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -195,6 +291,15 @@ class LeaveRequestListCard extends StatelessWidget {
                     dateText,
                     style: PulseClockTextStyles.cardSubtitle.copyWith(
                       fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Duration: $durationText',
+                    style: PulseClockTextStyles.cardSubtitle.copyWith(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: PulseClockColors.textSecondary.withOpacity(0.9),
                     ),
                   ),
                 ],
@@ -299,4 +404,81 @@ class _NoLeaveRequestState extends StatelessWidget {
 
 bool _isSameDay(DateTime a, DateTime b) {
   return a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
+int _leaveDurationDays(DateTime startDate, DateTime endDate) {
+  final DateTime start = DateTime(startDate.year, startDate.month, startDate.day);
+  final DateTime end = DateTime(endDate.year, endDate.month, endDate.day);
+  if (end.isBefore(start)) {
+    return 1;
+  }
+  return end.difference(start).inDays + 1;
+}
+
+String _leaveDateRangeLabel(DateTime startDate, DateTime endDate) {
+  if (_isSameDay(startDate, endDate)) {
+    return dateLabel(startDate);
+  }
+
+  final String startMonth = _monthShortName(startDate.month);
+  final String endMonth = _monthShortName(endDate.month);
+  if (startDate.year == endDate.year && startDate.month == endDate.month) {
+    return '${startDate.day} - ${endDate.day} $endMonth ${endDate.year}';
+  }
+  if (startDate.year == endDate.year) {
+    return '${startDate.day} $startMonth - ${endDate.day} $endMonth ${endDate.year}';
+  }
+  return '${startDate.day} $startMonth ${startDate.year} - ${endDate.day} $endMonth ${endDate.year}';
+}
+
+String _monthShortName(int month) {
+  const List<String> months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return months[month - 1];
+}
+
+enum _LeaveStatusFilter { all, pendingApproval, approved, rejected }
+
+extension _LeaveStatusFilterLabels on _LeaveStatusFilter {
+  String get label {
+    switch (this) {
+      case _LeaveStatusFilter.all:
+        return 'All';
+      case _LeaveStatusFilter.pendingApproval:
+        return 'Pending Approval';
+      case _LeaveStatusFilter.approved:
+        return 'Approved';
+      case _LeaveStatusFilter.rejected:
+        return 'Rejected';
+    }
+  }
+}
+
+enum _LeaveTypeFilter { all, annualLeave, sickLeave, other }
+
+extension _LeaveTypeFilterLabels on _LeaveTypeFilter {
+  String get label {
+    switch (this) {
+      case _LeaveTypeFilter.all:
+        return 'All';
+      case _LeaveTypeFilter.annualLeave:
+        return 'Annual Leave';
+      case _LeaveTypeFilter.sickLeave:
+        return 'Sick Leave';
+      case _LeaveTypeFilter.other:
+        return 'Other';
+    }
+  }
 }
