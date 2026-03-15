@@ -71,19 +71,45 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Delete Request'),
-          content: const Text(
+          backgroundColor: const Color(0xFFFCFDFE),
+          surfaceTintColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 44, vertical: 24),
+          titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          contentPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          actionsPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: Text(
+            'Delete Request',
+            style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
+          ),
+          content: Text(
             'This pending leave request will be removed from WorkPulse. Do you want to continue?',
+            style: PulseClockTextStyles.cardSubtitle.copyWith(fontSize: 14),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              style: TextButton.styleFrom(
+                textStyle: PulseClockTextStyles.cardSubtitle.copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              child: Text(
+                'Cancel',
+                style: PulseClockTextStyles.cardSubtitle.copyWith(
+                  fontSize: 14,
+                ),
+              ),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
               style: TextButton.styleFrom(
                 foregroundColor: const Color(0xFFB42318),
+                textStyle: PulseClockTextStyles.cardSubtitle.copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               child: const Text('Delete'),
             ),
