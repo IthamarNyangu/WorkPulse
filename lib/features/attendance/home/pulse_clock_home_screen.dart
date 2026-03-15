@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pulseclock/features/attendance/clock/clock_confirmation_screen.dart';
 import 'package:pulseclock/features/attendance/history/attendance_history_screen.dart';
+import 'package:pulseclock/features/notifications/notifications_screen.dart';
 import 'package:pulseclock/features/profile/profile_screen.dart';
 import 'package:pulseclock/features/requests/requests_home_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
@@ -19,6 +20,7 @@ class PulseClockHomeScreen extends StatefulWidget {
 }
 
 class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
+  final WorkPulseMockStore _store = WorkPulseMockStore.instance;
   AttendanceStatus _status = AttendanceStatus.offDuty;
   int _selectedNavIndex = 0;
   late DateTime _now;
@@ -31,6 +33,8 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
   void initState() {
     super.initState();
     _now = DateTime.now();
+    _syncStateFromStore();
+    _store.addListener(_onStoreChanged);
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) {
         return;
@@ -44,7 +48,24 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
   @override
   void dispose() {
     _clockTimer?.cancel();
+    _store.removeListener(_onStoreChanged);
     super.dispose();
+  }
+
+  void _onStoreChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _syncStateFromStore();
+    });
+  }
+
+  void _syncStateFromStore() {
+    _status = _store.liveAttendanceStatus;
+    _punchInAt = _store.livePunchInAt;
+    _punchOutAt = _store.livePunchOutAt;
+    _lastWorkedDuration = _store.liveWorkedDuration;
   }
 
   void _onPrimaryActionPressed() async {
@@ -64,22 +85,24 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
       return;
     }
 
-    setState(() {
-      if (result.mode == ClockActionMode.clockIn) {
-        _status = AttendanceStatus.onDuty;
-        _punchInAt = result.timestamp;
-        _punchOutAt = null;
-        _lastWorkedDuration = null;
-      } else {
-        _status = AttendanceStatus.offDuty;
-        _punchOutAt = result.timestamp;
-        if (_punchInAt != null && !_punchOutAt!.isBefore(_punchInAt!)) {
-          _lastWorkedDuration = _punchOutAt!.difference(_punchInAt!);
-        } else {
-          _lastWorkedDuration = Duration.zero;
-        }
-      }
-    });
+    _store.applyClockConfirmationResult(result);
+  }
+
+  Future<void> _openNotifications() async {
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return const NotificationsScreen();
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
   }
 
   Widget _buildTabContent() {
@@ -91,6 +114,8 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
           statusCard: _statusCardForHome(),
           summary: _summaryForHome(),
           onPrimaryActionPressed: _onPrimaryActionPressed,
+          onNotificationsPressed: _openNotifications,
+          unreadNotifications: _store.unreadNotificationCount,
         );
       case 1:
         return const AttendanceHistoryScreen();
@@ -105,6 +130,8 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
           statusCard: _statusCardForHome(),
           summary: _summaryForHome(),
           onPrimaryActionPressed: _onPrimaryActionPressed,
+          onNotificationsPressed: _openNotifications,
+          unreadNotifications: _store.unreadNotificationCount,
         );
     }
   }
@@ -233,6 +260,8 @@ class HomeTabContent extends StatelessWidget {
     required this.statusCard,
     required this.summary,
     required this.onPrimaryActionPressed,
+    required this.onNotificationsPressed,
+    required this.unreadNotifications,
   });
 
   final DateTime now;
@@ -240,6 +269,8 @@ class HomeTabContent extends StatelessWidget {
   final StatusCardModel statusCard;
   final SummaryModel summary;
   final VoidCallback onPrimaryActionPressed;
+  final VoidCallback onNotificationsPressed;
+  final int unreadNotifications;
 
   @override
   Widget build(BuildContext context) {
@@ -255,7 +286,11 @@ class HomeTabContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const HeaderSection(employeeName: 'Ithamar'),
+          HeaderSection(
+            employeeName: 'Ithamar',
+            onNotificationsPressed: onNotificationsPressed,
+            unreadNotificationCount: unreadNotifications,
+          ),
           const SizedBox(height: 50),
           LiveTimeSection(now: now),
           const SizedBox(height: 20),

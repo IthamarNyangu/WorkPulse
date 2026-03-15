@@ -4,22 +4,103 @@ import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
 
 class HeaderSection extends StatelessWidget {
-  const HeaderSection({super.key, required this.employeeName});
+  const HeaderSection({
+    super.key,
+    required this.employeeName,
+    this.onNotificationsPressed,
+    this.unreadNotificationCount = 0,
+  });
 
   final String employeeName;
+  final VoidCallback? onNotificationsPressed;
+  final int unreadNotificationCount;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('WorkPulse', style: PulseClockTextStyles.headerTitle),
-        const SizedBox(height: 6),
-        Text(
-          'Welcome back, $employeeName',
-          style: PulseClockTextStyles.headerSubtitle,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('WorkPulse', style: PulseClockTextStyles.headerTitle),
+              const SizedBox(height: 6),
+              Text(
+                'Welcome back, $employeeName',
+                style: PulseClockTextStyles.headerSubtitle,
+              ),
+            ],
+          ),
         ),
+        if (onNotificationsPressed != null)
+          _HeaderNotificationButton(
+            onPressed: onNotificationsPressed!,
+            unreadCount: unreadNotificationCount,
+          ),
       ],
+    );
+  }
+}
+
+class _HeaderNotificationButton extends StatelessWidget {
+  const _HeaderNotificationButton({
+    required this.onPressed,
+    required this.unreadCount,
+  });
+
+  final VoidCallback onPressed;
+  final int unreadCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final int clampedUnreadCount = unreadCount > 99 ? 99 : unreadCount;
+    return SizedBox(
+      width: 46,
+      height: 46,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: Material(
+              color: const Color(0x22000000),
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                onTap: onPressed,
+                borderRadius: BorderRadius.circular(14),
+                child: const Icon(
+                  Icons.notifications_none_rounded,
+                  color: PulseClockColors.surface,
+                  size: 24,
+                ),
+              ),
+            ),
+          ),
+          if (clampedUnreadCount > 0)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                decoration: BoxDecoration(
+                  color: PulseClockColors.actionRed,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: PulseClockColors.surface, width: 1),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  clampedUnreadCount.toString(),
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    color: PulseClockColors.surface,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

@@ -43,6 +43,23 @@ enum LeaveRequestStatus { pendingApproval, approved, rejected }
 
 enum ClockActionMode { clockIn, clockOut }
 
+enum WorkPulseNotificationType {
+  clockInReminder,
+  clockOutReminder,
+  missedPunchReminder,
+  leaveUpdate,
+  generalInfo,
+}
+
+enum NotificationNavigationTarget {
+  clockInConfirmation,
+  clockOutConfirmation,
+  correctionList,
+  correctionDetails,
+  leaveList,
+  leaveDetails,
+}
+
 extension AttendanceRecordStatusLabels on AttendanceRecordStatus {
   String get label {
     switch (this) {
@@ -207,6 +224,23 @@ extension ClockActionModeLabels on ClockActionMode {
   }
 }
 
+extension WorkPulseNotificationTypeLabels on WorkPulseNotificationType {
+  String get label {
+    switch (this) {
+      case WorkPulseNotificationType.clockInReminder:
+        return 'Clock In Reminder';
+      case WorkPulseNotificationType.clockOutReminder:
+        return 'Clock Out Reminder';
+      case WorkPulseNotificationType.missedPunchReminder:
+        return 'Missed Punch Reminder';
+      case WorkPulseNotificationType.leaveUpdate:
+        return 'Leave Update';
+      case WorkPulseNotificationType.generalInfo:
+        return 'Info';
+    }
+  }
+}
+
 class ClockConfirmationResult {
   const ClockConfirmationResult({
     required this.mode,
@@ -229,6 +263,74 @@ class ClockLocationSnapshot {
   final String coordinates;
   final double accuracyMeters;
   final bool isInsideGeofence;
+}
+
+class ReminderConfig {
+  const ReminderConfig({
+    required this.workdayStartHour,
+    required this.clockOutReminderHour,
+    required this.missedPunchBufferMinutes,
+  });
+
+  final int workdayStartHour;
+  final int clockOutReminderHour;
+  final int missedPunchBufferMinutes;
+}
+
+class WorkPulseNotification {
+  const WorkPulseNotification({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.message,
+    required this.timestamp,
+    required this.isRead,
+    this.actionLabel,
+    this.navigationTarget,
+    this.attendanceRecordId,
+    this.correctionRequestId,
+    this.leaveRequestId,
+  });
+
+  final String id;
+  final WorkPulseNotificationType type;
+  final String title;
+  final String message;
+  final DateTime timestamp;
+  final bool isRead;
+  final String? actionLabel;
+  final NotificationNavigationTarget? navigationTarget;
+  final String? attendanceRecordId;
+  final String? correctionRequestId;
+  final String? leaveRequestId;
+
+  WorkPulseNotification copyWith({
+    String? id,
+    WorkPulseNotificationType? type,
+    String? title,
+    String? message,
+    DateTime? timestamp,
+    bool? isRead,
+    String? actionLabel,
+    NotificationNavigationTarget? navigationTarget,
+    String? attendanceRecordId,
+    String? correctionRequestId,
+    String? leaveRequestId,
+  }) {
+    return WorkPulseNotification(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      title: title ?? this.title,
+      message: message ?? this.message,
+      timestamp: timestamp ?? this.timestamp,
+      isRead: isRead ?? this.isRead,
+      actionLabel: actionLabel ?? this.actionLabel,
+      navigationTarget: navigationTarget ?? this.navigationTarget,
+      attendanceRecordId: attendanceRecordId ?? this.attendanceRecordId,
+      correctionRequestId: correctionRequestId ?? this.correctionRequestId,
+      leaveRequestId: leaveRequestId ?? this.leaveRequestId,
+    );
+  }
 }
 
 class StatusCardModel {

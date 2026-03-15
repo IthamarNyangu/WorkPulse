@@ -325,8 +325,21 @@ class WorkPulseMockStore extends ChangeNotifier {
   final List<AttendanceRecord> _attendanceRecords = <AttendanceRecord>[];
   final List<CorrectionRequest> _correctionRequests = <CorrectionRequest>[];
   final List<LeaveRequest> _leaveRequests = <LeaveRequest>[];
+  final Map<String, bool> _notificationReadState = <String, bool>{};
+  final Set<String> _resolvedNotificationIds = <String>{};
   int _correctionSequence = 1;
   int _leaveSequence = 1;
+  AttendanceStatus _liveAttendanceStatus = AttendanceStatus.offDuty;
+  DateTime? _livePunchInAt;
+  DateTime? _livePunchOutAt;
+  Duration? _lastWorkedDuration;
+  bool _isInsideGeofence = true;
+
+  static const ReminderConfig _reminderConfig = ReminderConfig(
+    workdayStartHour: 8,
+    clockOutReminderHour: 17,
+    missedPunchBufferMinutes: 45,
+  );
 
   List<AttendanceRecord> get attendanceRecords {
     return List<AttendanceRecord>.unmodifiable(_attendanceRecords);
@@ -335,6 +348,18 @@ class WorkPulseMockStore extends ChangeNotifier {
   List<CorrectionRequest> get correctionRequests {
     return List<CorrectionRequest>.unmodifiable(_correctionRequests);
   }
+
+  AttendanceStatus get liveAttendanceStatus => _liveAttendanceStatus;
+
+  DateTime? get livePunchInAt => _livePunchInAt;
+
+  DateTime? get livePunchOutAt => _livePunchOutAt;
+
+  Duration? get liveWorkedDuration => _lastWorkedDuration;
+
+  bool get isInsideGeofence => _isInsideGeofence;
+
+  ReminderConfig get reminderConfig => _reminderConfig;
 
   List<LeaveRequest> get leaveRequests {
     final List<LeaveRequest> requests = List<LeaveRequest>.from(_leaveRequests);
@@ -366,6 +391,26 @@ class WorkPulseMockStore extends ChangeNotifier {
     return List<AttendanceRecord>.unmodifiable(
       records,
     );
+  }
+
+  List<WorkPulseNotification> get notifications {
+    final List<WorkPulseNotification> generated = _buildNotifications(
+      now: DateTime.now(),
+    );
+    generated.sort((WorkPulseNotification a, WorkPulseNotification b) {
+      return b.timestamp.compareTo(a.timestamp);
+    });
+    return List<WorkPulseNotification>.unmodifiable(generated);
+  }
+
+  int get unreadNotificationCount {
+    int unread = 0;
+    for (final WorkPulseNotification notification in notifications) {
+      if (!notification.isRead) {
+        unread += 1;
+      }
+    }
+    return unread;
   }
 
   AttendanceRecord? get latestMissedPunchRecord {
@@ -413,6 +458,66 @@ class WorkPulseMockStore extends ChangeNotifier {
     return null;
   }
 
+  void markNotificationAsRead(String notificationId) {
+    final bool isAlreadyRead = _notificationReadState[notificationId] == true;
+    if (isAlreadyRead) {
+      return;
+    }
+    _notificationReadState[notificationId] = true;
+    notifyListeners();
+  }
+
+  void markAllNotificationsAsRead() {
+    bool changed = false;
+    for (final WorkPulseNotification notification in notifications) {
+      if (_notificationReadState[notification.id] == true) {
+        continue;
+      }
+      _notificationReadState[notification.id] = true;
+      changed = true;
+    }
+    if (changed) {
+      notifyListeners();
+    }
+  }
+
+  void resolveNotification(String notificationId) {
+    if (_resolvedNotificationIds.add(notificationId)) {
+      notifyListeners();
+    }
+  }
+
+  void setMockGeofenceState({required bool isInside}) {
+    if (_isInsideGeofence == isInside) {
+      return;
+    }
+    _isInsideGeofence = isInside;
+    notifyListeners();
+  }
+
+  void applyClockConfirmationResult(ClockConfirmationResult result) {
+    final DateTime actionDay = _dateOnly(result.timestamp);
+    if (result.mode == ClockActionMode.clockIn) {
+      _liveAttendanceStatus = AttendanceStatus.onDuty;
+      _livePunchInAt = result.timestamp;
+      _livePunchOutAt = null;
+      _lastWorkedDuration = null;
+      _isInsideGeofence = true;
+      _resolveNotificationSilently(_clockInReminderId(actionDay));
+    } else {
+      _liveAttendanceStatus = AttendanceStatus.offDuty;
+      _livePunchOutAt = result.timestamp;
+      if (_livePunchInAt != null && !_livePunchOutAt!.isBefore(_livePunchInAt!)) {
+        _lastWorkedDuration = _livePunchOutAt!.difference(_livePunchInAt!);
+      } else {
+        _lastWorkedDuration = Duration.zero;
+      }
+      _resolveNotificationSilently(_clockOutReminderId(actionDay));
+      _resolveNotificationSilently(_leftGeofenceReminderId(actionDay));
+    }
+    notifyListeners();
+  }
+
   CorrectionRequest submitCorrectionRequest({
     required String attendanceRecordId,
     required String issueSummary,
@@ -458,6 +563,9 @@ class WorkPulseMockStore extends ChangeNotifier {
         _correctionRequests.removeAt(existingRequestIndex);
         _correctionRequests.insert(0, updatedRequest);
         _rebuildAttendanceRecords();
+        _resolveNotificationSilently(
+          _missedPunchReminderId(attendanceRecordId),
+        );
         notifyListeners();
         return updatedRequest;
       }
@@ -481,6 +589,9 @@ class WorkPulseMockStore extends ChangeNotifier {
 
     _correctionRequests.insert(0, request);
     _rebuildAttendanceRecords();
+    _resolveNotificationSilently(
+      _missedPunchReminderId(attendanceRecordId),
+    );
     notifyListeners();
 
     return request;
@@ -507,6 +618,9 @@ class WorkPulseMockStore extends ChangeNotifier {
 
     _leaveRequests.insert(0, request);
     _rebuildAttendanceRecords();
+    _markNotificationAsUnreadSilently(
+      _leaveUpdateReminderId(request.id, request.status),
+    );
     notifyListeners();
     return request;
   }
@@ -539,6 +653,9 @@ class WorkPulseMockStore extends ChangeNotifier {
     );
     _leaveRequests[index] = updated;
     _rebuildAttendanceRecords();
+    _markNotificationAsUnreadSilently(
+      _leaveUpdateReminderId(updated.id, updated.status),
+    );
     notifyListeners();
     return updated;
   }
@@ -558,6 +675,12 @@ class WorkPulseMockStore extends ChangeNotifier {
 
     final LeaveRequest removed = _leaveRequests.removeAt(index);
     _rebuildAttendanceRecords();
+    _resolveNotificationSilently(
+      _leaveUpdateReminderId(
+        removed.id,
+        LeaveRequestStatus.pendingApproval,
+      ),
+    );
     notifyListeners();
     return removed;
   }
@@ -658,6 +781,269 @@ class WorkPulseMockStore extends ChangeNotifier {
     _attendanceRecords.sort((AttendanceRecord a, AttendanceRecord b) {
       return b.date.compareTo(a.date);
     });
+  }
+
+  List<WorkPulseNotification> _buildNotifications({required DateTime now}) {
+    final DateTime today = _dateOnly(now);
+    final List<WorkPulseNotification> results = <WorkPulseNotification>[];
+    final WorkPulseNotification appInfo = _notification(
+      id: 'general-workpulse-info',
+      type: WorkPulseNotificationType.generalInfo,
+      title: 'Smart Reminders Enabled',
+      message: 'WorkPulse reminders help you avoid missed attendance actions.',
+      timestamp: DateTime(today.year, today.month, today.day, 7),
+    );
+    _addNotificationIfActive(results, appInfo);
+
+    if (_shouldAddClockInReminder(now: now, today: today)) {
+      _addNotificationIfActive(
+        results,
+        _notification(
+          id: _clockInReminderId(today),
+          type: WorkPulseNotificationType.clockInReminder,
+          title: 'Clock In Reminder',
+          message: 'You are at work. Clock in to start your day.',
+          timestamp: DateTime(
+            today.year,
+            today.month,
+            today.day,
+            _reminderConfig.workdayStartHour,
+          ),
+          actionLabel: 'Clock In',
+          navigationTarget: NotificationNavigationTarget.clockInConfirmation,
+        ),
+      );
+    }
+
+    if (_shouldAddClockOutReminder(now: now)) {
+      _addNotificationIfActive(
+        results,
+        _notification(
+          id: _clockOutReminderId(today),
+          type: WorkPulseNotificationType.clockOutReminder,
+          title: 'Clock Out Reminder',
+          message: 'You are still clocked in. Did you forget to clock out?',
+          timestamp: DateTime(
+            today.year,
+            today.month,
+            today.day,
+            _reminderConfig.clockOutReminderHour,
+          ),
+          actionLabel: 'Clock Out',
+          navigationTarget: NotificationNavigationTarget.clockOutConfirmation,
+        ),
+      );
+    }
+
+    if (_shouldAddLeftGeofenceReminder(now: now)) {
+      _addNotificationIfActive(
+        results,
+        _notification(
+          id: _leftGeofenceReminderId(today),
+          type: WorkPulseNotificationType.clockOutReminder,
+          title: 'Left Geofence Reminder',
+          message: 'You left the office while still clocked in. Clock out now?',
+          timestamp: DateTime(
+            today.year,
+            today.month,
+            today.day,
+            _reminderConfig.clockOutReminderHour + 1,
+          ),
+          actionLabel: 'Clock Out',
+          navigationTarget: NotificationNavigationTarget.clockOutConfirmation,
+        ),
+      );
+    }
+
+    final AttendanceRecord? missedRecord = _yesterdayMissedPunchRecord();
+    if (missedRecord != null && _shouldAddMissedPunchReminder(now: now, today: today)) {
+      final DateTime reminderTime = DateTime(
+        today.year,
+        today.month,
+        today.day,
+      ).add(Duration(minutes: _reminderConfig.missedPunchBufferMinutes));
+      _addNotificationIfActive(
+        results,
+        _notification(
+          id: _missedPunchReminderId(missedRecord.id),
+          type: WorkPulseNotificationType.missedPunchReminder,
+          title: 'Missed Punch Reminder',
+          message: 'Yesterday\'s attendance is incomplete. Submit a correction.',
+          timestamp: reminderTime,
+          actionLabel: 'Request Correction',
+          navigationTarget: NotificationNavigationTarget.correctionList,
+          attendanceRecordId: missedRecord.id,
+        ),
+      );
+    }
+
+    for (final LeaveRequest request in _leaveRequests) {
+      final String? leaveMessage = _leaveUpdateMessageFor(request);
+      if (leaveMessage == null) {
+        continue;
+      }
+      _addNotificationIfActive(
+        results,
+        _notification(
+          id: _leaveUpdateReminderId(request.id, request.status),
+          type: WorkPulseNotificationType.leaveUpdate,
+          title: 'Leave Update',
+          message: leaveMessage,
+          timestamp: request.submittedAt,
+          actionLabel: 'View Leave Request',
+          navigationTarget: NotificationNavigationTarget.leaveDetails,
+          leaveRequestId: request.id,
+        ),
+      );
+    }
+
+    return results;
+  }
+
+  WorkPulseNotification _notification({
+    required String id,
+    required WorkPulseNotificationType type,
+    required String title,
+    required String message,
+    required DateTime timestamp,
+    String? actionLabel,
+    NotificationNavigationTarget? navigationTarget,
+    String? attendanceRecordId,
+    String? correctionRequestId,
+    String? leaveRequestId,
+  }) {
+    return WorkPulseNotification(
+      id: id,
+      type: type,
+      title: title,
+      message: message,
+      timestamp: timestamp,
+      isRead: _notificationReadState[id] == true,
+      actionLabel: actionLabel,
+      navigationTarget: navigationTarget,
+      attendanceRecordId: attendanceRecordId,
+      correctionRequestId: correctionRequestId,
+      leaveRequestId: leaveRequestId,
+    );
+  }
+
+  bool _shouldAddClockInReminder({required DateTime now, required DateTime today}) {
+    if (!_isInsideGeofence || _liveAttendanceStatus != AttendanceStatus.offDuty) {
+      return false;
+    }
+    if (now.hour < _reminderConfig.workdayStartHour) {
+      return false;
+    }
+    final bool hasClockedOutToday =
+        _livePunchOutAt != null && _dateOnly(_livePunchOutAt!) == today;
+    if (hasClockedOutToday) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _shouldAddClockOutReminder({required DateTime now}) {
+    if (_liveAttendanceStatus != AttendanceStatus.onDuty) {
+      return false;
+    }
+    return now.hour >= _reminderConfig.clockOutReminderHour;
+  }
+
+  bool _shouldAddLeftGeofenceReminder({required DateTime now}) {
+    if (_liveAttendanceStatus != AttendanceStatus.onDuty) {
+      return false;
+    }
+    if (!_isInsideGeofence) {
+      return true;
+    }
+    // Mock geofence exit trigger in the absence of real location services.
+    return now.hour >= (_reminderConfig.clockOutReminderHour + 1);
+  }
+
+  bool _shouldAddMissedPunchReminder({
+    required DateTime now,
+    required DateTime today,
+  }) {
+    final DateTime reminderStart = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).add(Duration(minutes: _reminderConfig.missedPunchBufferMinutes));
+    return !now.isBefore(reminderStart);
+  }
+
+  AttendanceRecord? _yesterdayMissedPunchRecord() {
+    final DateTime yesterday = _dateOnly(
+      DateTime.now().subtract(const Duration(days: 1)),
+    );
+    for (final AttendanceRecord record in _attendanceRecords) {
+      if (_dateOnly(record.date) != yesterday) {
+        continue;
+      }
+      if (record.clockInTime != '--' &&
+          record.clockOutTime == '--' &&
+          record.status == AttendanceRecordStatus.missedPunch) {
+        return record;
+      }
+    }
+    return null;
+  }
+
+  String? _leaveUpdateMessageFor(LeaveRequest request) {
+    switch (request.status) {
+      case LeaveRequestStatus.pendingApproval:
+        return 'Your ${request.type.label.toLowerCase()} request is still pending approval.';
+      case LeaveRequestStatus.approved:
+        return 'Your ${request.type.label.toLowerCase()} request was approved.';
+      case LeaveRequestStatus.rejected:
+        return 'Your ${request.type.label.toLowerCase()} request was rejected.';
+    }
+  }
+
+  void _addNotificationIfActive(
+    List<WorkPulseNotification> notifications,
+    WorkPulseNotification notification,
+  ) {
+    if (_resolvedNotificationIds.contains(notification.id)) {
+      return;
+    }
+    notifications.add(notification);
+  }
+
+  void _markNotificationAsUnreadSilently(String notificationId) {
+    _notificationReadState.remove(notificationId);
+    _resolvedNotificationIds.remove(notificationId);
+  }
+
+  void _resolveNotificationSilently(String notificationId) {
+    _resolvedNotificationIds.add(notificationId);
+  }
+
+  String _clockInReminderId(DateTime day) {
+    return 'clock-in-${_dayKey(day)}';
+  }
+
+  String _clockOutReminderId(DateTime day) {
+    return 'clock-out-${_dayKey(day)}';
+  }
+
+  String _leftGeofenceReminderId(DateTime day) {
+    return 'left-geofence-${_dayKey(day)}';
+  }
+
+  String _missedPunchReminderId(String attendanceRecordId) {
+    return 'missed-punch-$attendanceRecordId';
+  }
+
+  String _leaveUpdateReminderId(String requestId, LeaveRequestStatus status) {
+    return 'leave-update-$requestId-${status.name}';
+  }
+
+  String _dayKey(DateTime date) {
+    final String yyyy = date.year.toString().padLeft(4, '0');
+    final String mm = date.month.toString().padLeft(2, '0');
+    final String dd = date.day.toString().padLeft(2, '0');
+    return '$yyyy$mm$dd';
   }
 
   void _applyPendingCorrectionStatuses() {
