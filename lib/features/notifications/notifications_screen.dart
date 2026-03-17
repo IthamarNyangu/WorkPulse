@@ -211,7 +211,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ? const _NoNotificationState()
                 : ListView.separated(
                     itemCount: notifications.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (BuildContext context, int index) {
                       final WorkPulseNotification notification =
                           notifications[index];

@@ -191,7 +191,7 @@ class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
                   child: hasRequests
                       ? ListView.separated(
                           itemCount: currentPageRequests.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          separatorBuilder: (_, _) => const SizedBox(height: 10),
                           itemBuilder: (BuildContext context, int index) {
                             final CorrectionRequest request =
                                 currentPageRequests[index];

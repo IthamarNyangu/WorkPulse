@@ -202,10 +202,12 @@ class PrimaryActionButtonSection extends StatefulWidget {
     super.key,
     required this.model,
     required this.onPressed,
+    this.showIcon = true,
   });
 
   final PrimaryActionModel model;
   final VoidCallback onPressed;
+  final bool showIcon;
 
   @override
   State<PrimaryActionButtonSection> createState() =>
@@ -252,51 +254,96 @@ class _PrimaryActionButtonSectionState
           scale: _isHovered ? 1.012 : 1,
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOutCubic,
-          child: ElevatedButton.icon(
-            onPressed: widget.onPressed,
-            icon: Icon(widget.model.icon, size: 26),
-            label: Text(
-              widget.model.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            style: baseStyle.copyWith(
-              backgroundColor: WidgetStateProperty.resolveWith((
-                Set<WidgetState> states,
-              ) {
-                if (states.contains(WidgetState.hovered)) {
-                  return _brightenColor(widget.model.backgroundColor, 0.06);
-                }
-                if (states.contains(WidgetState.pressed)) {
-                  return _brightenColor(widget.model.backgroundColor, -0.03);
-                }
-                return widget.model.backgroundColor;
-              }),
-              elevation: WidgetStateProperty.resolveWith((
-                Set<WidgetState> states,
-              ) {
-                if (states.contains(WidgetState.pressed)) {
-                  return 6;
-                }
-                if (states.contains(WidgetState.hovered)) {
-                  return 14;
-                }
-                return 10;
-              }),
-              shadowColor: WidgetStateProperty.all(const Color(0x5A000000)),
-              overlayColor: WidgetStateProperty.resolveWith((
-                Set<WidgetState> states,
-              ) {
-                if (states.contains(WidgetState.hovered)) {
-                  return Colors.white.withOpacity(0.09);
-                }
-                if (states.contains(WidgetState.pressed)) {
-                  return Colors.black.withOpacity(0.08);
-                }
-                return null;
-              }),
-            ),
-          ),
+          child: widget.showIcon
+              ? ElevatedButton.icon(
+                  onPressed: widget.onPressed,
+                  icon: Icon(widget.model.icon, size: 26),
+                  label: Text(
+                    widget.model.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  style: baseStyle.copyWith(
+                    backgroundColor: WidgetStateProperty.resolveWith((
+                      Set<WidgetState> states,
+                    ) {
+                      if (states.contains(WidgetState.hovered)) {
+                        return _brightenColor(widget.model.backgroundColor, 0.06);
+                      }
+                      if (states.contains(WidgetState.pressed)) {
+                        return _brightenColor(widget.model.backgroundColor, -0.03);
+                      }
+                      return widget.model.backgroundColor;
+                    }),
+                    elevation: WidgetStateProperty.resolveWith((
+                      Set<WidgetState> states,
+                    ) {
+                      if (states.contains(WidgetState.pressed)) {
+                        return 6;
+                      }
+                      if (states.contains(WidgetState.hovered)) {
+                        return 14;
+                      }
+                      return 10;
+                    }),
+                    shadowColor: WidgetStateProperty.all(const Color(0x5A000000)),
+                    overlayColor: WidgetStateProperty.resolveWith((
+                      Set<WidgetState> states,
+                    ) {
+                      if (states.contains(WidgetState.hovered)) {
+                        return Colors.white.withOpacity(0.09);
+                      }
+                      if (states.contains(WidgetState.pressed)) {
+                        return Colors.black.withOpacity(0.08);
+                      }
+                      return null;
+                    }),
+                  ),
+                )
+              : ElevatedButton(
+                  onPressed: widget.onPressed,
+                  style: baseStyle.copyWith(
+                    backgroundColor: WidgetStateProperty.resolveWith((
+                      Set<WidgetState> states,
+                    ) {
+                      if (states.contains(WidgetState.hovered)) {
+                        return _brightenColor(widget.model.backgroundColor, 0.06);
+                      }
+                      if (states.contains(WidgetState.pressed)) {
+                        return _brightenColor(widget.model.backgroundColor, -0.03);
+                      }
+                      return widget.model.backgroundColor;
+                    }),
+                    elevation: WidgetStateProperty.resolveWith((
+                      Set<WidgetState> states,
+                    ) {
+                      if (states.contains(WidgetState.pressed)) {
+                        return 6;
+                      }
+                      if (states.contains(WidgetState.hovered)) {
+                        return 14;
+                      }
+                      return 10;
+                    }),
+                    shadowColor: WidgetStateProperty.all(const Color(0x5A000000)),
+                    overlayColor: WidgetStateProperty.resolveWith((
+                      Set<WidgetState> states,
+                    ) {
+                      if (states.contains(WidgetState.hovered)) {
+                        return Colors.white.withOpacity(0.09);
+                      }
+                      if (states.contains(WidgetState.pressed)) {
+                        return Colors.black.withOpacity(0.08);
+                      }
+                      return null;
+                    }),
+                  ),
+                  child: Text(
+                    widget.model.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
         ),
       ),
     );

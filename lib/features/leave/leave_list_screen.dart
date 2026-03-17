@@ -231,7 +231,7 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
                       ? const _NoLeaveRequestState()
                       : ListView.separated(
                           itemCount: leaveRequests.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          separatorBuilder: (_, _) => const SizedBox(height: 10),
                           itemBuilder: (BuildContext context, int index) {
                             final LeaveRequest request = leaveRequests[index];
                             return LeaveRequestListCard(

@@ -299,6 +299,7 @@ class HomeTabContent extends StatelessWidget {
           PrimaryActionButtonSection(
             model: primaryAction,
             onPressed: onPrimaryActionPressed,
+            showIcon: false,
           ),
           const SizedBox(height: 24),
           Text(
