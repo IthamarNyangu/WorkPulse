@@ -14,7 +14,7 @@ void main() {
     await tester.pumpWidget(const PulseClockApp());
 
     expect(find.text('PulseClock'), findsOneWidget);
-    expect(find.text('Welcome back, Sarah'), findsOneWidget);
+    expect(find.text('Welcome back, Ithamar'), findsOneWidget);
     expect(find.text("Today's Summary"), findsOneWidget);
     expect(find.text('Mock Status'), findsOneWidget);
   });

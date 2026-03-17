@@ -1,9 +1,235 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/features/notifications/notifications_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
+
+  Future<void> _openNotifications(BuildContext context) async {
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return const NotificationsScreen();
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
+
+  Future<void> _showPlaceholderDialog(
+    BuildContext context, {
+    required String title,
+    required String message,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFFFCFDFE),
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          title: Text(
+            title,
+            style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
+          ),
+          content: Text(
+            message,
+            style: PulseClockTextStyles.cardSubtitle.copyWith(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showRateUsModal(BuildContext context) async {
+    final BuildContext parentContext = context;
+    final TextEditingController feedbackController = TextEditingController();
+    int selectedRating = 0;
+
+    await showDialog<void>(
+      context: parentContext,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            final bool showFeedback = selectedRating > 0 && selectedRating < 3;
+            final bool showThankYou = selectedRating >= 4;
+
+            return Dialog(
+              backgroundColor: const Color(0xFFFCFDFE),
+              surfaceTintColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 24,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: AnimatedPadding(
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOut,
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Rate WorkPulse',
+                        style: PulseClockTextStyles.cardTitle.copyWith(
+                          fontSize: 22,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'How is your experience so far?',
+                        style: PulseClockTextStyles.cardSubtitle,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List<Widget>.generate(5, (int index) {
+                          final int starValue = index + 1;
+                          final bool isSelected = starValue <= selectedRating;
+                          return IconButton(
+                            onPressed: () {
+                              setModalState(() {
+                                selectedRating = starValue;
+                              });
+                            },
+                            icon: Icon(
+                              isSelected
+                                  ? Icons.star_rounded
+                                  : Icons.star_outline_rounded,
+                              color: isSelected
+                                  ? const Color(0xFFF59E0B)
+                                  : PulseClockColors.textSecondary.withOpacity(
+                                      0.55,
+                                    ),
+                              size: 32,
+                            ),
+                          );
+                        }),
+                      ),
+                      if (showThankYou) ...<Widget>[
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0x1415803D),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            'Thanks for the high rating. We are glad WorkPulse is helping.',
+                            style: PulseClockTextStyles.cardSubtitle.copyWith(
+                              color: const Color(0xFF0F8A43),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (showFeedback) ...<Widget>[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: feedbackController,
+                          maxLines: 3,
+                          decoration: InputDecoration(
+                            labelText: 'Optional feedback',
+                            alignLabelWithHint: true,
+                            filled: true,
+                            fillColor: PulseClockColors.surfaceMuted,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: PulseClockColors.cardBorder,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: PulseClockColors.cardBorder,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: PulseClockColors.actionBlue,
+                                width: 1.4,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: selectedRating == 0
+                              ? null
+                              : () {
+                                  Navigator.of(context).pop();
+                                  ScaffoldMessenger.of(
+                                    parentContext,
+                                  ).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        selectedRating >= 4
+                                            ? 'Thanks for rating WorkPulse.'
+                                            : 'Thanks for the feedback. We will use it to improve WorkPulse.',
+                                      ),
+                                    ),
+                                  );
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: PulseClockColors.actionBlue,
+                            foregroundColor: PulseClockColors.surface,
+                            disabledBackgroundColor: PulseClockColors.actionBlue
+                                .withOpacity(0.45),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            textStyle: PulseClockTextStyles.contextAction
+                                .copyWith(
+                                  color: PulseClockColors.surface,
+                                  fontSize: 16,
+                                ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                PulseClockDimensions.cardRadius,
+                              ),
+                            ),
+                          ),
+                          child: const Text('Submit Rating'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    feedbackController.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,38 +243,296 @@ class ProfileScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Profile', style: PulseClockTextStyles.headerTitle),
-          const SizedBox(height: 20),
-          const SurfaceCard(
-            child: Row(
+          Text(
+            'Profile',
+            style: PulseClockTextStyles.headerTitle.copyWith(fontSize: 32),
+          ),
+          const SizedBox(height: 18),
+          const _ProfileHeaderCard(
+            employeeName: 'Ithamar Nyangu',
+            employeeId: 'IN-2048',
+          ),
+          const SizedBox(height: 18),
+          Expanded(
+            child: ListView(
               children: [
-                Icon(
-                  Icons.location_on_outlined,
-                  color: PulseClockColors.textSecondary,
+                _SectionHeader(title: 'Preferences'),
+                const SizedBox(height: 8),
+                _ProfileSectionCard(
+                  items: [
+                    _ProfileActionItem(
+                      icon: Icons.settings_outlined,
+                      title: 'Settings',
+                      onTap: () => _showPlaceholderDialog(
+                        context,
+                        title: 'Settings',
+                        message:
+                            'Settings controls will be connected in a future update.',
+                      ),
+                    ),
+                    _ProfileActionItem(
+                      icon: Icons.notifications_active_outlined,
+                      title: 'Manage Notifications',
+                      onTap: () => _openNotifications(context),
+                    ),
+                  ],
                 ),
-                SizedBox(width: 12),
-                Expanded(
+                const SizedBox(height: 16),
+                _SectionHeader(title: 'Support'),
+                const SizedBox(height: 8),
+                _ProfileSectionCard(
+                  items: [
+                    _ProfileActionItem(
+                      icon: Icons.help_outline_rounded,
+                      title: 'Help & Support',
+                      onTap: () => _showPlaceholderDialog(
+                        context,
+                        title: 'Help & Support',
+                        message: 'Support tools will be connected here soon.',
+                      ),
+                    ),
+                    _ProfileActionItem(
+                      icon: Icons.quiz_outlined,
+                      title: 'FAQ',
+                      onTap: () => _showPlaceholderDialog(
+                        context,
+                        title: 'FAQ',
+                        message: 'FAQ content is a placeholder for now.',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _SectionHeader(title: 'About'),
+                const SizedBox(height: 8),
+                _ProfileSectionCard(
+                  items: [
+                    _ProfileActionItem(
+                      icon: Icons.info_outline_rounded,
+                      title: 'About WorkPulse',
+                      onTap: () => _showPlaceholderDialog(
+                        context,
+                        title: 'About WorkPulse',
+                        message:
+                            'WorkPulse helps teams manage attendance, requests, and reminders.',
+                      ),
+                    ),
+                    _ProfileActionItem(
+                      icon: Icons.article_outlined,
+                      title: 'Terms & Conditions',
+                      onTap: () => _showPlaceholderDialog(
+                        context,
+                        title: 'Terms & Conditions',
+                        message: 'Terms content will be added later.',
+                      ),
+                    ),
+                    _ProfileActionItem(
+                      icon: Icons.lock_outline_rounded,
+                      title: 'Privacy Policy',
+                      onTap: () => _showPlaceholderDialog(
+                        context,
+                        title: 'Privacy Policy',
+                        message: 'Privacy policy content will be added later.',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _SectionHeader(title: 'Feedback'),
+                const SizedBox(height: 8),
+                _ProfileSectionCard(
+                  items: [
+                    _ProfileActionItem(
+                      icon: Icons.star_outline_rounded,
+                      title: 'Rate Us',
+                      onTap: () => _showRateUsModal(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => _showPlaceholderDialog(
+                      context,
+                      title: 'Logout',
+                      message:
+                          'Logout will be connected when account authentication is added.',
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFB42318),
+                      backgroundColor: const Color(0xFFFDF4F4),
+                      side: const BorderSide(color: Color(0xFFF3B6B6)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      textStyle: PulseClockTextStyles.contextAction.copyWith(
+                        color: const Color(0xFFB42318),
+                        fontSize: 16,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          PulseClockDimensions.cardRadius,
+                        ),
+                      ),
+                    ),
+                    child: const Text('Logout'),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Center(
                   child: Text(
-                    'Profile settings will appear here.',
-                    style: PulseClockTextStyles.cardSubtitle,
+                    'Version demo',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Color(0x9FF2D4D7),
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.2,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const Spacer(),
-          const Center(
-            child: Text(
-              'Version demo',
-              style: TextStyle(
-                fontSize: 10,
-                color: Color(0x9FF2D4D7),
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0.2,
-              ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileHeaderCard extends StatelessWidget {
+  const _ProfileHeaderCard({
+    required this.employeeName,
+    required this.employeeId,
+  });
+
+  final String employeeName;
+  final String employeeId;
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: const Color(0x142563EB),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.person_outline_rounded,
+              color: PulseClockColors.actionBlue,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  employeeName,
+                  style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 22),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Employee ID: $employeeId',
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: PulseClockTextStyles.cardSubtitle.copyWith(
+        color: PulseClockColors.onBackgroundPrimary,
+        fontWeight: FontWeight.w700,
+        fontSize: 14,
+      ),
+    );
+  }
+}
+
+class _ProfileSectionCard extends StatelessWidget {
+  const _ProfileSectionCard({required this.items});
+
+  final List<_ProfileActionItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          for (int index = 0; index < items.length; index++) ...<Widget>[
+            _ProfileActionRow(item: items[index]),
+            if (index != items.length - 1)
+              const Divider(height: 1, color: PulseClockColors.cardBorder),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileActionItem {
+  const _ProfileActionItem({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+}
+
+class _ProfileActionRow extends StatelessWidget {
+  const _ProfileActionRow({required this.item});
+
+  final _ProfileActionItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: item.onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(item.icon, color: PulseClockColors.textSecondary, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                item.title,
+                style: PulseClockTextStyles.cardSubtitle.copyWith(
+                  color: PulseClockColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: PulseClockColors.textSecondary,
+            ),
+          ],
+        ),
       ),
     );
   }

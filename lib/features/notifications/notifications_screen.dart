@@ -163,7 +163,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     final List<WorkPulseNotification> notifications = _store.notifications;
-    final int unreadCount = _store.unreadNotificationCount;
+    final List<_NotificationDateGroup> groupedNotifications =
+        _groupNotificationsByDate(notifications);
 
     return Scaffold(
       backgroundColor: PulseClockColors.appBackground,
@@ -174,14 +175,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         actions: [
-          if (unreadCount > 0)
-            TextButton(
-              onPressed: _store.markAllNotificationsAsRead,
-              child: Text(
-                'Mark All Read',
-                style: PulseClockTextStyles.cardSubtitle.copyWith(
-                  color: PulseClockColors.actionBlue,
-                  fontWeight: FontWeight.w700,
+          if (notifications.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Center(
+                child: TextButton(
+                  onPressed: _store.clearAllNotifications,
+                  style: TextButton.styleFrom(
+                    foregroundColor: PulseClockColors.actionBlue,
+                    backgroundColor: const Color(0x142563EB),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    textStyle: PulseClockTextStyles.cardSubtitle.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  child: const Text('Clear All'),
                 ),
               ),
             ),
@@ -205,24 +219,42 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               PulseClockDimensions.horizontalPadding,
               PulseClockDimensions.topPadding,
               PulseClockDimensions.horizontalPadding,
-              28,
+              24,
             ),
             child: notifications.isEmpty
                 ? const _NoNotificationState()
-                : ListView.separated(
-                    itemCount: notifications.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (BuildContext context, int index) {
-                      final WorkPulseNotification notification =
-                          notifications[index];
-                      return _NotificationCard(
-                        notification: notification,
-                        onTap: () => _openFromNotification(notification),
-                        onAction: notification.actionLabel == null
-                            ? null
-                            : () => _openFromNotification(notification),
-                      );
-                    },
+                : ListView(
+                    children: [
+                      for (final _NotificationDateGroup group
+                          in groupedNotifications) ...<Widget>[
+                        Text(
+                          group.label,
+                          style: PulseClockTextStyles.cardSubtitle.copyWith(
+                            color: PulseClockColors.onBackgroundPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        for (int index = 0; index < group.notifications.length; index++)
+                          Padding(
+                            padding: EdgeInsets.only(
+                              bottom: index == group.notifications.length - 1 ? 18 : 8,
+                            ),
+                            child: _NotificationCard(
+                              notification: group.notifications[index],
+                              onTap: () => _openFromNotification(
+                                group.notifications[index],
+                              ),
+                              onAction: group.notifications[index].actionLabel == null
+                                  ? null
+                                  : () => _openFromNotification(
+                                        group.notifications[index],
+                                      ),
+                            ),
+                          ),
+                      ],
+                    ],
                   ),
           ),
         ),
@@ -251,103 +283,110 @@ class _NotificationCard extends StatelessWidget {
       onTap: onTap,
       child: SurfaceCard(
         borderRadius: 14,
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        color: notification.isRead ? const Color(0xFFF9FAFC) : Colors.white,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: style.backgroundColor,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    style.icon,
-                    size: 20,
-                    color: style.foregroundColor,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              notification.title,
-                              style: PulseClockTextStyles.cardTitle.copyWith(
-                                fontSize: 18,
-                                color: PulseClockColors.textPrimary,
+        padding: EdgeInsets.zero,
+        color: notification.isRead
+            ? const Color(0xFFF8FAFC)
+            : PulseClockColors.surface,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 5,
+                height: 96,
+                color: style.indicatorColor,
+              ),
+              Expanded(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 96),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                notification.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: PulseClockTextStyles.cardSubtitle.copyWith(
+                                  color: PulseClockColors.textPrimary,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                ),
                               ),
                             ),
+                            if (!notification.isRead)
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: PulseClockColors.actionBlue,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          notification.message,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: PulseClockTextStyles.cardSubtitle.copyWith(
+                            fontSize: 13,
+                            height: 1.25,
+                            color: notification.isRead
+                                ? PulseClockColors.textSecondary.withOpacity(0.86)
+                                : PulseClockColors.textSecondary,
                           ),
-                          if (!notification.isRead)
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: PulseClockColors.actionBlue,
-                                shape: BoxShape.circle,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Text(
+                              timeLabel(notification.timestamp),
+                              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                                fontSize: 11,
+                                color: PulseClockColors.textSecondary.withOpacity(0.78),
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        notification.message,
-                        style: PulseClockTextStyles.cardSubtitle.copyWith(
-                          fontSize: 14,
-                          color: notification.isRead
-                              ? PulseClockColors.textSecondary.withOpacity(0.88)
-                              : PulseClockColors.textSecondary,
+                            const Spacer(),
+                            if (notification.actionLabel != null)
+                              TextButton(
+                                onPressed: onAction,
+                                style: TextButton.styleFrom(
+                                  foregroundColor: style.indicatorColor,
+                                  backgroundColor: style.backgroundTint,
+                                  minimumSize: Size.zero,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  textStyle: PulseClockTextStyles.cardSubtitle.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                ),
+                                child: Text(notification.actionLabel!),
+                              ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _timestampLabel(notification.timestamp),
-                        style: PulseClockTextStyles.cardSubtitle.copyWith(
-                          fontSize: 12,
-                          color: PulseClockColors.textSecondary.withOpacity(0.85),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            if (notification.actionLabel != null) ...<Widget>[
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: onAction,
-                    icon: Icon(
-                      style.icon,
-                      size: 16,
-                      color: PulseClockColors.actionBlue,
-                    ),
-                    label: Text(
-                      notification.actionLabel!,
-                      style: PulseClockTextStyles.cardSubtitle.copyWith(
-                        color: PulseClockColors.actionBlue,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      ],
                     ),
                   ),
                 ),
               ),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -383,64 +422,75 @@ class _NoNotificationState extends StatelessWidget {
   }
 }
 
-class _NotificationStyle {
-  const _NotificationStyle({
-    required this.icon,
-    required this.backgroundColor,
-    required this.foregroundColor,
+class _NotificationDateGroup {
+  const _NotificationDateGroup({
+    required this.label,
+    required this.notifications,
   });
 
-  final IconData icon;
-  final Color backgroundColor;
-  final Color foregroundColor;
+  final String label;
+  final List<WorkPulseNotification> notifications;
+}
+
+class _NotificationStyle {
+  const _NotificationStyle({
+    required this.indicatorColor,
+    required this.backgroundTint,
+  });
+
+  final Color indicatorColor;
+  final Color backgroundTint;
+}
+
+List<_NotificationDateGroup> _groupNotificationsByDate(
+  List<WorkPulseNotification> notifications,
+) {
+  final Map<String, List<WorkPulseNotification>> grouped =
+      <String, List<WorkPulseNotification>>{};
+
+  for (final WorkPulseNotification notification in notifications) {
+    final String key = dateLabel(notification.timestamp);
+    grouped.putIfAbsent(key, () => <WorkPulseNotification>[]);
+    grouped[key]!.add(notification);
+  }
+
+  return grouped.entries
+      .map(
+        (MapEntry<String, List<WorkPulseNotification>> entry) =>
+            _NotificationDateGroup(
+              label: entry.key,
+              notifications: entry.value,
+            ),
+      )
+      .toList(growable: false);
 }
 
 _NotificationStyle _styleForType(WorkPulseNotificationType type) {
   switch (type) {
     case WorkPulseNotificationType.clockInReminder:
       return const _NotificationStyle(
-        icon: Icons.login_rounded,
-        backgroundColor: Color(0x1F2563EB),
-        foregroundColor: PulseClockColors.actionBlue,
+        indicatorColor: PulseClockColors.actionBlue,
+        backgroundTint: Color(0x142563EB),
       );
     case WorkPulseNotificationType.clockOutReminder:
       return const _NotificationStyle(
-        icon: Icons.logout_rounded,
-        backgroundColor: Color(0x22B91C1C),
-        foregroundColor: Color(0xFFB91C1C),
+        indicatorColor: Color(0xFFF97316),
+        backgroundTint: Color(0x14F97316),
       );
     case WorkPulseNotificationType.missedPunchReminder:
       return const _NotificationStyle(
-        icon: Icons.warning_amber_rounded,
-        backgroundColor: Color(0x22C81E3A),
-        foregroundColor: Color(0xFFC81E3A),
+        indicatorColor: Color(0xFFC81E3A),
+        backgroundTint: Color(0x14C81E3A),
       );
     case WorkPulseNotificationType.leaveUpdate:
       return const _NotificationStyle(
-        icon: Icons.event_note_rounded,
-        backgroundColor: Color(0x226B21A8),
-        foregroundColor: Color(0xFF6B21A8),
+        indicatorColor: Color(0xFF0F8A43),
+        backgroundTint: Color(0x1415803D),
       );
     case WorkPulseNotificationType.generalInfo:
       return const _NotificationStyle(
-        icon: Icons.info_outline_rounded,
-        backgroundColor: Color(0x1F64748B),
-        foregroundColor: Color(0xFF334155),
+        indicatorColor: Color(0xFF475569),
+        backgroundTint: Color(0x14475569),
       );
   }
-}
-
-String _timestampLabel(DateTime timestamp) {
-  final DateTime now = DateTime.now();
-  final DateTime today = DateTime(now.year, now.month, now.day);
-  final DateTime tsDay = DateTime(
-    timestamp.year,
-    timestamp.month,
-    timestamp.day,
-  );
-  final String time = timeLabel(timestamp);
-  if (tsDay == today) {
-    return 'Today, $time';
-  }
-  return '${dateLabel(timestamp)}, $time';
 }

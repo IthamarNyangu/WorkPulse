@@ -481,6 +481,17 @@ class WorkPulseMockStore extends ChangeNotifier {
     }
   }
 
+  void clearAllNotifications() {
+    bool changed = false;
+    for (final WorkPulseNotification notification in notifications) {
+      final bool added = _resolvedNotificationIds.add(notification.id);
+      changed = changed || added;
+    }
+    if (changed) {
+      notifyListeners();
+    }
+  }
+
   void resolveNotification(String notificationId) {
     if (_resolvedNotificationIds.add(notificationId)) {
       notifyListeners();
@@ -786,6 +797,9 @@ class WorkPulseMockStore extends ChangeNotifier {
   List<WorkPulseNotification> _buildNotifications({required DateTime now}) {
     final DateTime today = _dateOnly(now);
     final List<WorkPulseNotification> results = <WorkPulseNotification>[];
+    final bool hasLeftGeofenceReminder = _shouldAddLeftGeofenceReminder(
+      now: now,
+    );
     final WorkPulseNotification appInfo = _notification(
       id: 'general-workpulse-info',
       type: WorkPulseNotificationType.generalInfo,
@@ -815,7 +829,7 @@ class WorkPulseMockStore extends ChangeNotifier {
       );
     }
 
-    if (_shouldAddClockOutReminder(now: now)) {
+    if (_shouldAddClockOutReminder(now: now) && !hasLeftGeofenceReminder) {
       _addNotificationIfActive(
         results,
         _notification(
@@ -835,7 +849,7 @@ class WorkPulseMockStore extends ChangeNotifier {
       );
     }
 
-    if (_shouldAddLeftGeofenceReminder(now: now)) {
+    if (hasLeftGeofenceReminder) {
       _addNotificationIfActive(
         results,
         _notification(
