@@ -62,13 +62,18 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
   }
 
   void _syncStateFromStore() {
-    _status = _store.liveAttendanceStatus;
+    _status = _store.effectiveHomeAttendanceStatus;
     _punchInAt = _store.livePunchInAt;
     _punchOutAt = _store.livePunchOutAt;
     _lastWorkedDuration = _store.liveWorkedDuration;
   }
 
   void _onPrimaryActionPressed() async {
+    if (_status != AttendanceStatus.offDuty &&
+        _status != AttendanceStatus.onDuty) {
+      return;
+    }
+
     final ClockActionMode mode = _status == AttendanceStatus.offDuty
         ? ClockActionMode.clockIn
         : ClockActionMode.clockOut;
@@ -158,6 +163,22 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
           backgroundColor: PulseClockColors.statusOnDutyBg,
           accentColor: PulseClockColors.statusOnDutyAccent,
         );
+      case AttendanceStatus.leavePending:
+        return const StatusCardModel(
+          title: 'Leave Pending',
+          subtitle: 'Your leave request for today is awaiting approval',
+          icon: Icons.schedule_outlined,
+          backgroundColor: PulseClockColors.statusPendingBg,
+          accentColor: PulseClockColors.statusPendingAccent,
+        );
+      case AttendanceStatus.onLeave:
+        return const StatusCardModel(
+          title: 'On Leave',
+          subtitle: 'Approved leave is active for today',
+          icon: Icons.beach_access_outlined,
+          backgroundColor: PulseClockColors.statusLeaveBg,
+          accentColor: PulseClockColors.statusLeaveAccent,
+        );
     }
   }
 
@@ -172,6 +193,15 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
       workedDuration = _now.difference(_punchInAt!);
     } else if (_lastWorkedDuration != null) {
       workedDuration = _lastWorkedDuration!;
+    }
+
+    if (_status == AttendanceStatus.leavePending ||
+        _status == AttendanceStatus.onLeave) {
+      return const SummaryModel(
+        punchIn: '--',
+        punchOut: '--',
+        workHours: '0h 0m',
+      );
     }
 
     return SummaryModel(
@@ -272,9 +302,15 @@ class HomeTabContent extends StatelessWidget {
   final VoidCallback onNotificationsPressed;
   final int unreadNotifications;
 
+  bool get _showsPrimaryAction {
+    return status == AttendanceStatus.offDuty || status == AttendanceStatus.onDuty;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final PrimaryActionModel primaryAction = primaryActionFor(status);
+    final PrimaryActionModel? primaryAction = _showsPrimaryAction
+        ? primaryActionFor(status)
+        : null;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -295,12 +331,14 @@ class HomeTabContent extends StatelessWidget {
           LiveTimeSection(now: now),
           const SizedBox(height: 20),
           StatusCardSection(model: statusCard),
-          const SizedBox(height: 16),
-          PrimaryActionButtonSection(
-            model: primaryAction,
-            onPressed: onPrimaryActionPressed,
-            showIcon: false,
-          ),
+          if (primaryAction != null) ...<Widget>[
+            const SizedBox(height: 16),
+            PrimaryActionButtonSection(
+              model: primaryAction,
+              onPressed: onPrimaryActionPressed,
+              showIcon: false,
+            ),
+          ],
           const SizedBox(height: 24),
           Text(
             "Today's Summary",

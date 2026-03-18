@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 
-enum AttendanceStatus { offDuty, onDuty }
+enum AttendanceStatus { offDuty, onDuty, leavePending, onLeave }
 
 enum RequestEntryType { missedPunch, correctionPending, leaveDetails }
 

@@ -60,7 +60,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   Widget build(BuildContext context) {
     final List<AttendanceRecord> filteredRecords =
         filterAttendanceHistoryRecords(
-          records: _store.attendanceRecords,
+          records: _store.historyAttendanceRecords,
           dateRange: _selectedDateRange,
           statusFilter: _selectedStatus,
           now: _now,

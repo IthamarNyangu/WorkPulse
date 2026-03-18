@@ -20,6 +20,22 @@ StatusCardModel statusCardFor(AttendanceStatus status) {
         backgroundColor: PulseClockColors.statusOnDutyBg,
         accentColor: PulseClockColors.statusOnDutyAccent,
       );
+    case AttendanceStatus.leavePending:
+      return const StatusCardModel(
+        title: 'Leave Pending',
+        subtitle: 'Your leave request for today is awaiting approval',
+        icon: Icons.schedule_outlined,
+        backgroundColor: PulseClockColors.statusPendingBg,
+        accentColor: PulseClockColors.statusPendingAccent,
+      );
+    case AttendanceStatus.onLeave:
+      return const StatusCardModel(
+        title: 'On Leave',
+        subtitle: 'Approved leave is active for today',
+        icon: Icons.beach_access_outlined,
+        backgroundColor: PulseClockColors.statusLeaveBg,
+        accentColor: PulseClockColors.statusLeaveAccent,
+      );
   }
 }
 
@@ -39,6 +55,20 @@ PrimaryActionModel primaryActionFor(AttendanceStatus status) {
         backgroundColor: PulseClockColors.actionRed,
         foregroundColor: PulseClockColors.surface,
       );
+    case AttendanceStatus.leavePending:
+      return const PrimaryActionModel(
+        label: 'Leave Pending',
+        icon: Icons.schedule_outlined,
+        backgroundColor: PulseClockColors.actionBlue,
+        foregroundColor: PulseClockColors.surface,
+      );
+    case AttendanceStatus.onLeave:
+      return const PrimaryActionModel(
+        label: 'On Leave',
+        icon: Icons.beach_access_outlined,
+        backgroundColor: PulseClockColors.actionBlue,
+        foregroundColor: PulseClockColors.surface,
+      );
   }
 }
 
@@ -55,6 +85,13 @@ SummaryModel summaryFor(AttendanceStatus status) {
         punchIn: '19:15',
         punchOut: '--',
         workHours: '3h 42m',
+      );
+    case AttendanceStatus.leavePending:
+    case AttendanceStatus.onLeave:
+      return const SummaryModel(
+        punchIn: '--',
+        punchOut: '--',
+        workHours: '0h 0m',
       );
   }
 }
@@ -345,11 +382,42 @@ class WorkPulseMockStore extends ChangeNotifier {
     return List<AttendanceRecord>.unmodifiable(_attendanceRecords);
   }
 
+  List<AttendanceRecord> get historyAttendanceRecords {
+    final DateTime today = _dateOnly(DateTime.now());
+    final List<AttendanceRecord> records = _attendanceRecords.where((
+      AttendanceRecord record,
+    ) {
+      final DateTime recordDate = _dateOnly(record.date);
+      return !recordDate.isAfter(today);
+    }).toList(growable: false);
+    return List<AttendanceRecord>.unmodifiable(records);
+  }
+
   List<CorrectionRequest> get correctionRequests {
     return List<CorrectionRequest>.unmodifiable(_correctionRequests);
   }
 
   AttendanceStatus get liveAttendanceStatus => _liveAttendanceStatus;
+
+  AttendanceStatus get effectiveHomeAttendanceStatus {
+    if (_liveAttendanceStatus == AttendanceStatus.onDuty) {
+      return AttendanceStatus.onDuty;
+    }
+
+    final AttendanceRecord? todayRecord = todayAttendanceRecord;
+    if (todayRecord == null) {
+      return AttendanceStatus.offDuty;
+    }
+
+    switch (todayRecord.status) {
+      case AttendanceRecordStatus.onLeave:
+        return AttendanceStatus.onLeave;
+      case AttendanceRecordStatus.leavePending:
+        return AttendanceStatus.leavePending;
+      default:
+        return AttendanceStatus.offDuty;
+    }
+  }
 
   DateTime? get livePunchInAt => _livePunchInAt;
 
@@ -416,6 +484,16 @@ class WorkPulseMockStore extends ChangeNotifier {
   AttendanceRecord? get latestMissedPunchRecord {
     for (final AttendanceRecord record in _attendanceRecords) {
       if (record.status == AttendanceRecordStatus.missedPunch) {
+        return record;
+      }
+    }
+    return null;
+  }
+
+  AttendanceRecord? get todayAttendanceRecord {
+    final DateTime today = _dateOnly(DateTime.now());
+    for (final AttendanceRecord record in _attendanceRecords) {
+      if (_dateOnly(record.date) == today) {
         return record;
       }
     }
@@ -942,7 +1020,8 @@ class WorkPulseMockStore extends ChangeNotifier {
   }
 
   bool _shouldAddClockInReminder({required DateTime now, required DateTime today}) {
-    if (!_isInsideGeofence || _liveAttendanceStatus != AttendanceStatus.offDuty) {
+    if (!_isInsideGeofence ||
+        effectiveHomeAttendanceStatus != AttendanceStatus.offDuty) {
       return false;
     }
     if (now.hour < _reminderConfig.workdayStartHour) {
