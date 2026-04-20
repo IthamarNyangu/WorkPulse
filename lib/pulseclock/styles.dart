@@ -16,7 +16,7 @@ abstract final class PulseClockColors {
   static const Color statusOffDutyBg = Color(0xFFECF1F8);
   static const Color statusOffDutyAccent = Color(0xFF2F3E52);
 
-  static const Color statusOnDutyBg = Color(0xFFE4F7EC);
+  static const Color statusOnDutyBg = Color(0xFFECF1F8);
   static const Color statusOnDutyAccent = Color(0xFF0F8A43);
 
   static const Color statusMissedBg = Color(0xFFFFE8EE);
