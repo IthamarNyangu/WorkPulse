@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/auth/presentation/supabase_auth_gate.dart';
 import 'package:pulseclock/pulseclock/home_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 
@@ -25,7 +26,9 @@ class PulseClockApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
       ),
-      home: const PulseClockHomeScreen(),
+      home: SupabaseBootstrap.isInitialized
+          ? const SupabaseAuthGate()
+          : const PulseClockHomeScreen(),
     );
   }
 }

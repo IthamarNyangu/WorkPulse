@@ -584,6 +584,31 @@ class WorkPulseMockStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  void syncLiveAttendance({
+    DateTime? punchInAt,
+    DateTime? punchOutAt,
+  }) {
+    _livePunchInAt = punchInAt;
+    _livePunchOutAt = punchOutAt;
+
+    if (punchInAt != null && punchOutAt == null) {
+      _liveAttendanceStatus = AttendanceStatus.onDuty;
+      _lastWorkedDuration = null;
+      notifyListeners();
+      return;
+    }
+
+    _liveAttendanceStatus = AttendanceStatus.offDuty;
+    if (punchInAt != null &&
+        punchOutAt != null &&
+        !punchOutAt.isBefore(punchInAt)) {
+      _lastWorkedDuration = punchOutAt.difference(punchInAt);
+    } else {
+      _lastWorkedDuration = null;
+    }
+    notifyListeners();
+  }
+
   void applyClockConfirmationResult(ClockConfirmationResult result) {
     final DateTime actionDay = _dateOnly(result.timestamp);
     if (result.mode == ClockActionMode.clockIn) {

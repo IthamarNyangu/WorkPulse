@@ -1,98 +1,123 @@
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/auth/data/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AttendanceService {
   AttendanceService({SupabaseClient? client})
-    : _client = client ?? SupabaseBootstrap.client;
+    : _client = client ?? SupabaseBootstrap.client,
+      _authService = AuthService(client: client ?? SupabaseBootstrap.client);
 
   static const String tableName = 'attendance_records';
 
   final SupabaseClient _client;
+  final AuthService _authService;
 
   Future<SupabaseAttendanceRecord> insertClockIn({
-    required String employeeId,
     String? comment,
     DateTime? clockInAt,
+    double? latitude,
+    double? longitude,
   }) async {
     final DateTime effectiveClockInAt = clockInAt ?? DateTime.now();
-    final String userId = _requireUserId();
+    final WorkPulseUserProfile profile = await _requireCurrentProfile();
+    final SupabaseAttendanceRecord? existing = await fetchTodaysAttendance(
+      date: effectiveClockInAt,
+    );
 
-    final Map<String, dynamic> row = (await _client
-        .from(tableName)
-        .insert(<String, dynamic>{
-          'user_id': userId,
-          'employee_id': employeeId,
-          'work_date': _dateOnlyLabel(effectiveClockInAt),
-          'clock_in_at': effectiveClockInAt.toUtc().toIso8601String(),
-          'comment': comment,
-          'status': 'on_duty',
-        })
-        .select()
-        .single());
+    if (existing != null) {
+      if (existing.clockOutAt == null) {
+        throw StateError('You are already clocked in for today.');
+      }
+      throw StateError('Attendance for today is already completed.');
+    }
+
+    final Map<String, dynamic> row =
+        (await _client
+                .from(tableName)
+                .insert(<String, dynamic>{
+                  'user_id': profile.id,
+                  'employee_id': profile.employeeId,
+                  'work_date': _dateOnlyLabel(effectiveClockInAt),
+                  'clock_in': effectiveClockInAt.toUtc().toIso8601String(),
+                  'clock_in_comment': comment,
+                  'clock_in_lat': latitude,
+                  'clock_in_lng': longitude,
+                  'status': 'on_duty',
+                })
+                .select()
+                .single())
+            as Map<String, dynamic>;
 
     return SupabaseAttendanceRecord.fromMap(row);
   }
 
   Future<SupabaseAttendanceRecord> insertClockOut({
-    required String employeeId,
     String? comment,
     DateTime? clockOutAt,
+    double? latitude,
+    double? longitude,
   }) async {
     final DateTime effectiveClockOutAt = clockOutAt ?? DateTime.now();
     final SupabaseAttendanceRecord? record = await fetchTodaysAttendance(
-      employeeId: employeeId,
       date: effectiveClockOutAt,
     );
 
     if (record == null) {
       throw StateError('No open attendance record found for today.');
     }
+    if (record.clockInAt == null) {
+      throw StateError('Today does not have a clock-in record yet.');
+    }
+    if (record.clockOutAt != null) {
+      throw StateError('You are already clocked out for today.');
+    }
 
-    final Map<String, dynamic> row = (await _client
-        .from(tableName)
-        .update(<String, dynamic>{
-          'clock_out_at': effectiveClockOutAt.toUtc().toIso8601String(),
-          'comment': comment ?? record.comment,
-          'status': 'completed',
-        })
-        .eq('id', record.id)
-        .select()
-        .single());
+    final Map<String, dynamic> row =
+        (await _client
+                .from(tableName)
+                .update(<String, dynamic>{
+                  'clock_out': effectiveClockOutAt.toUtc().toIso8601String(),
+                  'clock_out_comment': comment,
+                  'clock_out_lat': latitude,
+                  'clock_out_lng': longitude,
+                  'status': 'completed',
+                })
+                .eq('id', record.id)
+                .select()
+                .single())
+            as Map<String, dynamic>;
 
     return SupabaseAttendanceRecord.fromMap(row);
   }
 
-  Future<SupabaseAttendanceRecord?> fetchTodaysAttendance({
-    required String employeeId,
-    DateTime? date,
-  }) async {
-    final String userId = _requireUserId();
+  Future<SupabaseAttendanceRecord?> fetchTodaysAttendance({DateTime? date}) async {
+    final WorkPulseUserProfile profile = await _requireCurrentProfile();
     final String workDate = _dateOnlyLabel(date ?? DateTime.now());
 
-    final List<dynamic> rows = await _client
-        .from(tableName)
-        .select()
-        .eq('user_id', userId)
-        .eq('employee_id', employeeId)
-        .eq('work_date', workDate)
-        .order('created_at', ascending: false)
-        .limit(1);
+    final Map<String, dynamic>? row =
+        (await _client
+                .from(tableName)
+                .select()
+                .eq('user_id', profile.id)
+                .eq('work_date', workDate)
+                .maybeSingle())
+            as Map<String, dynamic>?;
 
-    if (rows.isEmpty) {
+    if (row == null) {
       return null;
     }
 
-    return SupabaseAttendanceRecord.fromMap(
-      Map<String, dynamic>.from(rows.first as Map),
-    );
+    return SupabaseAttendanceRecord.fromMap(row);
   }
 
-  String _requireUserId() {
-    final String? userId = _client.auth.currentUser?.id;
-    if (userId == null) {
-      throw StateError('You must be logged in before using attendance APIs.');
+  Future<WorkPulseUserProfile> _requireCurrentProfile() async {
+    final WorkPulseUserProfile? profile = await _authService.fetchCurrentProfile();
+    if (profile == null) {
+      throw StateError(
+        'No employee profile found for the current user. Confirm the profiles trigger and test user are set up in Supabase.',
+      );
     }
-    return userId;
+    return profile;
   }
 
   String _dateOnlyLabel(DateTime dateTime) {
@@ -112,9 +137,15 @@ class SupabaseAttendanceRecord {
     required this.workDate,
     this.clockInAt,
     this.clockOutAt,
-    this.comment,
+    this.clockInComment,
+    this.clockOutComment,
+    this.clockInLatitude,
+    this.clockInLongitude,
+    this.clockOutLatitude,
+    this.clockOutLongitude,
     this.status,
     this.createdAt,
+    this.updatedAt,
   });
 
   final String id;
@@ -123,9 +154,15 @@ class SupabaseAttendanceRecord {
   final DateTime workDate;
   final DateTime? clockInAt;
   final DateTime? clockOutAt;
-  final String? comment;
+  final String? clockInComment;
+  final String? clockOutComment;
+  final double? clockInLatitude;
+  final double? clockInLongitude;
+  final double? clockOutLatitude;
+  final double? clockOutLongitude;
   final String? status;
   final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   factory SupabaseAttendanceRecord.fromMap(Map<String, dynamic> map) {
     return SupabaseAttendanceRecord(
@@ -133,11 +170,17 @@ class SupabaseAttendanceRecord {
       userId: map['user_id'] as String,
       employeeId: map['employee_id'] as String,
       workDate: DateTime.parse(map['work_date'] as String),
-      clockInAt: _parseDateTime(map['clock_in_at']),
-      clockOutAt: _parseDateTime(map['clock_out_at']),
-      comment: map['comment'] as String?,
+      clockInAt: _parseDateTime(map['clock_in']),
+      clockOutAt: _parseDateTime(map['clock_out']),
+      clockInComment: map['clock_in_comment'] as String?,
+      clockOutComment: map['clock_out_comment'] as String?,
+      clockInLatitude: _parseDouble(map['clock_in_lat']),
+      clockInLongitude: _parseDouble(map['clock_in_lng']),
+      clockOutLatitude: _parseDouble(map['clock_out_lat']),
+      clockOutLongitude: _parseDouble(map['clock_out_lng']),
       status: map['status'] as String?,
       createdAt: _parseDateTime(map['created_at']),
+      updatedAt: _parseDateTime(map['updated_at']),
     );
   }
 
@@ -146,5 +189,12 @@ class SupabaseAttendanceRecord {
       return null;
     }
     return DateTime.parse(value as String).toLocal();
+  }
+
+  static double? _parseDouble(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    return (value as num).toDouble();
   }
 }

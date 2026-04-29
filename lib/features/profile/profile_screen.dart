@@ -1,10 +1,47 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/auth/data/auth_service.dart';
 import 'package:pulseclock/features/notifications/notifications_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  String _employeeName = 'Ithamar Nyangu';
+  String _employeeId = 'IN-2048';
+  bool _isLoggingOut = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    if (!SupabaseBootstrap.isInitialized) {
+      return;
+    }
+
+    try {
+      final WorkPulseUserProfile? profile = await AuthService()
+          .fetchCurrentProfile();
+      if (!mounted || profile == null) {
+        return;
+      }
+      setState(() {
+        _employeeName = profile.fullName;
+        _employeeId = profile.employeeId;
+      });
+    } catch (_) {
+      // Keep existing mock values if the backend profile is unavailable.
+    }
+  }
 
   Future<void> _openNotifications(BuildContext context) async {
     await Navigator.of(context).push<void>(
@@ -231,6 +268,42 @@ class ProfileScreen extends StatelessWidget {
     feedbackController.dispose();
   }
 
+  Future<void> _logout() async {
+    if (_isLoggingOut) {
+      return;
+    }
+
+    if (!SupabaseBootstrap.isInitialized) {
+      await _showPlaceholderDialog(
+        context,
+        title: 'Logout',
+        message: 'Supabase authentication is not enabled in this run.',
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoggingOut = true;
+    });
+
+    try {
+      await AuthService().logout();
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to log out right now.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoggingOut = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -248,9 +321,9 @@ class ProfileScreen extends StatelessWidget {
             style: PulseClockTextStyles.headerTitle.copyWith(fontSize: 32),
           ),
           const SizedBox(height: 18),
-          const _ProfileHeaderCard(
-            employeeName: 'Ithamar Nyangu',
-            employeeId: 'IN-2048',
+          _ProfileHeaderCard(
+            employeeName: _employeeName,
+            employeeId: _employeeId,
           ),
           const SizedBox(height: 18),
           Expanded(
@@ -353,12 +426,7 @@ class ProfileScreen extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
-                    onPressed: () => _showPlaceholderDialog(
-                      context,
-                      title: 'Logout',
-                      message:
-                          'Logout will be connected when account authentication is added.',
-                    ),
+                    onPressed: _isLoggingOut ? null : _logout,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFFB42318),
                       backgroundColor: const Color(0xFFFDF4F4),
@@ -374,7 +442,18 @@ class ProfileScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    child: const Text('Logout'),
+                    child: _isLoggingOut
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFFB42318),
+                              ),
+                            ),
+                          )
+                        : const Text('Logout'),
                   ),
                 ),
                 const SizedBox(height: 16),

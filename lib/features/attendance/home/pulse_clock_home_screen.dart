@@ -1,8 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/attendance/clock/clock_confirmation_screen.dart';
+import 'package:pulseclock/features/attendance/data/attendance_service.dart';
 import 'package:pulseclock/features/attendance/history/attendance_history_screen.dart';
+import 'package:pulseclock/features/auth/data/auth_service.dart';
 import 'package:pulseclock/features/notifications/notifications_screen.dart';
 import 'package:pulseclock/features/profile/profile_screen.dart';
 import 'package:pulseclock/features/requests/requests_home_screen.dart';
@@ -23,6 +26,7 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
   AttendanceStatus _status = AttendanceStatus.offDuty;
   int _selectedNavIndex = 0;
+  String _employeeName = 'Ithamar';
   late DateTime _now;
   Timer? _clockTimer;
   DateTime? _punchInAt;
@@ -34,6 +38,8 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
     super.initState();
     _now = DateTime.now();
     _syncStateFromStore();
+    _loadEmployeeProfile();
+    _loadAttendanceFromBackend();
     _store.addListener(_onStoreChanged);
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) {
@@ -66,6 +72,45 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
     _punchInAt = _store.livePunchInAt;
     _punchOutAt = _store.livePunchOutAt;
     _lastWorkedDuration = _store.liveWorkedDuration;
+  }
+
+  Future<void> _loadEmployeeProfile() async {
+    if (!SupabaseBootstrap.isInitialized) {
+      return;
+    }
+
+    try {
+      final WorkPulseUserProfile? profile = await AuthService()
+          .fetchCurrentProfile();
+      if (!mounted || profile == null || profile.firstName.isEmpty) {
+        return;
+      }
+      setState(() {
+        _employeeName = profile.firstName;
+      });
+    } catch (_) {
+      // Preserve existing home experience if profile fetch fails.
+    }
+  }
+
+  Future<void> _loadAttendanceFromBackend() async {
+    if (!SupabaseBootstrap.isInitialized) {
+      return;
+    }
+
+    try {
+      final SupabaseAttendanceRecord? record = await AttendanceService()
+          .fetchTodaysAttendance();
+      if (!mounted) {
+        return;
+      }
+      _store.syncLiveAttendance(
+        punchInAt: record?.clockInAt,
+        punchOutAt: record?.clockOutAt,
+      );
+    } catch (_) {
+      // Keep the existing mock state if the backend attendance lookup fails.
+    }
   }
 
   void _onPrimaryActionPressed() async {
@@ -116,6 +161,7 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
         return HomeTabContent(
           now: _now,
           status: _status,
+          employeeName: _employeeName,
           statusCard: _statusCardForHome(),
           summary: _summaryForHome(),
           onPrimaryActionPressed: _onPrimaryActionPressed,
@@ -132,6 +178,7 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
         return HomeTabContent(
           now: _now,
           status: _status,
+          employeeName: _employeeName,
           statusCard: _statusCardForHome(),
           summary: _summaryForHome(),
           onPrimaryActionPressed: _onPrimaryActionPressed,
@@ -287,6 +334,7 @@ class HomeTabContent extends StatelessWidget {
     super.key,
     required this.now,
     required this.status,
+    required this.employeeName,
     required this.statusCard,
     required this.summary,
     required this.onPrimaryActionPressed,
@@ -296,6 +344,7 @@ class HomeTabContent extends StatelessWidget {
 
   final DateTime now;
   final AttendanceStatus status;
+  final String employeeName;
   final StatusCardModel statusCard;
   final SummaryModel summary;
   final VoidCallback onPrimaryActionPressed;
@@ -323,7 +372,7 @@ class HomeTabContent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           HeaderSection(
-            employeeName: 'Ithamar',
+            employeeName: employeeName,
             onNotificationsPressed: onNotificationsPressed,
             unreadNotificationCount: unreadNotifications,
           ),

@@ -1,43 +1,90 @@
+-- WorkPulse development reset + bootstrap script.
+-- Safe to use only while the project is still in early setup.
+
+drop trigger if exists on_auth_user_created on auth.users;
+
+drop table if exists public.correction_requests cascade;
+drop table if exists public.leave_requests cascade;
+drop table if exists public.attendance_records cascade;
+drop table if exists public.profiles cascade;
+
+drop function if exists public.handle_new_user();
+drop function if exists public.set_updated_at();
+
 create extension if not exists pgcrypto;
 
-create table if not exists public.attendance_records (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  employee_id text not null,
-  work_date date not null,
-  clock_in_at timestamptz,
-  clock_out_at timestamptz,
-  comment text,
-  status text not null default 'off_duty',
+create table public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  employee_id text unique not null,
+  full_name text not null,
+  email text unique not null,
+  role text not null default 'employee' check (
+    role in ('employee', 'supervisor', 'hr', 'admin')
+  ),
+  department text,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
 
-create unique index if not exists attendance_records_user_date_idx
-on public.attendance_records (user_id, employee_id, work_date);
+create table public.attendance_records (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  employee_id text not null,
+  work_date date not null,
+  clock_in timestamptz,
+  clock_out timestamptz,
+  clock_in_comment text,
+  clock_out_comment text,
+  clock_in_lat double precision,
+  clock_in_lng double precision,
+  clock_out_lat double precision,
+  clock_out_lng double precision,
+  status text not null check (
+    status in (
+      'on_duty',
+      'completed',
+      'missed_punch',
+      'absent',
+      'on_leave',
+      'leave_pending',
+      'correction_pending'
+    )
+  ),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (user_id, work_date)
+);
 
-alter table public.attendance_records enable row level security;
+create table public.leave_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  leave_type text not null check (leave_type in ('annual', 'sick', 'other')),
+  start_date date not null,
+  end_date date not null,
+  duration_days integer not null check (duration_days >= 1),
+  reason text,
+  status text not null check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
 
-create policy "Users can read own attendance"
-on public.attendance_records
-for select
-to authenticated
-using (auth.uid() = user_id);
+create table public.correction_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  attendance_record_id uuid references public.attendance_records(id) on delete set null,
+  work_date date not null,
+  correction_type text not null check (
+    correction_type in ('clock_in', 'clock_out', 'both')
+  ),
+  corrected_clock_in timestamptz,
+  corrected_clock_out timestamptz,
+  reason text not null,
+  status text not null check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
 
-create policy "Users can insert own attendance"
-on public.attendance_records
-for insert
-to authenticated
-with check (auth.uid() = user_id);
-
-create policy "Users can update own attendance"
-on public.attendance_records
-for update
-to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
-
-create or replace function public.set_attendance_updated_at()
+create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
 as $$
@@ -47,10 +94,154 @@ begin
 end;
 $$;
 
-drop trigger if exists attendance_records_set_updated_at
-on public.attendance_records;
+create trigger set_profiles_updated_at
+before update on public.profiles
+for each row execute function public.set_updated_at();
 
-create trigger attendance_records_set_updated_at
+create trigger set_attendance_records_updated_at
 before update on public.attendance_records
-for each row
-execute function public.set_attendance_updated_at();
+for each row execute function public.set_updated_at();
+
+create trigger set_leave_requests_updated_at
+before update on public.leave_requests
+for each row execute function public.set_updated_at();
+
+create trigger set_correction_requests_updated_at
+before update on public.correction_requests
+for each row execute function public.set_updated_at();
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (
+    id,
+    employee_id,
+    full_name,
+    email,
+    role
+  )
+  values (
+    new.id,
+    coalesce(
+      new.raw_user_meta_data ->> 'employee_id',
+      'EMP-' || substr(new.id::text, 1, 8)
+    ),
+    coalesce(new.raw_user_meta_data ->> 'full_name', 'New User'),
+    new.email,
+    coalesce(new.raw_user_meta_data ->> 'role', 'employee')
+  );
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute procedure public.handle_new_user();
+
+insert into public.profiles (
+  id,
+  employee_id,
+  full_name,
+  email,
+  role
+)
+select
+  users.id,
+  coalesce(
+    users.raw_user_meta_data ->> 'employee_id',
+    'EMP-' || substr(users.id::text, 1, 8)
+  ),
+  coalesce(users.raw_user_meta_data ->> 'full_name', 'New User'),
+  users.email,
+  coalesce(users.raw_user_meta_data ->> 'role', 'employee')
+from auth.users as users
+on conflict (id) do nothing;
+
+alter table public.profiles enable row level security;
+alter table public.attendance_records enable row level security;
+alter table public.leave_requests enable row level security;
+alter table public.correction_requests enable row level security;
+
+create policy "profiles_select_own"
+on public.profiles
+for select
+to authenticated
+using (auth.uid() = id);
+
+create policy "profiles_update_own"
+on public.profiles
+for update
+to authenticated
+using (auth.uid() = id)
+with check (auth.uid() = id);
+
+create policy "attendance_select_own"
+on public.attendance_records
+for select
+to authenticated
+using (auth.uid() = user_id);
+
+create policy "attendance_insert_own"
+on public.attendance_records
+for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+create policy "attendance_update_own"
+on public.attendance_records
+for update
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+create policy "leave_select_own"
+on public.leave_requests
+for select
+to authenticated
+using (auth.uid() = user_id);
+
+create policy "leave_insert_own"
+on public.leave_requests
+for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+create policy "leave_update_pending_own"
+on public.leave_requests
+for update
+to authenticated
+using (auth.uid() = user_id and status = 'pending');
+
+create policy "leave_delete_pending_own"
+on public.leave_requests
+for delete
+to authenticated
+using (auth.uid() = user_id and status = 'pending');
+
+create policy "correction_select_own"
+on public.correction_requests
+for select
+to authenticated
+using (auth.uid() = user_id);
+
+create policy "correction_insert_own"
+on public.correction_requests
+for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+create policy "correction_update_pending_own"
+on public.correction_requests
+for update
+to authenticated
+using (auth.uid() = user_id and status = 'pending');
+
+create policy "correction_delete_pending_own"
+on public.correction_requests
+for delete
+to authenticated
+using (auth.uid() = user_id and status = 'pending');

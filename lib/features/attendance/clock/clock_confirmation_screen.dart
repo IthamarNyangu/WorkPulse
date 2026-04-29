@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/attendance/data/attendance_service.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
@@ -63,6 +65,18 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
 
     try {
       await _submitConfirmation();
+    } on StateError catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message.toString())),
+      );
+      setState(() {
+        _isSubmitting = false;
+        _showLoadingIndicator = false;
+      });
+      return;
     } catch (_) {
       if (!mounted) {
         return;
@@ -136,8 +150,35 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
   }
 
   Future<void> _submitConfirmation() async {
-    // Placeholder for future API/location work. Kept async to preserve UX flow.
-    await Future<void>.value();
+    if (!SupabaseBootstrap.isInitialized) {
+      await Future<void>.value();
+      return;
+    }
+
+    final AttendanceService attendanceService = AttendanceService();
+    final (double? latitude, double? longitude) = _coordinatesFromSnapshot(
+      _mockLocation,
+    );
+    final String comment = _commentController.text.trim();
+    final String? safeComment = comment.isEmpty ? null : comment;
+    final DateTime now = DateTime.now();
+
+    if (widget.mode == ClockActionMode.clockIn) {
+      await attendanceService.insertClockIn(
+        comment: safeComment,
+        clockInAt: now,
+        latitude: latitude,
+        longitude: longitude,
+      );
+      return;
+    }
+
+    await attendanceService.insertClockOut(
+      comment: safeComment,
+      clockOutAt: now,
+      latitude: latitude,
+      longitude: longitude,
+    );
   }
 
   @override
@@ -293,6 +334,17 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
       ),
     );
   }
+}
+
+(double?, double?) _coordinatesFromSnapshot(ClockLocationSnapshot snapshot) {
+  final List<String> parts = snapshot.coordinates.split(',');
+  if (parts.length != 2) {
+    return (null, null);
+  }
+  return (
+    double.tryParse(parts[0].trim()),
+    double.tryParse(parts[1].trim()),
+  );
 }
 
 class _ConfirmButtonContent extends StatelessWidget {
