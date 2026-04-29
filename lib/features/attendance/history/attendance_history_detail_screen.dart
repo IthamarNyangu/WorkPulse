@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/attendance/data/attendance_service.dart';
 import 'package:pulseclock/features/corrections/correction_form_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
@@ -19,11 +21,16 @@ class AttendanceHistoryDetailScreen extends StatefulWidget {
 class _AttendanceHistoryDetailScreenState
     extends State<AttendanceHistoryDetailScreen> {
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
+  AttendanceRecord? _record;
+  bool _isLoading = true;
+
+  bool get _usesBackend => SupabaseBootstrap.isInitialized;
 
   @override
   void initState() {
     super.initState();
     _store.addListener(_onStoreChanged);
+    _loadRecord();
   }
 
   @override
@@ -36,7 +43,44 @@ class _AttendanceHistoryDetailScreenState
     if (!mounted) {
       return;
     }
-    setState(() {});
+    _loadRecord();
+  }
+
+  Future<void> _loadRecord() async {
+    if (!_usesBackend) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _record = _store.attendanceRecordById(widget.recordId);
+        _isLoading = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final AttendanceRecord? record = await AttendanceService()
+          .fetchHistoryRecordById(widget.recordId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _record = record;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _record = null;
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _openCorrectionForm(AttendanceRecord record) async {
@@ -75,7 +119,27 @@ class _AttendanceHistoryDetailScreenState
 
   @override
   Widget build(BuildContext context) {
-    final AttendanceRecord? record = _store.attendanceRecordById(widget.recordId);
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: PulseClockColors.appBackground,
+        appBar: AppBar(
+          title: const Text('Attendance Details'),
+          backgroundColor: PulseClockColors.surface,
+          foregroundColor: PulseClockColors.textPrimary,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(
+              PulseClockColors.surface,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final AttendanceRecord? record = _record;
 
     if (record == null) {
       return Scaffold(

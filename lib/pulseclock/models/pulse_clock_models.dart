@@ -6,6 +6,7 @@ enum AttendanceStatus { offDuty, onDuty, leavePending, onLeave }
 enum RequestEntryType { missedPunch, correctionPending, leaveDetails }
 
 enum AttendanceRecordStatus {
+  onDuty,
   completed,
   missedPunch,
   correctionPending,
@@ -63,6 +64,8 @@ enum NotificationNavigationTarget {
 extension AttendanceRecordStatusLabels on AttendanceRecordStatus {
   String get label {
     switch (this) {
+      case AttendanceRecordStatus.onDuty:
+        return 'On Duty';
       case AttendanceRecordStatus.completed:
         return 'Completed';
       case AttendanceRecordStatus.missedPunch:

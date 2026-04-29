@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/attendance/data/attendance_service.dart';
 import 'package:pulseclock/features/attendance/history/attendance_history_detail_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
@@ -18,12 +20,18 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   HistoryStatusFilter _selectedStatus = HistoryStatusFilter.all;
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
   late final DateTime _now;
+  List<AttendanceRecord> _records = <AttendanceRecord>[];
+  bool _isLoading = true;
+  String? _loadError;
+
+  bool get _usesBackend => SupabaseBootstrap.isInitialized;
 
   @override
   void initState() {
     super.initState();
     _now = DateTime.now();
     _store.addListener(_onStoreChanged);
+    _loadRecords();
   }
 
   @override
@@ -36,7 +44,55 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     if (!mounted) {
       return;
     }
-    setState(() {});
+
+    if (_usesBackend) {
+      _loadRecords();
+      return;
+    }
+
+    setState(() {
+      _records = _store.historyAttendanceRecords;
+    });
+  }
+
+  Future<void> _loadRecords() async {
+    if (!_usesBackend) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _records = _store.historyAttendanceRecords;
+        _isLoading = false;
+        _loadError = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+
+    try {
+      final List<AttendanceRecord> records = await AttendanceService()
+          .fetchHistoryRecords();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _records = records;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _records = <AttendanceRecord>[];
+        _isLoading = false;
+        _loadError = error.toString();
+      });
+    }
   }
 
   void _openRecordDetails(AttendanceRecord record) {
@@ -60,7 +116,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   Widget build(BuildContext context) {
     final List<AttendanceRecord> filteredRecords =
         filterAttendanceHistoryRecords(
-          records: _store.historyAttendanceRecords,
+          records: _records,
           dateRange: _selectedDateRange,
           statusFilter: _selectedStatus,
           now: _now,
@@ -131,21 +187,46 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
           ),
           const SizedBox(height: 14),
           Expanded(
-            child: filteredRecords.isEmpty
+            child: _isLoading
+                ? const _HistoryLoadingState()
+                : _loadError != null
+                ? _HistoryErrorState(
+                    message: _loadError!,
+                    onRetry: _loadRecords,
+                  )
+                : filteredRecords.isEmpty
                 ? const _HistoryEmptyState()
-                : ListView.separated(
-                    itemCount: filteredRecords.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (BuildContext context, int index) {
-                      final AttendanceRecord record = filteredRecords[index];
-                      return HistoryRecordCard(
-                        record: record,
-                        onTap: () => _openRecordDetails(record),
-                      );
-                    },
+                : RefreshIndicator(
+                    onRefresh: _loadRecords,
+                    child: ListView.separated(
+                      itemCount: filteredRecords.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemBuilder: (BuildContext context, int index) {
+                        final AttendanceRecord record = filteredRecords[index];
+                        return HistoryRecordCard(
+                          record: record,
+                          onTap: () => _openRecordDetails(record),
+                        );
+                      },
+                    ),
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HistoryLoadingState extends StatelessWidget {
+  const _HistoryLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: CircularProgressIndicator(
+        valueColor: AlwaysStoppedAnimation<Color>(
+          PulseClockColors.surface,
+        ),
       ),
     );
   }
@@ -172,6 +253,50 @@ class _HistoryEmptyState extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HistoryErrorState extends StatelessWidget {
+  const _HistoryErrorState({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SurfaceCard(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              color: Color(0xFFB42318),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Unable to load attendance history.',
+              style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              style: PulseClockTextStyles.cardSubtitle,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
+            TextButton(
+              onPressed: onRetry,
+              child: const Text('Retry'),
             ),
           ],
         ),

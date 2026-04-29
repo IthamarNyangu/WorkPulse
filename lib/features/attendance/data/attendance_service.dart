@@ -1,5 +1,7 @@
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/auth/data/auth_service.dart';
+import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
+import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AttendanceService {
@@ -110,6 +112,44 @@ class AttendanceService {
     return SupabaseAttendanceRecord.fromMap(row);
   }
 
+  Future<List<AttendanceRecord>> fetchHistoryRecords() async {
+    final WorkPulseUserProfile profile = await _requireCurrentProfile();
+
+    final List<dynamic> rows = await _client
+        .from(tableName)
+        .select()
+        .eq('user_id', profile.id)
+        .order('work_date', ascending: false)
+        .order('created_at', ascending: false);
+
+    return rows
+        .map(
+          (dynamic row) => SupabaseAttendanceRecord.fromMap(
+            Map<String, dynamic>.from(row as Map),
+          ).toHistoryRecord(),
+        )
+        .toList(growable: false);
+  }
+
+  Future<AttendanceRecord?> fetchHistoryRecordById(String id) async {
+    final WorkPulseUserProfile profile = await _requireCurrentProfile();
+
+    final Map<String, dynamic>? row =
+        (await _client
+                .from(tableName)
+                .select()
+                .eq('user_id', profile.id)
+                .eq('id', id)
+                .maybeSingle())
+            as Map<String, dynamic>?;
+
+    if (row == null) {
+      return null;
+    }
+
+    return SupabaseAttendanceRecord.fromMap(row).toHistoryRecord();
+  }
+
   Future<WorkPulseUserProfile> _requireCurrentProfile() async {
     final WorkPulseUserProfile? profile = await _authService.fetchCurrentProfile();
     if (profile == null) {
@@ -196,5 +236,86 @@ class SupabaseAttendanceRecord {
       return null;
     }
     return (value as num).toDouble();
+  }
+
+  AttendanceRecord toHistoryRecord() {
+    final String clockInTimeLabel = clockInAt == null ? '--' : timeLabel(clockInAt!);
+    final String clockOutTimeLabel = clockOutAt == null
+        ? '--'
+        : timeLabel(clockOutAt!);
+    final Duration? workedDuration = _workedDuration;
+
+    return AttendanceRecord(
+      id: id,
+      date: workDate,
+      clockInTime: clockInTimeLabel,
+      clockOutTime: clockOutTimeLabel,
+      workHours: _workHoursLabel(workedDuration),
+      status: _historyStatus,
+      note: _historyNote,
+    );
+  }
+
+  Duration? get _workedDuration {
+    if (clockInAt == null) {
+      return null;
+    }
+    if (clockOutAt != null && !clockOutAt!.isBefore(clockInAt!)) {
+      return clockOutAt!.difference(clockInAt!);
+    }
+    if (status == 'on_duty') {
+      return DateTime.now().difference(clockInAt!);
+    }
+    return null;
+  }
+
+  AttendanceRecordStatus get _historyStatus {
+    switch (status) {
+      case 'on_duty':
+        return AttendanceRecordStatus.onDuty;
+      case 'completed':
+        return AttendanceRecordStatus.completed;
+      case 'missed_punch':
+        return AttendanceRecordStatus.missedPunch;
+      case 'correction_pending':
+        return AttendanceRecordStatus.correctionPending;
+      case 'leave_pending':
+        return AttendanceRecordStatus.leavePending;
+      case 'on_leave':
+        return AttendanceRecordStatus.onLeave;
+      case 'absent':
+        return AttendanceRecordStatus.absent;
+      default:
+        return AttendanceRecordStatus.completed;
+    }
+  }
+
+  String _workHoursLabel(Duration? workedDuration) {
+    if (workedDuration != null) {
+      return durationLabel(workedDuration);
+    }
+
+    switch (_historyStatus) {
+      case AttendanceRecordStatus.onLeave:
+      case AttendanceRecordStatus.leavePending:
+      case AttendanceRecordStatus.absent:
+        return '0h 0m';
+      default:
+        return '--';
+    }
+  }
+
+  String? get _historyNote {
+    final List<String> notes = <String>[];
+    if (clockInComment != null && clockInComment!.trim().isNotEmpty) {
+      notes.add('Clock In Comment: ${clockInComment!.trim()}');
+    }
+    if (clockOutComment != null && clockOutComment!.trim().isNotEmpty) {
+      notes.add('Clock Out Comment: ${clockOutComment!.trim()}');
+    }
+    if (notes.isEmpty) {
+      return null;
+    }
+    return notes.join('\n');
   }
 }

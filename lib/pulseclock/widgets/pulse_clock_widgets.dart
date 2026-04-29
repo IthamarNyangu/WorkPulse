@@ -741,6 +741,11 @@ class _HistoryMetricCell extends StatelessWidget {
 
 _StatusBadgeStyle _styleForHistoryStatus(AttendanceRecordStatus status) {
   switch (status) {
+    case AttendanceRecordStatus.onDuty:
+      return const _StatusBadgeStyle(
+        backgroundColor: Color(0x2215803D),
+        foregroundColor: Color(0xFF0F8A43),
+      );
     case AttendanceRecordStatus.completed:
       return const _StatusBadgeStyle(
         backgroundColor: Color(0x1F15803D),
