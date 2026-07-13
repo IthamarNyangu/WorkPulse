@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/leave/data/leave_service.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
@@ -23,12 +25,24 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
   late DateTime _startDate;
   late DateTime _endDate;
   LeaveRequest? _editingRequest;
+  AnnualLeaveBalance _annualLeaveBalance = const AnnualLeaveBalance(
+    totalDays: LeaveService.defaultAnnualLeaveEntitlementDays,
+    usedDays: 0,
+    pendingDays: 0,
+  );
+  bool _isLoadingRequest = false;
+  bool _isLoadingBalance = false;
   bool _isSubmitting = false;
 
   bool get _isEditing => _editingRequest != null;
+  bool get _usesBackend => SupabaseBootstrap.isInitialized;
 
   int get _durationDays {
-    final DateTime start = DateTime(_startDate.year, _startDate.month, _startDate.day);
+    final DateTime start = DateTime(
+      _startDate.year,
+      _startDate.month,
+      _startDate.day,
+    );
     final DateTime end = DateTime(_endDate.year, _endDate.month, _endDate.day);
     return end.difference(start).inDays + 1;
   }
@@ -47,15 +61,19 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
     _selectedType = LeaveType.annualLeave;
     _startDate = DateTime(today.year, today.month, today.day);
     _endDate = DateTime(today.year, today.month, today.day);
+    _loadAnnualLeaveBalance();
+
+    if (widget.initialRequestId != null && _usesBackend) {
+      _loadEditingRequest();
+      return;
+    }
 
     if (widget.initialRequestId != null) {
-      final LeaveRequest? request = _store.leaveRequestById(widget.initialRequestId!);
+      final LeaveRequest? request = _store.leaveRequestById(
+        widget.initialRequestId!,
+      );
       if (request != null) {
-        _editingRequest = request;
-        _selectedType = request.type;
-        _startDate = request.startDate;
-        _endDate = request.endDate;
-        _reasonController.text = request.reason;
+        _applyEditingRequest(request);
       }
     }
   }
@@ -64,6 +82,119 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
   void dispose() {
     _reasonController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadEditingRequest() async {
+    setState(() {
+      _isLoadingRequest = true;
+    });
+
+    try {
+      final LeaveRequest? request = await LeaveService().fetchLeaveRequestById(
+        widget.initialRequestId!,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (request != null) {
+        setState(() {
+          _applyEditingRequest(request);
+          _isLoadingRequest = false;
+        });
+        return;
+      }
+      setState(() {
+        _isLoadingRequest = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Leave request is no longer available.')),
+      );
+      Navigator.of(context).pop(false);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoadingRequest = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to load leave request.')),
+      );
+      Navigator.of(context).pop(false);
+    }
+  }
+
+  void _applyEditingRequest(LeaveRequest request) {
+    _editingRequest = request;
+    _selectedType = request.type;
+    _startDate = request.startDate;
+    _endDate = request.endDate;
+    _reasonController.text = request.reason;
+  }
+
+  Future<void> _loadAnnualLeaveBalance() async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingBalance = true;
+    });
+
+    try {
+      final AnnualLeaveBalance balance = _usesBackend
+          ? await LeaveService().fetchAnnualLeaveBalance()
+          : _mockAnnualLeaveBalance();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _annualLeaveBalance = balance;
+        _isLoadingBalance = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _annualLeaveBalance = const AnnualLeaveBalance(
+          totalDays: LeaveService.defaultAnnualLeaveEntitlementDays,
+          usedDays: 0,
+          pendingDays: 0,
+        );
+        _isLoadingBalance = false;
+      });
+    }
+  }
+
+  AnnualLeaveBalance _mockAnnualLeaveBalance() {
+    int usedDays = 0;
+    int pendingDays = 0;
+    for (final LeaveRequest request in _store.leaveRequests) {
+      if (request.type != LeaveType.annualLeave) {
+        continue;
+      }
+      final int durationDays = _leaveDurationDays(
+        request.startDate,
+        request.endDate,
+      );
+      switch (request.status) {
+        case LeaveRequestStatus.approved:
+          usedDays += durationDays;
+          break;
+        case LeaveRequestStatus.pendingApproval:
+          pendingDays += durationDays;
+          break;
+        case LeaveRequestStatus.rejected:
+          break;
+      }
+    }
+
+    return AnnualLeaveBalance(
+      totalDays: LeaveService.defaultAnnualLeaveEntitlementDays,
+      usedDays: usedDays,
+      pendingDays: pendingDays,
+    );
   }
 
   Future<void> _pickStartDate() async {
@@ -130,26 +261,60 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
       return;
     }
 
+    final DateTime now = DateTime.now();
+    final DateTime today = DateTime(now.year, now.month, now.day);
+    if (_startDate.isBefore(today)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Start date cannot be in the past.')),
+      );
+      return;
+    }
+    if (_endDate.isBefore(_startDate)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('End date cannot be before start date.')),
+      );
+      return;
+    }
+
     setState(() {
       _isSubmitting = true;
     });
 
     try {
-      if (_isEditing) {
-        _store.updatePendingLeaveRequest(
-          requestId: _editingRequest!.id,
-          type: _selectedType,
-          startDate: _startDate,
-          endDate: _endDate,
-          reason: _reasonController.text.trim(),
-        );
+      if (_usesBackend) {
+        if (_isEditing) {
+          await LeaveService().updatePendingLeaveRequest(
+            requestId: _editingRequest!.id,
+            type: _selectedType,
+            startDate: _startDate,
+            endDate: _endDate,
+            reason: _reasonController.text.trim(),
+          );
+        } else {
+          await LeaveService().submitLeaveRequest(
+            type: _selectedType,
+            startDate: _startDate,
+            endDate: _endDate,
+            reason: _reasonController.text.trim(),
+          );
+        }
       } else {
-        _store.submitLeaveRequest(
-          type: _selectedType,
-          startDate: _startDate,
-          endDate: _endDate,
-          reason: _reasonController.text.trim(),
-        );
+        if (_isEditing) {
+          _store.updatePendingLeaveRequest(
+            requestId: _editingRequest!.id,
+            type: _selectedType,
+            startDate: _startDate,
+            endDate: _endDate,
+            reason: _reasonController.text.trim(),
+          );
+        } else {
+          _store.submitLeaveRequest(
+            type: _selectedType,
+            startDate: _startDate,
+            endDate: _endDate,
+            reason: _reasonController.text.trim(),
+          );
+        }
       }
 
       if (!mounted) {
@@ -202,184 +367,289 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
             ),
             child: Form(
               key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SurfaceCard(
-                    child: Column(
+              child: _isLoadingRequest
+                  ? const _LeaveFormLoadingState()
+                  : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Leave Type',
-                          style: PulseClockTextStyles.cardTitle.copyWith(
-                            fontSize: 20,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: LeaveType.values.map((LeaveType type) {
-                            return ChoiceChip(
-                              label: Text(type.label),
-                              selected: _selectedType == type,
-                              onSelected: _isSubmitting
-                                  ? null
-                                  : (_) {
-                                      setState(() {
-                                        _selectedType = type;
-                                      });
-                                    },
-                              labelStyle: PulseClockTextStyles.cardSubtitle.copyWith(
-                                color: _selectedType == type
-                                    ? PulseClockColors.surface
-                                    : PulseClockColors.textPrimary,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                              selectedColor: PulseClockColors.actionBlue,
-                              backgroundColor: PulseClockColors.surfaceMuted,
-                              side: BorderSide(
-                                color: _selectedType == type
-                                    ? PulseClockColors.actionBlue
-                                    : PulseClockColors.cardBorder,
-                              ),
-                              showCheckmark: false,
-                            );
-                          }).toList(growable: false),
-                        ),
-                        if (_selectedType == LeaveType.annualLeave) ...<Widget>[
-                          const SizedBox(height: 12),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: PulseClockColors.surfaceMuted,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: PulseClockColors.cardBorder),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Annual Leave Balance',
-                                  style: PulseClockTextStyles.cardSubtitle.copyWith(
-                                    color: PulseClockColors.textPrimary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                        SurfaceCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Leave Type',
+                                style: PulseClockTextStyles.cardTitle.copyWith(
+                                  fontSize: 20,
                                 ),
-                                const SizedBox(height: 2),
-                                const Text(
-                                  '12 of 30 days remaining',
-                                  style: PulseClockTextStyles.cardSubtitle,
+                              ),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: LeaveType.values
+                                    .map((LeaveType type) {
+                                      return ChoiceChip(
+                                        label: Text(type.label),
+                                        selected: _selectedType == type,
+                                        onSelected: _isSubmitting
+                                            ? null
+                                            : (_) {
+                                                setState(() {
+                                                  _selectedType = type;
+                                                });
+                                                if (type ==
+                                                    LeaveType.annualLeave) {
+                                                  _loadAnnualLeaveBalance();
+                                                }
+                                              },
+                                        labelStyle: PulseClockTextStyles
+                                            .cardSubtitle
+                                            .copyWith(
+                                              color: _selectedType == type
+                                                  ? PulseClockColors.surface
+                                                  : PulseClockColors
+                                                        .textPrimary,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13,
+                                            ),
+                                        selectedColor:
+                                            PulseClockColors.actionBlue,
+                                        backgroundColor:
+                                            PulseClockColors.surfaceMuted,
+                                        side: BorderSide(
+                                          color: _selectedType == type
+                                              ? PulseClockColors.actionBlue
+                                              : PulseClockColors.cardBorder,
+                                        ),
+                                        showCheckmark: false,
+                                      );
+                                    })
+                                    .toList(growable: false),
+                              ),
+                              if (_selectedType ==
+                                  LeaveType.annualLeave) ...<Widget>[
+                                const SizedBox(height: 12),
+                                AnnualLeaveBalanceCard(
+                                  balance: _annualLeaveBalance,
+                                  isLoading: _isLoadingBalance,
                                 ),
                               ],
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 14),
-                        _DateField(
-                          label: 'Start Date',
-                          value: dateLabel(_startDate),
-                          onTap: _pickStartDate,
-                        ),
-                        const SizedBox(height: 10),
-                        _DateField(
-                          label: 'End Date',
-                          value: dateLabel(_endDate),
-                          onTap: _pickEndDate,
-                        ),
-                        const SizedBox(height: 10),
-                        DetailInfoRow(
-                          label: 'Leave Duration',
-                          value: _durationLabel,
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _reasonController,
-                          enabled: !_isSubmitting,
-                          maxLines: 4,
-                          decoration: InputDecoration(
-                            labelText: 'Reason / Comment',
-                            alignLabelWithHint: true,
-                            filled: true,
-                            fillColor: PulseClockColors.surfaceMuted,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: PulseClockColors.cardBorder,
+                              const SizedBox(height: 14),
+                              _DateField(
+                                label: 'Start Date',
+                                value: dateLabel(_startDate),
+                                onTap: _pickStartDate,
                               ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: PulseClockColors.cardBorder,
+                              const SizedBox(height: 10),
+                              _DateField(
+                                label: 'End Date',
+                                value: dateLabel(_endDate),
+                                onTap: _pickEndDate,
                               ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: PulseClockColors.actionBlue,
-                                width: 1.4,
+                              const SizedBox(height: 10),
+                              DetailInfoRow(
+                                label: 'Leave Duration',
+                                value: _durationLabel,
                               ),
-                            ),
-                          ),
-                          validator: (String? value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Reason is required';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 14),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _isSubmitting ? null : _submit,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: PulseClockColors.actionBlue,
-                              foregroundColor: PulseClockColors.surface,
-                              disabledBackgroundColor: PulseClockColors.actionBlue
-                                  .withOpacity(0.65),
-                              disabledForegroundColor: PulseClockColors.surface,
-                              textStyle: PulseClockTextStyles.primaryAction.copyWith(
-                                fontSize: 20,
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 16,
-                                horizontal: 18,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  PulseClockDimensions.cardRadius,
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                controller: _reasonController,
+                                enabled: !_isSubmitting,
+                                maxLines: 4,
+                                decoration: InputDecoration(
+                                  labelText: 'Reason / Comment',
+                                  alignLabelWithHint: true,
+                                  filled: true,
+                                  fillColor: PulseClockColors.surfaceMuted,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: PulseClockColors.cardBorder,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: PulseClockColors.cardBorder,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: PulseClockColors.actionBlue,
+                                      width: 1.4,
+                                    ),
+                                  ),
                                 ),
+                                validator: (String? value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Reason is required';
+                                  }
+                                  return null;
+                                },
                               ),
-                            ),
-                            child: _isSubmitting
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.4,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
+                              const SizedBox(height: 14),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: _isSubmitting ? null : _submit,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor:
+                                        PulseClockColors.actionBlue,
+                                    foregroundColor: PulseClockColors.surface,
+                                    disabledBackgroundColor: PulseClockColors
+                                        .actionBlue
+                                        .withOpacity(0.65),
+                                    disabledForegroundColor:
                                         PulseClockColors.surface,
+                                    textStyle: PulseClockTextStyles
+                                        .primaryAction
+                                        .copyWith(fontSize: 20),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                      horizontal: 18,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        PulseClockDimensions.cardRadius,
                                       ),
                                     ),
-                                  )
-                                : const Text('Submit Leave Request'),
+                                  ),
+                                  child: _isSubmitting
+                                      ? const SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.4,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                  PulseClockColors.surface,
+                                                ),
+                                          ),
+                                        )
+                                      : const Text('Submit Leave Request'),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
             ),
           ),
         ),
       ),
     );
   }
+}
+
+class AnnualLeaveBalanceCard extends StatelessWidget {
+  const AnnualLeaveBalanceCard({
+    super.key,
+    required this.balance,
+    required this.isLoading,
+  });
+
+  final AnnualLeaveBalance balance;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final String pendingText = balance.pendingDays == 0
+        ? 'No annual leave pending approval.'
+        : '${balance.pendingDays} day${balance.pendingDays == 1 ? '' : 's'} pending approval. If approved: ${balance.projectedRemainingDays} day${balance.projectedRemainingDays == 1 ? '' : 's'} left.';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: PulseClockColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: PulseClockColors.cardBorder),
+      ),
+      child: isLoading
+          ? Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Checking annual leave balance...',
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    color: PulseClockColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Annual Leave Balance',
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    color: PulseClockColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${balance.remainingDays} of ${balance.totalDays} days remaining',
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    color: PulseClockColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${balance.usedDays} day${balance.usedDays == 1 ? '' : 's'} approved/used.',
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  pendingText,
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _LeaveFormLoadingState extends StatelessWidget {
+  const _LeaveFormLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 80),
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(PulseClockColors.surface),
+        ),
+      ),
+    );
+  }
+}
+
+int _leaveDurationDays(DateTime startDate, DateTime endDate) {
+  final DateTime start = DateTime(
+    startDate.year,
+    startDate.month,
+    startDate.day,
+  );
+  final DateTime end = DateTime(endDate.year, endDate.month, endDate.day);
+  if (end.isBefore(start)) {
+    return 1;
+  }
+  return end.difference(start).inDays + 1;
 }
 
 class _DateField extends StatelessWidget {

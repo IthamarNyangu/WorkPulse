@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/corrections/correction_list_screen.dart';
+import 'package:pulseclock/features/leave/data/leave_service.dart';
 import 'package:pulseclock/features/leave/leave_list_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
@@ -15,11 +17,15 @@ class RequestsHomeScreen extends StatefulWidget {
 
 class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
+  int? _backendPendingLeaveCount;
+
+  bool get _usesBackend => SupabaseBootstrap.isInitialized;
 
   @override
   void initState() {
     super.initState();
     _store.addListener(_onStoreChanged);
+    _loadBackendPendingLeaveCount();
   }
 
   @override
@@ -32,7 +38,36 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
     if (!mounted) {
       return;
     }
+
+    if (_usesBackend) {
+      _loadBackendPendingLeaveCount();
+      return;
+    }
+
     setState(() {});
+  }
+
+  Future<void> _loadBackendPendingLeaveCount() async {
+    if (!_usesBackend) {
+      return;
+    }
+
+    try {
+      final int count = await LeaveService().fetchPendingLeaveRequestCount();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _backendPendingLeaveCount = count;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _backendPendingLeaveCount = null;
+      });
+    }
   }
 
   void _openCorrections() {
@@ -52,8 +87,8 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
     );
   }
 
-  void _openLeaveRequests() {
-    Navigator.of(context).push(
+  Future<void> _openLeaveRequests() async {
+    await Navigator.of(context).push<void>(
       PageRouteBuilder<void>(
         pageBuilder:
             (
@@ -67,18 +102,21 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
         reverseTransitionDuration: Duration.zero,
       ),
     );
+    await _loadBackendPendingLeaveCount();
   }
 
   @override
   Widget build(BuildContext context) {
     final int missedCount = _store.missedPunchRecords.length;
     final int pendingCorrectionCount = _store.pendingCorrectionRequests.length;
-    final int pendingLeaveCount = _store.leaveRequests
-        .where(
-          (LeaveRequest request) =>
-              request.status == LeaveRequestStatus.pendingApproval,
-        )
-        .length;
+    final int pendingLeaveCount = _usesBackend
+        ? (_backendPendingLeaveCount ?? 0)
+        : _store.leaveRequests
+              .where(
+                (LeaveRequest request) =>
+                    request.status == LeaveRequestStatus.pendingApproval,
+              )
+              .length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -178,7 +216,10 @@ class _RequestHubCard extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: PulseClockColors.textSecondary),
+            const Icon(
+              Icons.chevron_right,
+              color: PulseClockColors.textSecondary,
+            ),
           ],
         ),
       ),

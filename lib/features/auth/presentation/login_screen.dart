@@ -21,7 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    _emailController = TextEditingController(text: 'staff@workpulse.app');
+    _emailController = TextEditingController();
     _passwordController = TextEditingController();
   }
 
@@ -55,14 +55,15 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       setState(() {
-        _errorMessage = error.message;
+        _errorMessage = _friendlyAuthError(error.message);
       });
     } catch (_) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _errorMessage = 'Sign in failed. Please try again.';
+        _errorMessage =
+            'Unable to sign in right now. Check your internet connection and try again.';
       });
     } finally {
       if (mounted) {
@@ -118,7 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Use the test user you created in Supabase Authentication.',
+                        'Use an email and password from Supabase Authentication.',
                         style: PulseClockTextStyles.cardSubtitle,
                       ),
                       const SizedBox(height: 16),
@@ -215,5 +216,32 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  String _friendlyAuthError(String message) {
+    final String normalized = message.toLowerCase();
+
+    if (normalized.contains('failed host lookup') ||
+        normalized.contains('socketexception') ||
+        normalized.contains('network') ||
+        normalized.contains('connection')) {
+      return 'WorkPulse could not reach Supabase. Check your internet connection, then try again.';
+    }
+
+    if (normalized.contains('invalid login credentials') ||
+        normalized.contains('invalid email or password') ||
+        normalized.contains('grant_type=password')) {
+      return 'Incorrect email or password.';
+    }
+
+    if (normalized.contains('email not confirmed')) {
+      return 'This account email is not confirmed yet.';
+    }
+
+    if (normalized.contains('too many requests')) {
+      return 'Too many sign-in attempts. Please wait a moment and try again.';
+    }
+
+    return 'Unable to sign in right now. Please try again.';
   }
 }

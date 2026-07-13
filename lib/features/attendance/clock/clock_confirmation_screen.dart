@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
+import 'package:postgrest/postgrest.dart';
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/attendance/data/attendance_service.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
@@ -71,6 +73,23 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.message.toString())),
+      );
+      setState(() {
+        _isSubmitting = false;
+        _showLoadingIndicator = false;
+      });
+      return;
+    } on PostgrestException catch (error) {
+      developer.log(
+        'Attendance confirmation failed with PostgrestException',
+        name: 'workpulse.clock_confirmation',
+        error: error,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_friendlyPostgrestError(error))),
       );
       setState(() {
         _isSubmitting = false;
@@ -164,21 +183,43 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
     final DateTime now = DateTime.now();
 
     if (widget.mode == ClockActionMode.clockIn) {
-      await attendanceService.insertClockIn(
+      final SupabaseAttendanceRecord record = await attendanceService.insertClockIn(
         comment: safeComment,
         clockInAt: now,
         latitude: latitude,
         longitude: longitude,
       );
+      developer.log(
+        'Clock in saved to Supabase: ${record.id}',
+        name: 'workpulse.clock_confirmation',
+      );
+      final SupabaseAttendanceRecord? verificationRecord =
+          await attendanceService.fetchTodaysAttendance(date: now);
+      if (verificationRecord == null) {
+        throw StateError(
+          'Clock in did not appear in Supabase after saving. Please check your active Supabase project and try again.',
+        );
+      }
       return;
     }
 
-    await attendanceService.insertClockOut(
+    final SupabaseAttendanceRecord record = await attendanceService.insertClockOut(
       comment: safeComment,
       clockOutAt: now,
       latitude: latitude,
       longitude: longitude,
     );
+    developer.log(
+      'Clock out saved to Supabase: ${record.id}',
+      name: 'workpulse.clock_confirmation',
+    );
+    final SupabaseAttendanceRecord? verificationRecord =
+        await attendanceService.fetchTodaysAttendance(date: now);
+    if (verificationRecord == null) {
+      throw StateError(
+        'Clock out could not be verified from Supabase after saving.',
+      );
+    }
   }
 
   @override
@@ -345,6 +386,14 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
     double.tryParse(parts[0].trim()),
     double.tryParse(parts[1].trim()),
   );
+}
+
+String _friendlyPostgrestError(PostgrestException error) {
+  final String details = error.message.trim();
+  if (details.isEmpty) {
+    return 'Attendance could not be saved to Supabase right now.';
+  }
+  return 'Attendance could not be saved: $details';
 }
 
 class _ConfirmButtonContent extends StatelessWidget {

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/leave/data/leave_service.dart';
 import 'package:pulseclock/features/leave/leave_details_screen.dart';
 import 'package:pulseclock/features/leave/leave_form_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
@@ -18,11 +20,17 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
   _LeaveStatusFilter _selectedStatusFilter = _LeaveStatusFilter.all;
   _LeaveTypeFilter _selectedTypeFilter = _LeaveTypeFilter.all;
+  List<LeaveRequest> _leaveRequests = <LeaveRequest>[];
+  bool _isLoading = true;
+  String? _loadError;
+
+  bool get _usesBackend => SupabaseBootstrap.isInitialized;
 
   @override
   void initState() {
     super.initState();
     _store.addListener(_onStoreChanged);
+    _loadLeaveRequests();
   }
 
   @override
@@ -35,7 +43,55 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
     if (!mounted) {
       return;
     }
-    setState(() {});
+
+    if (_usesBackend) {
+      _loadLeaveRequests();
+      return;
+    }
+
+    setState(() {
+      _leaveRequests = _store.leaveRequests;
+    });
+  }
+
+  Future<void> _loadLeaveRequests() async {
+    if (!_usesBackend) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _leaveRequests = _store.leaveRequests;
+        _isLoading = false;
+        _loadError = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+
+    try {
+      final List<LeaveRequest> requests = await LeaveService()
+          .fetchLeaveRequests();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _leaveRequests = requests;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _leaveRequests = <LeaveRequest>[];
+        _isLoading = false;
+        _loadError = error.toString();
+      });
+    }
   }
 
   Future<void> _openLeaveForm({String? initialRequestId}) async {
@@ -58,14 +114,18 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
       return;
     }
 
+    await _loadLeaveRequests();
+    if (!mounted) {
+      return;
+    }
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Leave request submitted.')));
   }
 
-  void _openLeaveDetails(LeaveRequest request) {
-    Navigator.of(context).push(
-      PageRouteBuilder<void>(
+  Future<void> _openLeaveDetails(LeaveRequest request) async {
+    final bool? changed = await Navigator.of(context).push<bool>(
+      PageRouteBuilder<bool>(
         pageBuilder:
             (
               BuildContext context,
@@ -78,6 +138,11 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
         reverseTransitionDuration: Duration.zero,
       ),
     );
+
+    if (!mounted || changed != true) {
+      return;
+    }
+    await _loadLeaveRequests();
   }
 
   bool _matchesStatusFilter(LeaveRequest request) {
@@ -107,7 +172,7 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
   }
 
   List<LeaveRequest> _filteredLeaveRequests() {
-    final Iterable<LeaveRequest> filtered = _store.leaveRequests.where((
+    final Iterable<LeaveRequest> filtered = _leaveRequests.where((
       LeaveRequest request,
     ) {
       return _matchesStatusFilter(request) && _matchesTypeFilter(request);
@@ -227,18 +292,32 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
                 ),
                 const SizedBox(height: 10),
                 Expanded(
-                  child: leaveRequests.isEmpty
-                      ? const _NoLeaveRequestState()
-                      : ListView.separated(
-                          itemCount: leaveRequests.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 10),
-                          itemBuilder: (BuildContext context, int index) {
-                            final LeaveRequest request = leaveRequests[index];
-                            return LeaveRequestListCard(
-                              request: request,
-                              onTap: () => _openLeaveDetails(request),
-                            );
-                          },
+                  child: _isLoading
+                      ? const _LeaveLoadingState()
+                      : _loadError != null
+                      ? _LeaveErrorState(
+                          message: _loadError!,
+                          onRetry: _loadLeaveRequests,
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _loadLeaveRequests,
+                          child: leaveRequests.isEmpty
+                              ? const _NoLeaveRequestState()
+                              : ListView.separated(
+                                  itemCount: leaveRequests.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(height: 10),
+                                  itemBuilder:
+                                      (BuildContext context, int index) {
+                                        final LeaveRequest request =
+                                            leaveRequests[index];
+                                        return LeaveRequestListCard(
+                                          request: request,
+                                          onTap: () =>
+                                              _openLeaveDetails(request),
+                                        );
+                                      },
+                                ),
                         ),
                 ),
               ],
@@ -267,7 +346,10 @@ class LeaveRequestListCard extends StatelessWidget {
       request.startDate,
       request.endDate,
     );
-    final int durationDays = _leaveDurationDays(request.startDate, request.endDate);
+    final int durationDays = _leaveDurationDays(
+      request.startDate,
+      request.endDate,
+    );
     final String durationText = singleDay ? 'Single Day' : '$durationDays Days';
 
     return GestureDetector(
@@ -284,7 +366,9 @@ class LeaveRequestListCard extends StatelessWidget {
                 children: [
                   Text(
                     request.type.label,
-                    style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
+                    style: PulseClockTextStyles.cardTitle.copyWith(
+                      fontSize: 20,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -308,7 +392,10 @@ class LeaveRequestListCard extends StatelessWidget {
             const SizedBox(width: 8),
             LeaveRequestStatusBadge(status: request.status),
             const SizedBox(width: 4),
-            const Icon(Icons.chevron_right, color: PulseClockColors.textSecondary),
+            const Icon(
+              Icons.chevron_right,
+              color: PulseClockColors.textSecondary,
+            ),
           ],
         ),
       ),
@@ -373,6 +460,19 @@ _LeaveRequestBadgeStyle _leaveBadgeStyle(LeaveRequestStatus status) {
   }
 }
 
+class _LeaveLoadingState extends StatelessWidget {
+  const _LeaveLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: CircularProgressIndicator(
+        valueColor: AlwaysStoppedAnimation<Color>(PulseClockColors.surface),
+      ),
+    );
+  }
+}
+
 class _NoLeaveRequestState extends StatelessWidget {
   const _NoLeaveRequestState();
 
@@ -402,12 +502,51 @@ class _NoLeaveRequestState extends StatelessWidget {
   }
 }
 
+class _LeaveErrorState extends StatelessWidget {
+  const _LeaveErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SurfaceCard(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline_rounded, color: Color(0xFFB42318)),
+            const SizedBox(height: 12),
+            Text(
+              'Unable to load leave requests.',
+              style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              style: PulseClockTextStyles.cardSubtitle,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 bool _isSameDay(DateTime a, DateTime b) {
   return a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
 int _leaveDurationDays(DateTime startDate, DateTime endDate) {
-  final DateTime start = DateTime(startDate.year, startDate.month, startDate.day);
+  final DateTime start = DateTime(
+    startDate.year,
+    startDate.month,
+    startDate.day,
+  );
   final DateTime end = DateTime(endDate.year, endDate.month, endDate.day);
   if (end.isBefore(start)) {
     return 1;

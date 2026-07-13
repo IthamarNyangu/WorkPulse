@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/leave/data/leave_service.dart';
 import 'package:pulseclock/features/leave/leave_form_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
@@ -17,11 +19,18 @@ class LeaveDetailsScreen extends StatefulWidget {
 
 class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
+  LeaveRequest? _request;
+  bool _isLoading = true;
+  bool _isDeleting = false;
+  String? _loadError;
+
+  bool get _usesBackend => SupabaseBootstrap.isInitialized;
 
   @override
   void initState() {
     super.initState();
     _store.addListener(_onStoreChanged);
+    _loadRequest();
   }
 
   @override
@@ -34,7 +43,56 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
     if (!mounted) {
       return;
     }
-    setState(() {});
+
+    if (_usesBackend) {
+      _loadRequest();
+      return;
+    }
+
+    setState(() {
+      _request = _store.leaveRequestById(widget.requestId);
+    });
+  }
+
+  Future<void> _loadRequest() async {
+    if (!_usesBackend) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _request = _store.leaveRequestById(widget.requestId);
+        _isLoading = false;
+        _loadError = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+
+    try {
+      final LeaveRequest? request = await LeaveService().fetchLeaveRequestById(
+        widget.requestId,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _request = request;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _request = null;
+        _isLoading = false;
+        _loadError = error.toString();
+      });
+    }
   }
 
   Future<void> _openEditForm(LeaveRequest request) async {
@@ -57,9 +115,13 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Leave request updated.')),
-    );
+    await _loadRequest();
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Leave request updated.')));
   }
 
   Future<void> _confirmDeleteRequest(LeaveRequest request) async {
@@ -73,11 +135,16 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
         return AlertDialog(
           backgroundColor: const Color(0xFFFCFDFE),
           surfaceTintColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 44, vertical: 24),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 44,
+            vertical: 24,
+          ),
           titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           contentPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           actionsPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           title: Text(
             'Delete Request',
             style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
@@ -97,9 +164,7 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
               ),
               child: Text(
                 'Cancel',
-                style: PulseClockTextStyles.cardSubtitle.copyWith(
-                  fontSize: 14,
-                ),
+                style: PulseClockTextStyles.cardSubtitle.copyWith(fontSize: 14),
               ),
             ),
             TextButton(
@@ -122,12 +187,23 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
       return;
     }
 
+    setState(() {
+      _isDeleting = true;
+    });
+
     try {
-      _store.deletePendingLeaveRequest(requestId: request.id);
+      if (_usesBackend) {
+        await LeaveService().deletePendingLeaveRequest(requestId: request.id);
+      } else {
+        _store.deletePendingLeaveRequest(requestId: request.id);
+      }
     } catch (_) {
       if (!mounted) {
         return;
       }
+      setState(() {
+        _isDeleting = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Unable to delete leave request.')),
       );
@@ -146,28 +222,23 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final LeaveRequest? request = _store.leaveRequestById(widget.requestId);
+    final LeaveRequest? request = _request;
+
+    if (_isLoading) {
+      return const _LeaveDetailsLoadingScaffold();
+    }
+
+    if (_loadError != null) {
+      return _LeaveDetailsMessageScaffold(
+        message: 'Unable to load leave request.',
+        details: _loadError,
+        onRetry: _loadRequest,
+      );
+    }
 
     if (request == null) {
-      return Scaffold(
-        backgroundColor: PulseClockColors.appBackgroundSolid,
-        appBar: AppBar(
-          title: const Text('Leave Request Details'),
-          backgroundColor: PulseClockColors.surface,
-          foregroundColor: PulseClockColors.textPrimary,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-        ),
-        body: const Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Text(
-              'Leave request is no longer available.',
-              style: PulseClockTextStyles.cardSubtitle,
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
+      return const _LeaveDetailsMessageScaffold(
+        message: 'Leave request is no longer available.',
       );
     }
 
@@ -201,7 +272,10 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      DetailInfoRow(label: 'Leave Type', value: request.type.label),
+                      DetailInfoRow(
+                        label: 'Leave Type',
+                        value: request.type.label,
+                      ),
                       const SizedBox(height: 10),
                       DetailInfoRow(
                         label: isSingleDay ? 'Date' : 'Date Range',
@@ -236,7 +310,9 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () => _openEditForm(request),
+                      onPressed: _isDeleting
+                          ? null
+                          : () => _openEditForm(request),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: PulseClockColors.actionBlue,
                         foregroundColor: PulseClockColors.surface,
@@ -258,7 +334,9 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () => _confirmDeleteRequest(request),
+                      onPressed: _isDeleting
+                          ? null
+                          : () => _confirmDeleteRequest(request),
                       icon: const Icon(Icons.delete_outline_rounded, size: 20),
                       style: ElevatedButton.styleFrom(
                         foregroundColor: const Color(0xFFB42318),
@@ -276,9 +354,100 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
                           side: const BorderSide(color: Color(0xFFF3B6B6)),
                         ),
                       ),
-                      label: const Text('Delete Request'),
+                      label: _isDeleting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Color(0xFFB42318),
+                                ),
+                              ),
+                            )
+                          : const Text('Delete Request'),
                     ),
                   ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LeaveDetailsLoadingScaffold extends StatelessWidget {
+  const _LeaveDetailsLoadingScaffold();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: PulseClockColors.appBackgroundSolid,
+      appBar: AppBar(
+        title: const Text('Leave Request Details'),
+        backgroundColor: PulseClockColors.surface,
+        foregroundColor: PulseClockColors.textPrimary,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(PulseClockColors.surface),
+        ),
+      ),
+    );
+  }
+}
+
+class _LeaveDetailsMessageScaffold extends StatelessWidget {
+  const _LeaveDetailsMessageScaffold({
+    required this.message,
+    this.details,
+    this.onRetry,
+  });
+
+  final String message;
+  final String? details;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: PulseClockColors.appBackgroundSolid,
+      appBar: AppBar(
+        title: const Text('Leave Request Details'),
+        backgroundColor: PulseClockColors.surface,
+        foregroundColor: PulseClockColors.textPrimary,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: SurfaceCard(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  message,
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                if (details != null) ...<Widget>[
+                  const SizedBox(height: 8),
+                  Text(
+                    details!,
+                    style: PulseClockTextStyles.cardSubtitle,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+                if (onRetry != null) ...<Widget>[
+                  const SizedBox(height: 14),
+                  TextButton(onPressed: onRetry, child: const Text('Retry')),
                 ],
               ],
             ),
