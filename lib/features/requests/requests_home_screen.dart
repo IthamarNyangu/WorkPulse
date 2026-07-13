@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/features/approvals/approvals_home_screen.dart';
+import 'package:pulseclock/features/approvals/data/approval_service.dart';
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/corrections/correction_list_screen.dart';
 import 'package:pulseclock/features/corrections/data/correction_service.dart';
@@ -21,6 +23,8 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
   int? _backendMissedPunchCount;
   int? _backendPendingCorrectionCount;
   int? _backendPendingLeaveCount;
+  int? _backendPendingApprovalCount;
+  bool _canReviewRequests = false;
 
   bool get _usesBackend => SupabaseBootstrap.isInitialized;
 
@@ -63,6 +67,13 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
           .fetchPendingCorrectionRequestCount();
       final int pendingLeaveCount = await LeaveService()
           .fetchPendingLeaveRequestCount();
+      final ApprovalService approvalService = ApprovalService();
+      final bool canReviewRequests = await approvalService.canReviewRequests();
+      int? pendingApprovalCount;
+      if (canReviewRequests) {
+        pendingApprovalCount =
+            (await approvalService.fetchApprovalCounts()).totalPending;
+      }
       if (!mounted) {
         return;
       }
@@ -70,6 +81,8 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
         _backendMissedPunchCount = missedPunchCount;
         _backendPendingCorrectionCount = pendingCorrectionCount;
         _backendPendingLeaveCount = pendingLeaveCount;
+        _backendPendingApprovalCount = pendingApprovalCount;
+        _canReviewRequests = canReviewRequests;
       });
     } catch (_) {
       if (!mounted) {
@@ -79,6 +92,8 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
         _backendMissedPunchCount = null;
         _backendPendingCorrectionCount = null;
         _backendPendingLeaveCount = null;
+        _backendPendingApprovalCount = null;
+        _canReviewRequests = false;
       });
     }
   }
@@ -119,6 +134,24 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
     await _loadBackendRequestCounts();
   }
 
+  Future<void> _openApprovals() async {
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return const ApprovalsHomeScreen();
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+    await _loadBackendRequestCounts();
+  }
+
   @override
   Widget build(BuildContext context) {
     final int missedCount = _usesBackend
@@ -135,6 +168,7 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
                     request.status == LeaveRequestStatus.pendingApproval,
               )
               .length;
+    final int pendingApprovalCount = _backendPendingApprovalCount ?? 0;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -172,6 +206,18 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
             accentColor: PulseClockColors.statusLeaveAccent,
             onTap: _openLeaveRequests,
           ),
+          if (_usesBackend && _canReviewRequests) ...<Widget>[
+            const SizedBox(height: 12),
+            _RequestHubCard(
+              title: 'Approvals',
+              subtitle:
+                  '$pendingApprovalCount pending review${pendingApprovalCount == 1 ? '' : 's'}',
+              icon: Icons.verified_user_outlined,
+              backgroundColor: const Color(0xFFEFF6FF),
+              accentColor: PulseClockColors.actionBlue,
+              onTap: _openApprovals,
+            ),
+          ],
         ],
       ),
     );

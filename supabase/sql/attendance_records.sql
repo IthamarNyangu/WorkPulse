@@ -10,6 +10,7 @@ drop table if exists public.profiles cascade;
 
 drop function if exists public.handle_new_user();
 drop function if exists public.set_updated_at();
+drop function if exists public.current_user_role();
 
 create extension if not exists pgcrypto;
 
@@ -64,6 +65,9 @@ create table public.leave_requests (
   duration_days integer not null check (duration_days >= 1),
   reason text,
   status text not null check (status in ('pending', 'approved', 'rejected')),
+  reviewed_by uuid references public.profiles(id) on delete set null,
+  reviewed_at timestamptz,
+  reviewer_note text,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -80,6 +84,9 @@ create table public.correction_requests (
   corrected_clock_out timestamptz,
   reason text not null,
   status text not null check (status in ('pending', 'approved', 'rejected')),
+  reviewed_by uuid references public.profiles(id) on delete set null,
+  reviewed_at timestamptz,
+  reviewer_note text,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -142,6 +149,20 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row execute procedure public.handle_new_user();
 
+create or replace function public.current_user_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select role
+  from public.profiles
+  where id = auth.uid()
+$$;
+
+grant execute on function public.current_user_role() to authenticated;
+
 insert into public.profiles (
   id,
   employee_id,
@@ -172,6 +193,12 @@ for select
 to authenticated
 using (auth.uid() = id);
 
+create policy "profiles_select_reviewer"
+on public.profiles
+for select
+to authenticated
+using (public.current_user_role() in ('supervisor', 'hr', 'admin'));
+
 create policy "profiles_update_own"
 on public.profiles
 for update
@@ -184,6 +211,12 @@ on public.attendance_records
 for select
 to authenticated
 using (auth.uid() = user_id);
+
+create policy "attendance_select_reviewer"
+on public.attendance_records
+for select
+to authenticated
+using (public.current_user_role() in ('supervisor', 'hr', 'admin'));
 
 create policy "attendance_insert_own"
 on public.attendance_records
@@ -198,11 +231,24 @@ to authenticated
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
+create policy "attendance_update_reviewer"
+on public.attendance_records
+for update
+to authenticated
+using (public.current_user_role() in ('supervisor', 'hr', 'admin'))
+with check (public.current_user_role() in ('supervisor', 'hr', 'admin'));
+
 create policy "leave_select_own"
 on public.leave_requests
 for select
 to authenticated
 using (auth.uid() = user_id);
+
+create policy "leave_select_reviewer"
+on public.leave_requests
+for select
+to authenticated
+using (public.current_user_role() in ('supervisor', 'hr', 'admin'));
 
 create policy "leave_insert_own"
 on public.leave_requests
@@ -214,7 +260,18 @@ create policy "leave_update_pending_own"
 on public.leave_requests
 for update
 to authenticated
-using (auth.uid() = user_id and status = 'pending');
+using (auth.uid() = user_id and status = 'pending')
+with check (auth.uid() = user_id and status = 'pending');
+
+create policy "leave_update_reviewer"
+on public.leave_requests
+for update
+to authenticated
+using (
+  status = 'pending'
+  and public.current_user_role() in ('supervisor', 'hr', 'admin')
+)
+with check (public.current_user_role() in ('supervisor', 'hr', 'admin'));
 
 create policy "leave_delete_pending_own"
 on public.leave_requests
@@ -228,6 +285,12 @@ for select
 to authenticated
 using (auth.uid() = user_id);
 
+create policy "correction_select_reviewer"
+on public.correction_requests
+for select
+to authenticated
+using (public.current_user_role() in ('supervisor', 'hr', 'admin'));
+
 create policy "correction_insert_own"
 on public.correction_requests
 for insert
@@ -238,7 +301,18 @@ create policy "correction_update_pending_own"
 on public.correction_requests
 for update
 to authenticated
-using (auth.uid() = user_id and status = 'pending');
+using (auth.uid() = user_id and status = 'pending')
+with check (auth.uid() = user_id and status = 'pending');
+
+create policy "correction_update_reviewer"
+on public.correction_requests
+for update
+to authenticated
+using (
+  status = 'pending'
+  and public.current_user_role() in ('supervisor', 'hr', 'admin')
+)
+with check (public.current_user_role() in ('supervisor', 'hr', 'admin'));
 
 create policy "correction_delete_pending_own"
 on public.correction_requests
