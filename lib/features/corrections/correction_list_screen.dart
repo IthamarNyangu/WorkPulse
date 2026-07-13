@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/corrections/data/correction_service.dart';
 import 'package:pulseclock/features/corrections/correction_details_screen.dart';
 import 'package:pulseclock/features/corrections/correction_form_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
@@ -19,12 +21,19 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
 
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
   final Set<String> _expandedRecordIds = <String>{};
+  List<AttendanceRecord> _missedPunchRecords = <AttendanceRecord>[];
+  int _pendingCorrectionCount = 0;
   int _currentPage = 0;
+  bool _isLoading = true;
+  String? _loadError;
+
+  bool get _usesBackend => SupabaseBootstrap.isInitialized;
 
   @override
   void initState() {
     super.initState();
     _store.addListener(_onStoreChanged);
+    _loadCorrectionOverview();
   }
 
   @override
@@ -37,7 +46,15 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
     if (!mounted) {
       return;
     }
+
+    if (_usesBackend) {
+      _loadCorrectionOverview();
+      return;
+    }
+
     setState(() {
+      _missedPunchRecords = _store.missedPunchRecords;
+      _pendingCorrectionCount = _store.pendingCorrectionRequests.length;
       final int totalPages = _totalPages;
       if (_currentPage >= totalPages) {
         _currentPage = totalPages - 1;
@@ -48,8 +65,51 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
     });
   }
 
-  List<AttendanceRecord> get _missedPunchRecords {
-    return _store.missedPunchRecords;
+  Future<void> _loadCorrectionOverview() async {
+    if (!_usesBackend) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _missedPunchRecords = _store.missedPunchRecords;
+        _pendingCorrectionCount = _store.pendingCorrectionRequests.length;
+        _isLoading = false;
+        _loadError = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+
+    try {
+      final CorrectionService service = CorrectionService();
+      final List<AttendanceRecord> missedPunchRecords = await service
+          .fetchMissedPunchRecords();
+      final int pendingCorrectionCount = await service
+          .fetchPendingCorrectionRequestCount();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _missedPunchRecords = missedPunchRecords;
+        _pendingCorrectionCount = pendingCorrectionCount;
+        _isLoading = false;
+        _currentPage = 0;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _missedPunchRecords = <AttendanceRecord>[];
+        _pendingCorrectionCount = 0;
+        _isLoading = false;
+        _loadError = error.toString();
+      });
+    }
   }
 
   int get _totalPages {
@@ -77,9 +137,9 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
     return all.sublist(start, end);
   }
 
-  void _openPendingCorrections() {
-    Navigator.of(context).push(
-      PageRouteBuilder<void>(
+  Future<void> _openPendingCorrections() async {
+    await Navigator.of(context).push<bool>(
+      PageRouteBuilder<bool>(
         pageBuilder:
             (
               BuildContext context,
@@ -92,6 +152,11 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
         reverseTransitionDuration: Duration.zero,
       ),
     );
+
+    if (!mounted) {
+      return;
+    }
+    await _loadCorrectionOverview();
   }
 
   Future<void> _openCorrectionForm(AttendanceRecord record) async {
@@ -112,6 +177,7 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
                 affectedDate: record.date,
                 issueSummary: _issueSummaryFor(record),
                 initialCorrectionType: initialType,
+                sourceRecord: record,
               );
             },
         transitionDuration: Duration.zero,
@@ -123,6 +189,10 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
       return;
     }
 
+    await _loadCorrectionOverview();
+    if (!mounted) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Correction request submitted.')),
     );
@@ -184,44 +254,62 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
                   ],
                 ),
                 Text(
-                  '${_store.pendingCorrectionRequests.length} pending correction request${_store.pendingCorrectionRequests.length == 1 ? '' : 's'}',
+                  '$_pendingCorrectionCount pending correction request${_pendingCorrectionCount == 1 ? '' : 's'}',
                   style: PulseClockTextStyles.cardSubtitle.copyWith(
                     color: PulseClockColors.onBackgroundSecondary,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Expanded(
-                  child: hasRecords
-                      ? ListView.separated(
-                          itemCount: currentPageRecords.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 10),
-                          itemBuilder: (BuildContext context, int index) {
-                            final AttendanceRecord record =
-                                currentPageRecords[index];
-                            final bool isExpanded = _expandedRecordIds.contains(
-                              record.id,
-                            );
-
-                            return _MissedPunchCard(
-                              key: ValueKey<String>('missed_${record.id}'),
-                              record: record,
-                              isExpanded: isExpanded,
-                              onExpansionChanged: (bool expanded) {
-                                setState(() {
-                                  if (expanded) {
-                                    _expandedRecordIds.add(record.id);
-                                  } else {
-                                    _expandedRecordIds.remove(record.id);
-                                  }
-                                });
-                              },
-                              onRequestCorrection: () =>
-                                  _openCorrectionForm(record),
-                            );
-                          },
+                  child: _isLoading
+                      ? const _CorrectionLoadingState()
+                      : _loadError != null
+                      ? _CorrectionErrorState(
+                          message: _loadError!,
+                          onRetry: _loadCorrectionOverview,
                         )
-                      : const _NoMissedPunchState(),
+                      : RefreshIndicator(
+                          onRefresh: _loadCorrectionOverview,
+                          child: hasRecords
+                              ? ListView.separated(
+                                  itemCount: currentPageRecords.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(height: 10),
+                                  itemBuilder:
+                                      (BuildContext context, int index) {
+                                        final AttendanceRecord record =
+                                            currentPageRecords[index];
+                                        final bool isExpanded =
+                                            _expandedRecordIds.contains(
+                                              record.id,
+                                            );
+
+                                        return _MissedPunchCard(
+                                          key: ValueKey<String>(
+                                            'missed_${record.id}',
+                                          ),
+                                          record: record,
+                                          isExpanded: isExpanded,
+                                          onExpansionChanged: (bool expanded) {
+                                            setState(() {
+                                              if (expanded) {
+                                                _expandedRecordIds.add(
+                                                  record.id,
+                                                );
+                                              } else {
+                                                _expandedRecordIds.remove(
+                                                  record.id,
+                                                );
+                                              }
+                                            });
+                                          },
+                                          onRequestCorrection: () =>
+                                              _openCorrectionForm(record),
+                                        );
+                                      },
+                                )
+                              : const _NoMissedPunchState(),
+                        ),
                 ),
                 if (hasRecords && _totalPages > 1) ...<Widget>[
                   const SizedBox(height: 10),
@@ -376,6 +464,54 @@ class _NoMissedPunchState extends StatelessWidget {
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CorrectionLoadingState extends StatelessWidget {
+  const _CorrectionLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: CircularProgressIndicator(
+        valueColor: AlwaysStoppedAnimation<Color>(PulseClockColors.surface),
+      ),
+    );
+  }
+}
+
+class _CorrectionErrorState extends StatelessWidget {
+  const _CorrectionErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SurfaceCard(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline_rounded, color: Color(0xFFB42318)),
+            const SizedBox(height: 12),
+            Text(
+              'Unable to load correction requests.',
+              style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              style: PulseClockTextStyles.cardSubtitle,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
       ),

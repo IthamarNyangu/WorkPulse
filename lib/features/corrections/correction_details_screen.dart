@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/attendance/data/attendance_service.dart';
+import 'package:pulseclock/features/corrections/data/correction_service.dart';
 import 'package:pulseclock/features/corrections/correction_form_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
@@ -12,7 +15,8 @@ class CorrectionDetailsScreen extends StatefulWidget {
   final String? initialRequestId;
 
   @override
-  State<CorrectionDetailsScreen> createState() => _CorrectionDetailsScreenState();
+  State<CorrectionDetailsScreen> createState() =>
+      _CorrectionDetailsScreenState();
 }
 
 class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
@@ -20,12 +24,18 @@ class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
 
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
   final Set<String> _expandedRequestIds = <String>{};
+  List<CorrectionRequest> _pendingRequests = <CorrectionRequest>[];
   int _currentPage = 0;
+  bool _isLoading = true;
+  String? _loadError;
+
+  bool get _usesBackend => SupabaseBootstrap.isInitialized;
 
   @override
   void initState() {
     super.initState();
     _store.addListener(_onStoreChanged);
+    _loadPendingRequests();
 
     if (widget.initialRequestId != null) {
       _expandedRequestIds.add(widget.initialRequestId!);
@@ -43,7 +53,14 @@ class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
     if (!mounted) {
       return;
     }
+
+    if (_usesBackend) {
+      _loadPendingRequests();
+      return;
+    }
+
     setState(() {
+      _pendingRequests = _store.pendingCorrectionRequests;
       final int totalPages = _totalPages;
       if (_currentPage >= totalPages) {
         _currentPage = totalPages - 1;
@@ -54,17 +71,79 @@ class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
     });
   }
 
+  Future<void> _loadPendingRequests() async {
+    if (!_usesBackend) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _pendingRequests = _store.pendingCorrectionRequests;
+        _isLoading = false;
+        _loadError = null;
+        if (widget.initialRequestId != null) {
+          _currentPage = _pageForRequest(widget.initialRequestId!);
+        }
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+
+    try {
+      final List<CorrectionRequest> requests = await CorrectionService()
+          .fetchPendingCorrectionRequests();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _pendingRequests = requests;
+        _isLoading = false;
+        if (widget.initialRequestId != null) {
+          _currentPage = _pageForRequest(widget.initialRequestId!);
+        }
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _pendingRequests = <CorrectionRequest>[];
+        _isLoading = false;
+        _loadError = error.toString();
+      });
+    }
+  }
+
   Future<void> _openEditRequestForm(CorrectionRequest request) async {
-    final AttendanceRecord? record = _store.attendanceRecordById(
-      request.attendanceRecordId,
-    );
-    if (record == null) {
+    AttendanceRecord? record;
+    if (_usesBackend) {
+      if (request.attendanceRecordId.isNotEmpty) {
+        try {
+          record = await AttendanceService().fetchHistoryRecordById(
+            request.attendanceRecordId,
+          );
+        } catch (_) {
+          record = null;
+        }
+      }
+    } else {
+      record = _store.attendanceRecordById(request.attendanceRecordId);
+    }
+
+    if (record == null && !_usesBackend) {
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Attendance record no longer exists.')),
       );
+      return;
+    }
+
+    if (!mounted) {
       return;
     }
 
@@ -77,7 +156,7 @@ class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
               Animation<double> secondaryAnimation,
             ) {
               return CorrectionFormScreen(
-                attendanceRecordId: record.id,
+                attendanceRecordId: record?.id ?? request.attendanceRecordId,
                 affectedDate: request.affectedDate,
                 issueSummary: request.issueSummary,
                 initialCorrectionType: request.correctionType,
@@ -85,6 +164,7 @@ class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
                 initialCorrectedClockInTime: request.correctedClockInTime,
                 initialCorrectedClockOutTime: request.correctedClockOutTime,
                 initialReason: request.reason,
+                sourceRecord: record,
               );
             },
         transitionDuration: Duration.zero,
@@ -96,13 +176,13 @@ class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
       return;
     }
 
+    await _loadPendingRequests();
+    if (!mounted) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Correction request updated.')),
     );
-  }
-
-  List<CorrectionRequest> get _pendingRequests {
-    return _store.pendingCorrectionRequests;
   }
 
   int get _totalPages {
@@ -143,7 +223,8 @@ class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final List<CorrectionRequest> currentPageRequests = _requestsOnCurrentPage();
+    final List<CorrectionRequest> currentPageRequests =
+        _requestsOnCurrentPage();
     final bool hasRequests = _pendingRequests.isNotEmpty;
 
     return Scaffold(
@@ -188,35 +269,55 @@ class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
                 ),
                 const SizedBox(height: 10),
                 Expanded(
-                  child: hasRequests
-                      ? ListView.separated(
-                          itemCount: currentPageRequests.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 10),
-                          itemBuilder: (BuildContext context, int index) {
-                            final CorrectionRequest request =
-                                currentPageRequests[index];
-                            final bool isExpanded = _expandedRequestIds.contains(
-                              request.id,
-                            );
-
-                            return _PendingCorrectionCard(
-                              key: ValueKey<String>('pending_${request.id}'),
-                              request: request,
-                              isExpanded: isExpanded,
-                              onEditRequest: () => _openEditRequestForm(request),
-                              onExpansionChanged: (bool expanded) {
-                                setState(() {
-                                  if (expanded) {
-                                    _expandedRequestIds.add(request.id);
-                                  } else {
-                                    _expandedRequestIds.remove(request.id);
-                                  }
-                                });
-                              },
-                            );
-                          },
+                  child: _isLoading
+                      ? const _CorrectionDetailsLoadingState()
+                      : _loadError != null
+                      ? _CorrectionDetailsErrorState(
+                          message: _loadError!,
+                          onRetry: _loadPendingRequests,
                         )
-                      : const _NoPendingRequestState(),
+                      : RefreshIndicator(
+                          onRefresh: _loadPendingRequests,
+                          child: hasRequests
+                              ? ListView.separated(
+                                  itemCount: currentPageRequests.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(height: 10),
+                                  itemBuilder:
+                                      (BuildContext context, int index) {
+                                        final CorrectionRequest request =
+                                            currentPageRequests[index];
+                                        final bool isExpanded =
+                                            _expandedRequestIds.contains(
+                                              request.id,
+                                            );
+
+                                        return _PendingCorrectionCard(
+                                          key: ValueKey<String>(
+                                            'pending_${request.id}',
+                                          ),
+                                          request: request,
+                                          isExpanded: isExpanded,
+                                          onEditRequest: () =>
+                                              _openEditRequestForm(request),
+                                          onExpansionChanged: (bool expanded) {
+                                            setState(() {
+                                              if (expanded) {
+                                                _expandedRequestIds.add(
+                                                  request.id,
+                                                );
+                                              } else {
+                                                _expandedRequestIds.remove(
+                                                  request.id,
+                                                );
+                                              }
+                                            });
+                                          },
+                                        );
+                                      },
+                                )
+                              : const _NoPendingRequestState(),
+                        ),
                 ),
                 if (hasRequests && _totalPages > 1) ...<Widget>[
                   const SizedBox(height: 10),
@@ -412,6 +513,57 @@ class _NoPendingRequestState extends StatelessWidget {
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CorrectionDetailsLoadingState extends StatelessWidget {
+  const _CorrectionDetailsLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: CircularProgressIndicator(
+        valueColor: AlwaysStoppedAnimation<Color>(PulseClockColors.surface),
+      ),
+    );
+  }
+}
+
+class _CorrectionDetailsErrorState extends StatelessWidget {
+  const _CorrectionDetailsErrorState({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SurfaceCard(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline_rounded, color: Color(0xFFB42318)),
+            const SizedBox(height: 12),
+            Text(
+              'Unable to load pending correction requests.',
+              style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              style: PulseClockTextStyles.cardSubtitle,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
       ),

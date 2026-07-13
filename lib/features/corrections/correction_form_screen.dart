@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/corrections/data/correction_service.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
@@ -16,6 +18,7 @@ class CorrectionFormScreen extends StatefulWidget {
     this.initialCorrectedClockInTime,
     this.initialCorrectedClockOutTime,
     this.initialReason,
+    this.sourceRecord,
   });
 
   final String attendanceRecordId;
@@ -26,6 +29,7 @@ class CorrectionFormScreen extends StatefulWidget {
   final String? initialCorrectedClockInTime;
   final String? initialCorrectedClockOutTime;
   final String? initialReason;
+  final AttendanceRecord? sourceRecord;
 
   @override
   State<CorrectionFormScreen> createState() => _CorrectionFormScreenState();
@@ -41,6 +45,8 @@ class _CorrectionFormScreenState extends State<CorrectionFormScreen> {
   late final AttendanceRecord? _sourceRecord;
   late CorrectionType _selectedType;
   bool _isSubmitting = false;
+
+  bool get _usesBackend => SupabaseBootstrap.isInitialized;
 
   bool get _needsClockIn {
     return _selectedType == CorrectionType.clockIn ||
@@ -89,7 +95,11 @@ class _CorrectionFormScreenState extends State<CorrectionFormScreen> {
   @override
   void initState() {
     super.initState();
-    _sourceRecord = _store.attendanceRecordById(widget.attendanceRecordId);
+    _sourceRecord =
+        widget.sourceRecord ??
+        (!_usesBackend
+            ? _store.attendanceRecordById(widget.attendanceRecordId)
+            : null);
     if (widget.initialCorrectedClockInTime != null) {
       _clockInController.text = widget.initialCorrectedClockInTime!.trim();
     }
@@ -156,7 +166,7 @@ class _CorrectionFormScreenState extends State<CorrectionFormScreen> {
     if (_isSubmitting) {
       return;
     }
-    if (_sourceRecord == null) {
+    if (_sourceRecord == null && !_usesBackend) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Attendance record no longer exists.')),
       );
@@ -171,19 +181,50 @@ class _CorrectionFormScreenState extends State<CorrectionFormScreen> {
     });
 
     try {
-      _store.submitCorrectionRequest(
-        attendanceRecordId: _sourceRecord.id,
-        issueSummary: widget.issueSummary,
-        correctionType: _selectedType,
-        reason: _reasonController.text.trim(),
-        correctedClockInTime: _needsClockIn
-            ? _clockInController.text.trim()
-            : null,
-        correctedClockOutTime: _needsClockOut
-            ? _clockOutController.text.trim()
-            : null,
-        existingRequestId: widget.existingRequestId,
-      );
+      if (_usesBackend) {
+        if (widget.existingRequestId == null) {
+          await CorrectionService().submitCorrectionRequest(
+            attendanceRecordId: widget.attendanceRecordId,
+            affectedDate: widget.affectedDate,
+            correctionType: _selectedType,
+            reason: _reasonController.text.trim(),
+            correctedClockInTime: _needsClockIn
+                ? _clockInController.text.trim()
+                : null,
+            correctedClockOutTime: _needsClockOut
+                ? _clockOutController.text.trim()
+                : null,
+          );
+        } else {
+          await CorrectionService().updatePendingCorrectionRequest(
+            requestId: widget.existingRequestId!,
+            attendanceRecordId: widget.attendanceRecordId,
+            affectedDate: widget.affectedDate,
+            correctionType: _selectedType,
+            reason: _reasonController.text.trim(),
+            correctedClockInTime: _needsClockIn
+                ? _clockInController.text.trim()
+                : null,
+            correctedClockOutTime: _needsClockOut
+                ? _clockOutController.text.trim()
+                : null,
+          );
+        }
+      } else {
+        _store.submitCorrectionRequest(
+          attendanceRecordId: _sourceRecord!.id,
+          issueSummary: widget.issueSummary,
+          correctionType: _selectedType,
+          reason: _reasonController.text.trim(),
+          correctedClockInTime: _needsClockIn
+              ? _clockInController.text.trim()
+              : null,
+          correctedClockOutTime: _needsClockOut
+              ? _clockOutController.text.trim()
+              : null,
+          existingRequestId: widget.existingRequestId,
+        );
+      }
 
       if (!mounted) {
         return;

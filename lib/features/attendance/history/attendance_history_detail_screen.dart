@@ -101,6 +101,7 @@ class _AttendanceHistoryDetailScreenState
                 affectedDate: record.date,
                 issueSummary: _issueSummaryFor(record),
                 initialCorrectionType: initialType,
+                sourceRecord: record,
               );
             },
         transitionDuration: Duration.zero,
@@ -112,6 +113,10 @@ class _AttendanceHistoryDetailScreenState
       return;
     }
 
+    await _loadRecord();
+    if (!mounted) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Correction request submitted.')),
     );
@@ -131,9 +136,7 @@ class _AttendanceHistoryDetailScreenState
         ),
         body: const Center(
           child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(
-              PulseClockColors.surface,
-            ),
+            valueColor: AlwaysStoppedAnimation<Color>(PulseClockColors.surface),
           ),
         ),
       );
@@ -226,11 +229,20 @@ class _AttendanceHistoryDetailScreenState
                         value: weekdayName(record.date),
                       ),
                       const SizedBox(height: 10),
-                      DetailInfoRow(label: 'Clock In', value: record.clockInTime),
+                      DetailInfoRow(
+                        label: 'Clock In',
+                        value: record.clockInTime,
+                      ),
                       const SizedBox(height: 10),
-                      DetailInfoRow(label: 'Clock Out', value: record.clockOutTime),
+                      DetailInfoRow(
+                        label: 'Clock Out',
+                        value: record.clockOutTime,
+                      ),
                       const SizedBox(height: 10),
-                      DetailInfoRow(label: 'Work Hours', value: record.workHours),
+                      DetailInfoRow(
+                        label: 'Work Hours',
+                        value: record.workHours,
+                      ),
                       if (record.note != null) ...<Widget>[
                         const SizedBox(height: 12),
                         const Divider(color: PulseClockColors.cardBorder),
@@ -242,7 +254,10 @@ class _AttendanceHistoryDetailScreenState
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(record.note!, style: PulseClockTextStyles.cardSubtitle),
+                        Text(
+                          record.note!,
+                          style: PulseClockTextStyles.cardSubtitle,
+                        ),
                       ],
                     ],
                   ),

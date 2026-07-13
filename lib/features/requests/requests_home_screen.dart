@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/corrections/correction_list_screen.dart';
+import 'package:pulseclock/features/corrections/data/correction_service.dart';
 import 'package:pulseclock/features/leave/data/leave_service.dart';
 import 'package:pulseclock/features/leave/leave_list_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
@@ -17,6 +18,8 @@ class RequestsHomeScreen extends StatefulWidget {
 
 class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
+  int? _backendMissedPunchCount;
+  int? _backendPendingCorrectionCount;
   int? _backendPendingLeaveCount;
 
   bool get _usesBackend => SupabaseBootstrap.isInitialized;
@@ -25,7 +28,7 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
   void initState() {
     super.initState();
     _store.addListener(_onStoreChanged);
-    _loadBackendPendingLeaveCount();
+    _loadBackendRequestCounts();
   }
 
   @override
@@ -40,38 +43,48 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
     }
 
     if (_usesBackend) {
-      _loadBackendPendingLeaveCount();
+      _loadBackendRequestCounts();
       return;
     }
 
     setState(() {});
   }
 
-  Future<void> _loadBackendPendingLeaveCount() async {
+  Future<void> _loadBackendRequestCounts() async {
     if (!_usesBackend) {
       return;
     }
 
     try {
-      final int count = await LeaveService().fetchPendingLeaveRequestCount();
+      final CorrectionService correctionService = CorrectionService();
+      final int missedPunchCount = await correctionService
+          .fetchMissedPunchCount();
+      final int pendingCorrectionCount = await correctionService
+          .fetchPendingCorrectionRequestCount();
+      final int pendingLeaveCount = await LeaveService()
+          .fetchPendingLeaveRequestCount();
       if (!mounted) {
         return;
       }
       setState(() {
-        _backendPendingLeaveCount = count;
+        _backendMissedPunchCount = missedPunchCount;
+        _backendPendingCorrectionCount = pendingCorrectionCount;
+        _backendPendingLeaveCount = pendingLeaveCount;
       });
     } catch (_) {
       if (!mounted) {
         return;
       }
       setState(() {
+        _backendMissedPunchCount = null;
+        _backendPendingCorrectionCount = null;
         _backendPendingLeaveCount = null;
       });
     }
   }
 
-  void _openCorrections() {
-    Navigator.of(context).push(
+  Future<void> _openCorrections() async {
+    await Navigator.of(context).push<void>(
       PageRouteBuilder<void>(
         pageBuilder:
             (
@@ -85,6 +98,7 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
         reverseTransitionDuration: Duration.zero,
       ),
     );
+    await _loadBackendRequestCounts();
   }
 
   Future<void> _openLeaveRequests() async {
@@ -102,13 +116,17 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
         reverseTransitionDuration: Duration.zero,
       ),
     );
-    await _loadBackendPendingLeaveCount();
+    await _loadBackendRequestCounts();
   }
 
   @override
   Widget build(BuildContext context) {
-    final int missedCount = _store.missedPunchRecords.length;
-    final int pendingCorrectionCount = _store.pendingCorrectionRequests.length;
+    final int missedCount = _usesBackend
+        ? (_backendMissedPunchCount ?? 0)
+        : _store.missedPunchRecords.length;
+    final int pendingCorrectionCount = _usesBackend
+        ? (_backendPendingCorrectionCount ?? 0)
+        : _store.pendingCorrectionRequests.length;
     final int pendingLeaveCount = _usesBackend
         ? (_backendPendingLeaveCount ?? 0)
         : _store.leaveRequests
