@@ -1,5 +1,6 @@
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
+import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LeaveService {
@@ -7,6 +8,7 @@ class LeaveService {
     : _client = client ?? SupabaseBootstrap.client;
 
   static const String tableName = 'leave_requests';
+  static const String attendanceTableName = 'attendance_records';
   static const int defaultAnnualLeaveEntitlementDays = 30;
 
   final SupabaseClient _client;
@@ -125,6 +127,11 @@ class LeaveService {
     final String userId = _requireCurrentUserId();
     final DateTime safeStartDate = _dateOnly(startDate);
     final DateTime safeEndDate = _dateOnly(endDate);
+    await _throwIfAttendanceExistsForRange(
+      userId: userId,
+      startDate: safeStartDate,
+      endDate: safeEndDate,
+    );
 
     final Map<String, dynamic> row = await _client
         .from(tableName)
@@ -153,6 +160,11 @@ class LeaveService {
     final String userId = _requireCurrentUserId();
     final DateTime safeStartDate = _dateOnly(startDate);
     final DateTime safeEndDate = _dateOnly(endDate);
+    await _throwIfAttendanceExistsForRange(
+      userId: userId,
+      startDate: safeStartDate,
+      endDate: safeEndDate,
+    );
 
     final Map<String, dynamic> row = await _client
         .from(tableName)
@@ -189,6 +201,64 @@ class LeaveService {
       throw StateError('No signed-in user found.');
     }
     return userId;
+  }
+
+  Future<void> _throwIfAttendanceExistsForRange({
+    required String userId,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final List<dynamic> rows = await _client
+        .from(attendanceTableName)
+        .select('work_date, status, clock_in, clock_out')
+        .eq('user_id', userId)
+        .gte('work_date', _dateOnlyLabel(startDate))
+        .lte('work_date', _dateOnlyLabel(endDate));
+
+    final List<DateTime> conflictDates = rows
+        .map((dynamic row) => Map<String, dynamic>.from(row as Map))
+        .where(_hasAttendanceActivity)
+        .map(
+          (Map<String, dynamic> row) =>
+              _dateOnly(DateTime.parse(row['work_date'] as String)),
+        )
+        .toList(growable: false);
+
+    if (conflictDates.isEmpty) {
+      return;
+    }
+
+    conflictDates.sort();
+    throw StateError(
+      'Leave cannot be requested for dates with attendance activity: '
+      '${_conflictDatesLabel(conflictDates)}.',
+    );
+  }
+
+  bool _hasAttendanceActivity(Map<String, dynamic> row) {
+    if (row['clock_in'] != null || row['clock_out'] != null) {
+      return true;
+    }
+
+    switch (row['status'] as String?) {
+      case 'completed':
+      case 'on_duty':
+      case 'missed_punch':
+      case 'correction_pending':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  String _conflictDatesLabel(List<DateTime> dates) {
+    if (dates.length == 1) {
+      return dateLabel(dates.first);
+    }
+    if (dates.length == 2) {
+      return '${dateLabel(dates.first)} and ${dateLabel(dates.last)}';
+    }
+    return '${dateLabel(dates.first)} and ${dates.length - 1} more dates';
   }
 }
 

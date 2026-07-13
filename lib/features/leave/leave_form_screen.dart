@@ -110,6 +110,16 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
         const SnackBar(content: Text('Leave request is no longer available.')),
       );
       Navigator.of(context).pop(false);
+    } on StateError catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isSubmitting = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (!mounted) {
         return;
