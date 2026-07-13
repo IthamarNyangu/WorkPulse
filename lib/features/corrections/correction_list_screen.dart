@@ -247,9 +247,29 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
                         ),
                       ),
                     ),
-                    TextButton(
+                    OutlinedButton.icon(
                       onPressed: _openPendingCorrections,
-                      child: const Text('Pending Requests'),
+                      icon: const Icon(Icons.hourglass_top_rounded, size: 17),
+                      label: const Text('Pending Requests'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: PulseClockColors.actionBlue,
+                        backgroundColor: PulseClockColors.surface,
+                        side: const BorderSide(
+                          color: PulseClockColors.actionBlue,
+                          width: 1.2,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        textStyle: PulseClockTextStyles.contextAction.copyWith(
+                          fontSize: 13,
+                          color: PulseClockColors.actionBlue,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
                     ),
                   ],
                 ),

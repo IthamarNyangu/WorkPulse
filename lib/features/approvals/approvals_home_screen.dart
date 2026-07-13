@@ -25,6 +25,9 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
   bool _isLoading = true;
   String? _loadError;
   String? _actioningId;
+  int _reviewedPage = 0;
+
+  static const int _reviewedPageSize = 8;
 
   @override
   void initState() {
@@ -52,11 +55,19 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
       if (!mounted) {
         return;
       }
+      final int reviewedTotal =
+          reviewedLeaveApprovals.length + reviewedCorrectionApprovals.length;
+      final int maxReviewedPage = reviewedTotal == 0
+          ? 0
+          : (reviewedTotal - 1) ~/ _reviewedPageSize;
       setState(() {
         _leaveApprovals = leaveApprovals;
         _correctionApprovals = correctionApprovals;
         _reviewedLeaveApprovals = reviewedLeaveApprovals;
         _reviewedCorrectionApprovals = reviewedCorrectionApprovals;
+        if (_reviewedPage > maxReviewedPage) {
+          _reviewedPage = maxReviewedPage;
+        }
         _isLoading = false;
         _actioningId = null;
       });
@@ -76,6 +87,17 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
     }
   }
 
+  void _showResultSnackBar(String message) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+    });
+  }
+
   Future<void> _reviewLeave(
     LeaveApprovalItem request, {
     required bool approve,
@@ -87,6 +109,8 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
           : 'This leave request will be rejected.',
       actionLabel: approve ? 'Approve' : 'Reject',
       isDestructive: !approve,
+      noteLabel: approve ? 'Reviewer note (optional)' : 'Reason for rejection',
+      requireNote: !approve,
     );
     if (result == null || !mounted) {
       return;
@@ -112,12 +136,8 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            approve ? 'Leave request approved.' : 'Leave request rejected.',
-          ),
-        ),
+      _showResultSnackBar(
+        approve ? 'Leave request approved.' : 'Leave request rejected.',
       );
     } catch (_) {
       if (!mounted) {
@@ -126,14 +146,10 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
       setState(() {
         _actioningId = null;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            approve
-                ? 'Unable to approve leave request.'
-                : 'Unable to reject leave request.',
-          ),
-        ),
+      _showResultSnackBar(
+        approve
+            ? 'Unable to approve leave request.'
+            : 'Unable to reject leave request.',
       );
     }
   }
@@ -149,6 +165,8 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
           : 'This correction request will be rejected.',
       actionLabel: approve ? 'Approve' : 'Reject',
       isDestructive: !approve,
+      noteLabel: 'Reviewer note (optional)',
+      requireNote: false,
     );
     if (result == null || !mounted) {
       return;
@@ -174,14 +192,10 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            approve
-                ? 'Correction request approved.'
-                : 'Correction request rejected.',
-          ),
-        ),
+      _showResultSnackBar(
+        approve
+            ? 'Correction request approved.'
+            : 'Correction request rejected.',
       );
     } catch (_) {
       if (!mounted) {
@@ -190,14 +204,10 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
       setState(() {
         _actioningId = null;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            approve
-                ? 'Unable to approve correction request.'
-                : 'Unable to reject correction request.',
-          ),
-        ),
+      _showResultSnackBar(
+        approve
+            ? 'Unable to approve correction request.'
+            : 'Unable to reject correction request.',
       );
     }
   }
@@ -207,94 +217,173 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
     required String message,
     required String actionLabel,
     required bool isDestructive,
+    required String noteLabel,
+    required bool requireNote,
   }) async {
     final TextEditingController noteController = TextEditingController();
+    String? noteError;
 
     final _ReviewNoteResult? result = await showDialog<_ReviewNoteResult>(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFFFCFDFE),
-          surfaceTintColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 28,
-            vertical: 24,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Text(
-            title,
-            style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                message,
-                style: PulseClockTextStyles.cardSubtitle.copyWith(fontSize: 14),
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFFFCFDFE),
+              surfaceTintColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 28,
+                vertical: 24,
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: noteController,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: 'Reviewer note (optional)',
-                  alignLabelWithHint: true,
-                  filled: true,
-                  fillColor: PulseClockColors.surfaceMuted,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: PulseClockColors.cardBorder,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Text(
+                title,
+                style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message,
+                    style: PulseClockTextStyles.cardSubtitle.copyWith(
+                      fontSize: 14,
                     ),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: PulseClockColors.cardBorder,
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: noteController,
+                    maxLines: 3,
+                    onChanged: (_) {
+                      if (noteError == null) {
+                        return;
+                      }
+                      setDialogState(() {
+                        noteError = null;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      labelText: noteLabel,
+                      alignLabelWithHint: true,
+                      errorText: noteError,
+                      filled: true,
+                      fillColor: PulseClockColors.surfaceMuted,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: PulseClockColors.cardBorder,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: PulseClockColors.cardBorder,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: PulseClockColors.actionBlue,
+                          width: 1.4,
+                        ),
+                      ),
+                      errorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFB42318)),
+                      ),
+                      focusedErrorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: Color(0xFFB42318),
+                          width: 1.4,
+                        ),
+                      ),
                     ),
                   ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: PulseClockColors.actionBlue,
-                      width: 1.4,
-                    ),
-                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(
-                  context,
-                ).pop(_ReviewNoteResult(note: noteController.text.trim()));
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: isDestructive
-                    ? const Color(0xFFB42318)
-                    : PulseClockColors.actionBlue,
-                textStyle: PulseClockTextStyles.cardSubtitle.copyWith(
-                  fontWeight: FontWeight.w700,
+                TextButton(
+                  onPressed: () {
+                    final String note = noteController.text.trim();
+                    if (requireNote && note.isEmpty) {
+                      setDialogState(() {
+                        noteError = 'Enter a reason before rejecting.';
+                      });
+                      return;
+                    }
+                    Navigator.of(context).pop(_ReviewNoteResult(note: note));
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: isDestructive
+                        ? const Color(0xFFB42318)
+                        : PulseClockColors.actionBlue,
+                    textStyle: PulseClockTextStyles.cardSubtitle.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  child: Text(actionLabel),
                 ),
-              ),
-              child: Text(actionLabel),
-            ),
-          ],
+              ],
+            );
+          },
         );
       },
     );
 
     noteController.dispose();
     return result;
+  }
+
+  Future<void> _openCorrectionApprovalDetails(
+    CorrectionApprovalItem request,
+  ) async {
+    final _ApprovalDecision? decision = await Navigator.of(context).push(
+      PageRouteBuilder<_ApprovalDecision>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return _PendingCorrectionApprovalDetailsScreen(request: request);
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+
+    if (!mounted || decision == null) {
+      return;
+    }
+
+    await _reviewCorrection(
+      request,
+      approve: decision == _ApprovalDecision.approve,
+    );
+  }
+
+  Future<void> _openReviewedDetails(Object request) async {
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return _ReviewedApprovalDetailsScreen(request: request);
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
   }
 
   @override
@@ -315,11 +404,24 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
           : ((b as CorrectionApprovalItem).reviewedAt ?? b.submittedAt);
       return bDate.compareTo(aDate);
     });
+    final int reviewedPageCount = reviewedApprovals.isEmpty
+        ? 1
+        : ((reviewedApprovals.length - 1) ~/ _reviewedPageSize) + 1;
+    final int safeReviewedPage = _reviewedPage >= reviewedPageCount
+        ? reviewedPageCount - 1
+        : _reviewedPage;
+    final List<Object> pagedReviewedApprovals = reviewedApprovals
+        .skip(safeReviewedPage * _reviewedPageSize)
+        .take(_reviewedPageSize)
+        .toList(growable: false);
+    final bool showReviewedPagination =
+        _selectedQueue == _ApprovalQueue.reviewed &&
+        reviewedApprovals.length > _reviewedPageSize;
     final int selectedCount = showingLeave
         ? _leaveApprovals.length
         : showingCorrections
         ? _correctionApprovals.length
-        : reviewedApprovals.length;
+        : pagedReviewedApprovals.length + (showReviewedPagination ? 1 : 0);
 
     return Scaffold(
       backgroundColor: PulseClockColors.appBackground,
@@ -368,6 +470,9 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
                     }
                     setState(() {
                       _selectedQueue = queue;
+                      if (queue == _ApprovalQueue.reviewed) {
+                        _reviewedPage = 0;
+                      }
                     });
                   },
                 ),
@@ -410,31 +515,57 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
                                         if (showingCorrections) {
                                           final CorrectionApprovalItem request =
                                               _correctionApprovals[index];
-                                          return _CorrectionApprovalCard(
+                                          return _CorrectionApprovalSummaryCard(
                                             request: request,
                                             isBusy: _actioningId == request.id,
-                                            onApprove: () => _reviewCorrection(
-                                              request,
-                                              approve: true,
-                                            ),
-                                            onReject: () => _reviewCorrection(
-                                              request,
-                                              approve: false,
-                                            ),
+                                            onTap: () =>
+                                                _openCorrectionApprovalDetails(
+                                                  request,
+                                                ),
+                                          );
+                                        }
+
+                                        if (index >=
+                                            pagedReviewedApprovals.length) {
+                                          return _ReviewedPaginationControls(
+                                            currentPage: safeReviewedPage,
+                                            pageCount: reviewedPageCount,
+                                            onPrevious: safeReviewedPage == 0
+                                                ? null
+                                                : () {
+                                                    setState(() {
+                                                      _reviewedPage =
+                                                          safeReviewedPage - 1;
+                                                    });
+                                                  },
+                                            onNext:
+                                                safeReviewedPage >=
+                                                    reviewedPageCount - 1
+                                                ? null
+                                                : () {
+                                                    setState(() {
+                                                      _reviewedPage =
+                                                          safeReviewedPage + 1;
+                                                    });
+                                                  },
                                           );
                                         }
 
                                         final Object reviewed =
-                                            reviewedApprovals[index];
+                                            pagedReviewedApprovals[index];
                                         if (reviewed is LeaveApprovalItem) {
                                           return _ReviewedLeaveApprovalCard(
                                             request: reviewed,
+                                            onTap: () =>
+                                                _openReviewedDetails(reviewed),
                                           );
                                         }
                                         return _ReviewedCorrectionApprovalCard(
                                           request:
                                               reviewed
                                                   as CorrectionApprovalItem,
+                                          onTap: () =>
+                                              _openReviewedDetails(reviewed),
                                         );
                                       },
                                 ),
@@ -550,6 +681,71 @@ class _LeaveApprovalCard extends StatelessWidget {
   }
 }
 
+class _CorrectionApprovalSummaryCard extends StatelessWidget {
+  const _CorrectionApprovalSummaryCard({
+    required this.request,
+    required this.isBusy,
+    required this.onTap,
+  });
+
+  final CorrectionApprovalItem request;
+  final bool isBusy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: isBusy ? null : onTap,
+      child: SurfaceCard(
+        borderRadius: 14,
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ReviewedCardHeader(
+                    employee: request.employee,
+                    statusBadge: _CorrectionApprovalStatusBadge(
+                      status: request.status,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  DetailInfoRow(label: 'Request Type', value: 'Correction'),
+                  const SizedBox(height: 7),
+                  DetailInfoRow(
+                    label: 'Affected Date',
+                    value: dateLabel(request.affectedDate),
+                  ),
+                  const SizedBox(height: 7),
+                  DetailInfoRow(
+                    label: 'Correction Type',
+                    value: request.correctionType.label,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            isBusy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(
+                    Icons.chevron_right_rounded,
+                    color: PulseClockColors.textSecondary,
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CorrectionApprovalCard extends StatelessWidget {
   const _CorrectionApprovalCard({
     required this.request,
@@ -621,13 +817,276 @@ class _CorrectionApprovalCard extends StatelessWidget {
   }
 }
 
+class _PendingCorrectionApprovalDetailsScreen extends StatelessWidget {
+  const _PendingCorrectionApprovalDetailsScreen({required this.request});
+
+  final CorrectionApprovalItem request;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: PulseClockColors.appBackgroundSolid,
+      appBar: AppBar(
+        title: const Text('Correction Approval Details'),
+        backgroundColor: PulseClockColors.surface,
+        foregroundColor: PulseClockColors.textPrimary,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            PulseClockDimensions.horizontalPadding,
+            PulseClockDimensions.topPadding,
+            PulseClockDimensions.horizontalPadding,
+            28,
+          ),
+          child: _CorrectionApprovalCard(
+            request: request,
+            isBusy: false,
+            onApprove: () =>
+                Navigator.of(context).pop(_ApprovalDecision.approve),
+            onReject: () => Navigator.of(context).pop(_ApprovalDecision.reject),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ReviewedLeaveApprovalCard extends StatelessWidget {
-  const _ReviewedLeaveApprovalCard({required this.request});
+  const _ReviewedLeaveApprovalCard({
+    required this.request,
+    required this.onTap,
+  });
+
+  final LeaveApprovalItem request;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SurfaceCard(
+        borderRadius: 14,
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ReviewedCardHeader(
+              employee: request.employee,
+              statusBadge: _LeaveApprovalStatusBadge(status: request.status),
+            ),
+            const SizedBox(height: 10),
+            DetailInfoRow(label: 'Request Type', value: 'Leave'),
+            const SizedBox(height: 7),
+            DetailInfoRow(label: 'Leave Type', value: request.type.label),
+            const SizedBox(height: 7),
+            DetailInfoRow(
+              label: request.durationDays == 1 ? 'Date' : 'Date Range',
+              value: _leaveDateRangeLabel(request.startDate, request.endDate),
+            ),
+            const SizedBox(height: 8),
+            const Align(
+              alignment: Alignment.centerRight,
+              child: Icon(
+                Icons.chevron_right_rounded,
+                color: PulseClockColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewedCorrectionApprovalCard extends StatelessWidget {
+  const _ReviewedCorrectionApprovalCard({
+    required this.request,
+    required this.onTap,
+  });
+
+  final CorrectionApprovalItem request;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SurfaceCard(
+        borderRadius: 14,
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ReviewedCardHeader(
+              employee: request.employee,
+              statusBadge: _CorrectionApprovalStatusBadge(
+                status: request.status,
+              ),
+            ),
+            const SizedBox(height: 10),
+            DetailInfoRow(label: 'Request Type', value: 'Correction'),
+            const SizedBox(height: 7),
+            DetailInfoRow(
+              label: 'Affected Date',
+              value: dateLabel(request.affectedDate),
+            ),
+            const SizedBox(height: 7),
+            DetailInfoRow(
+              label: 'Correction Type',
+              value: request.correctionType.label,
+            ),
+            const SizedBox(height: 8),
+            const Align(
+              alignment: Alignment.centerRight,
+              child: Icon(
+                Icons.chevron_right_rounded,
+                color: PulseClockColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewedCardHeader extends StatelessWidget {
+  const _ReviewedCardHeader({
+    required this.employee,
+    required this.statusBadge,
+  });
+
+  final ApprovalEmployeeProfile employee;
+  final Widget statusBadge;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                employee.fullName,
+                style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 18),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                employee.employeeId,
+                style: PulseClockTextStyles.cardSubtitle.copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        statusBadge,
+      ],
+    );
+  }
+}
+
+class _ReviewedPaginationControls extends StatelessWidget {
+  const _ReviewedPaginationControls({
+    required this.currentPage,
+    required this.pageCount,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final int currentPage;
+  final int pageCount;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      borderRadius: 14,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          TextButton.icon(
+            onPressed: onPrevious,
+            icon: const Icon(Icons.chevron_left_rounded),
+            label: const Text('Previous'),
+          ),
+          Expanded(
+            child: Text(
+              'Page ${currentPage + 1} of $pageCount',
+              textAlign: TextAlign.center,
+              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: onNext,
+            icon: const Icon(Icons.chevron_right_rounded),
+            label: const Text('Next'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewedApprovalDetailsScreen extends StatelessWidget {
+  const _ReviewedApprovalDetailsScreen({required this.request});
+
+  final Object request;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: PulseClockColors.appBackgroundSolid,
+      appBar: AppBar(
+        title: const Text('Reviewed Request Details'),
+        backgroundColor: PulseClockColors.surface,
+        foregroundColor: PulseClockColors.textPrimary,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            PulseClockDimensions.horizontalPadding,
+            PulseClockDimensions.topPadding,
+            PulseClockDimensions.horizontalPadding,
+            28,
+          ),
+          child: request is LeaveApprovalItem
+              ? _ReviewedLeaveDetails(request: request as LeaveApprovalItem)
+              : _ReviewedCorrectionDetails(
+                  request: request as CorrectionApprovalItem,
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewedLeaveDetails extends StatelessWidget {
+  const _ReviewedLeaveDetails({required this.request});
 
   final LeaveApprovalItem request;
 
   @override
   Widget build(BuildContext context) {
+    final String reviewerNote = request.reviewerNote?.trim() ?? '';
+    final bool isRejected = request.status == LeaveRequestStatus.rejected;
+
     return SurfaceCard(
       borderRadius: 14,
       padding: const EdgeInsets.all(14),
@@ -644,7 +1103,7 @@ class _ReviewedLeaveApprovalCard extends StatelessWidget {
               _LeaveApprovalStatusBadge(status: request.status),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           DetailInfoRow(label: 'Request Type', value: 'Leave'),
           const SizedBox(height: 8),
           DetailInfoRow(label: 'Leave Type', value: request.type.label),
@@ -655,19 +1114,27 @@ class _ReviewedLeaveApprovalCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           DetailInfoRow(
+            label: 'Duration',
+            value: request.durationDays == 1
+                ? 'Single Day'
+                : '${request.durationDays} Days',
+          ),
+          const SizedBox(height: 8),
+          DetailInfoRow(
             label: 'Reviewed',
             value: request.reviewedAt == null
                 ? '--'
                 : dateLabel(request.reviewedAt!),
           ),
-          const SizedBox(height: 12),
-          _ApprovalTextBlock(title: 'Reason', value: request.reason),
-          if (request.reviewerNote != null &&
-              request.reviewerNote!.trim().isNotEmpty) ...<Widget>[
-            const SizedBox(height: 8),
+          const SizedBox(height: 14),
+          _ApprovalTextBlock(title: 'Reason / Comment', value: request.reason),
+          if (isRejected || reviewerNote.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 10),
             _ApprovalTextBlock(
-              title: 'Reviewer Note',
-              value: request.reviewerNote!,
+              title: isRejected ? 'Reason for Rejection' : 'Reviewer Note',
+              value: reviewerNote.isEmpty
+                  ? 'No rejection reason was provided.'
+                  : reviewerNote,
             ),
           ],
         ],
@@ -676,13 +1143,15 @@ class _ReviewedLeaveApprovalCard extends StatelessWidget {
   }
 }
 
-class _ReviewedCorrectionApprovalCard extends StatelessWidget {
-  const _ReviewedCorrectionApprovalCard({required this.request});
+class _ReviewedCorrectionDetails extends StatelessWidget {
+  const _ReviewedCorrectionDetails({required this.request});
 
   final CorrectionApprovalItem request;
 
   @override
   Widget build(BuildContext context) {
+    final String reviewerNote = request.reviewerNote?.trim() ?? '';
+
     return SurfaceCard(
       borderRadius: 14,
       padding: const EdgeInsets.all(14),
@@ -699,7 +1168,7 @@ class _ReviewedCorrectionApprovalCard extends StatelessWidget {
               _CorrectionApprovalStatusBadge(status: request.status),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           DetailInfoRow(label: 'Request Type', value: 'Correction'),
           const SizedBox(height: 8),
           DetailInfoRow(
@@ -713,24 +1182,45 @@ class _ReviewedCorrectionApprovalCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           DetailInfoRow(
+            label: 'Original Clock In',
+            value: _timeOrPlaceholder(request.originalClockInAt),
+          ),
+          const SizedBox(height: 8),
+          DetailInfoRow(
+            label: 'Original Clock Out',
+            value: _timeOrPlaceholder(request.originalClockOutAt),
+          ),
+          const SizedBox(height: 8),
+          DetailInfoRow(
+            label: 'Corrected Clock In',
+            value: _timeOrPlaceholder(request.correctedClockInAt),
+          ),
+          const SizedBox(height: 8),
+          DetailInfoRow(
+            label: 'Corrected Clock Out',
+            value: _timeOrPlaceholder(request.correctedClockOutAt),
+          ),
+          const SizedBox(height: 8),
+          DetailInfoRow(
             label: 'Reviewed',
             value: request.reviewedAt == null
                 ? '--'
                 : dateLabel(request.reviewedAt!),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           _ApprovalTextBlock(
             title: 'Issue Summary',
             value: request.issueSummary,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           _ApprovalTextBlock(title: 'Reason', value: request.reason),
-          if (request.reviewerNote != null &&
-              request.reviewerNote!.trim().isNotEmpty) ...<Widget>[
-            const SizedBox(height: 8),
+          if (reviewerNote.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 10),
             _ApprovalTextBlock(
-              title: 'Reviewer Note',
-              value: request.reviewerNote!,
+              title: request.status == CorrectionRequestApprovalStatus.rejected
+                  ? 'Reason for Rejection'
+                  : 'Reviewer Note',
+              value: reviewerNote,
             ),
           ],
         ],
@@ -973,6 +1463,8 @@ class _ReviewNoteResult {
 
   final String note;
 }
+
+enum _ApprovalDecision { approve, reject }
 
 enum _ApprovalQueue { leave, corrections, reviewed }
 

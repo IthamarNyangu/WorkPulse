@@ -450,6 +450,7 @@ class LeaveRequest {
     required this.reason,
     required this.status,
     required this.submittedAt,
+    this.reviewerNote,
   });
 
   final String id;
@@ -459,6 +460,7 @@ class LeaveRequest {
   final String reason;
   final LeaveRequestStatus status;
   final DateTime submittedAt;
+  final String? reviewerNote;
 
   LeaveRequest copyWith({
     String? id,
@@ -468,6 +470,7 @@ class LeaveRequest {
     String? reason,
     LeaveRequestStatus? status,
     DateTime? submittedAt,
+    String? reviewerNote,
   }) {
     return LeaveRequest(
       id: id ?? this.id,
@@ -477,6 +480,7 @@ class LeaveRequest {
       reason: reason ?? this.reason,
       status: status ?? this.status,
       submittedAt: submittedAt ?? this.submittedAt,
+      reviewerNote: reviewerNote ?? this.reviewerNote,
     );
   }
 }

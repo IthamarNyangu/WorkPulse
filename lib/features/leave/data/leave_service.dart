@@ -293,6 +293,7 @@ LeaveRequest _leaveRequestFromMap(Map<String, dynamic> map) {
     reason: (map['reason'] as String?) ?? '',
     status: _leaveStatusFromValue(map['status'] as String),
     submittedAt: DateTime.parse(map['created_at'] as String).toLocal(),
+    reviewerNote: map['reviewer_note'] as String?,
   );
 }
 

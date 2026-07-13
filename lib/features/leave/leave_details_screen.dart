@@ -243,7 +243,9 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
     }
 
     final bool isPending = request.status == LeaveRequestStatus.pendingApproval;
+    final bool isRejected = request.status == LeaveRequestStatus.rejected;
     final bool isSingleDay = _isSameDay(request.startDate, request.endDate);
+    final String? reviewerNote = request.reviewerNote?.trim();
 
     return Scaffold(
       backgroundColor: PulseClockColors.appBackgroundSolid,
@@ -302,6 +304,27 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
                         request.reason,
                         style: PulseClockTextStyles.cardSubtitle,
                       ),
+                      if (isRejected) ...<Widget>[
+                        const SizedBox(height: 12),
+                        const Divider(color: PulseClockColors.cardBorder),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Reason for Rejection',
+                          style: PulseClockTextStyles.cardSubtitle.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFFB91C1C),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          reviewerNote == null || reviewerNote.isEmpty
+                              ? 'No rejection reason was provided.'
+                              : reviewerNote,
+                          style: PulseClockTextStyles.cardSubtitle.copyWith(
+                            color: PulseClockColors.textPrimary,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
