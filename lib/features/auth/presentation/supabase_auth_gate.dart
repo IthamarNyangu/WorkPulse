@@ -20,8 +20,9 @@ class SupabaseAuthGate extends StatelessWidget {
           return const _AuthLoadingScreen();
         }
 
-        if (authService.isSignedIn) {
-          return const PulseClockHomeScreen();
+        final User? currentUser = authService.currentUser;
+        if (currentUser != null) {
+          return PulseClockHomeScreen(key: ValueKey<String>(currentUser.id));
         }
 
         return const LoginScreen();
@@ -39,9 +40,7 @@ class _AuthLoadingScreen extends StatelessWidget {
       backgroundColor: PulseClockColors.appBackgroundSolid,
       body: Center(
         child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(
-            PulseClockColors.surface,
-          ),
+          valueColor: AlwaysStoppedAnimation<Color>(PulseClockColors.surface),
         ),
       ),
     );

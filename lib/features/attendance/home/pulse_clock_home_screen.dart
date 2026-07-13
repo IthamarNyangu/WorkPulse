@@ -373,6 +373,7 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
             _selectedNavIndex = index;
           });
           if (index == 0 && SupabaseBootstrap.isInitialized) {
+            _loadEmployeeProfile();
             _loadAttendanceFromBackend();
           }
         },

@@ -30,13 +30,11 @@ class AuthService {
       return null;
     }
 
-    final Map<String, dynamic>? row =
-        (await _client
-                .from(profilesTableName)
-                .select('id, employee_id, full_name, email, role, department')
-                .eq('id', user.id)
-                .maybeSingle())
-            as Map<String, dynamic>?;
+    final Map<String, dynamic>? row = await _client
+        .from(profilesTableName)
+        .select('id, employee_id, full_name, email, role, department')
+        .eq('id', user.id)
+        .maybeSingle();
 
     if (row == null) {
       return null;
