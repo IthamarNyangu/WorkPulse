@@ -15,6 +15,7 @@ class CorrectionService {
 
   Future<List<AttendanceRecord>> fetchMissedPunchRecords() async {
     final String userId = _requireCurrentUserId();
+    await AttendanceService(client: _client).syncAttendanceClassifications();
 
     final List<dynamic> rows = await _client
         .from(attendanceTableName)
@@ -35,6 +36,7 @@ class CorrectionService {
 
   Future<int> fetchMissedPunchCount() async {
     final String userId = _requireCurrentUserId();
+    await AttendanceService(client: _client).syncAttendanceClassifications();
 
     final List<dynamic> rows = await _client
         .from(attendanceTableName)

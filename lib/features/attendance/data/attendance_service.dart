@@ -10,6 +10,9 @@ class AttendanceService {
       _authService = AuthService(client: client ?? SupabaseBootstrap.client);
 
   static const String tableName = 'attendance_records';
+  static const String leaveTableName = 'leave_requests';
+  static const String correctionTableName = 'correction_requests';
+  static const int _classificationLookbackDays = 45;
 
   final SupabaseClient _client;
   final AuthService _authService;
@@ -27,28 +30,32 @@ class AttendanceService {
     );
 
     if (existing != null) {
-      if (existing.clockOutAt == null) {
+      if (existing.clockInAt == null && existing.status == 'leave_pending') {
+        throw StateError('You have a pending leave request for today.');
+      }
+      if (existing.clockInAt == null && existing.status == 'on_leave') {
+        throw StateError('Approved leave is active for today.');
+      }
+      if (existing.clockInAt != null && existing.clockOutAt == null) {
         throw StateError('You are already clocked in for today.');
       }
       throw StateError('Attendance for today is already completed.');
     }
 
-    final Map<String, dynamic> row =
-        (await _client
-                .from(tableName)
-                .insert(<String, dynamic>{
-                  'user_id': profile.id,
-                  'employee_id': profile.employeeId,
-                  'work_date': _dateOnlyLabel(effectiveClockInAt),
-                  'clock_in': effectiveClockInAt.toUtc().toIso8601String(),
-                  'clock_in_comment': comment,
-                  'clock_in_lat': latitude,
-                  'clock_in_lng': longitude,
-                  'status': 'on_duty',
-                })
-                .select()
-                .single())
-            as Map<String, dynamic>;
+    final Map<String, dynamic> row = await _client
+        .from(tableName)
+        .insert(<String, dynamic>{
+          'user_id': profile.id,
+          'employee_id': profile.employeeId,
+          'work_date': _dateOnlyLabel(effectiveClockInAt),
+          'clock_in': effectiveClockInAt.toUtc().toIso8601String(),
+          'clock_in_comment': comment,
+          'clock_in_lat': latitude,
+          'clock_in_lng': longitude,
+          'status': 'on_duty',
+        })
+        .select()
+        .single();
 
     return SupabaseAttendanceRecord.fromMap(row);
   }
@@ -67,6 +74,12 @@ class AttendanceService {
     if (record == null) {
       throw StateError('No open attendance record found for today.');
     }
+    if (record.status == 'leave_pending') {
+      throw StateError('You have a pending leave request for today.');
+    }
+    if (record.status == 'on_leave') {
+      throw StateError('Approved leave is active for today.');
+    }
     if (record.clockInAt == null) {
       throw StateError('Today does not have a clock-in record yet.');
     }
@@ -74,36 +87,35 @@ class AttendanceService {
       throw StateError('You are already clocked out for today.');
     }
 
-    final Map<String, dynamic> row =
-        (await _client
-                .from(tableName)
-                .update(<String, dynamic>{
-                  'clock_out': effectiveClockOutAt.toUtc().toIso8601String(),
-                  'clock_out_comment': comment,
-                  'clock_out_lat': latitude,
-                  'clock_out_lng': longitude,
-                  'status': 'completed',
-                })
-                .eq('id', record.id)
-                .select()
-                .single())
-            as Map<String, dynamic>;
+    final Map<String, dynamic> row = await _client
+        .from(tableName)
+        .update(<String, dynamic>{
+          'clock_out': effectiveClockOutAt.toUtc().toIso8601String(),
+          'clock_out_comment': comment,
+          'clock_out_lat': latitude,
+          'clock_out_lng': longitude,
+          'status': 'completed',
+        })
+        .eq('id', record.id)
+        .select()
+        .single();
 
     return SupabaseAttendanceRecord.fromMap(row);
   }
 
-  Future<SupabaseAttendanceRecord?> fetchTodaysAttendance({DateTime? date}) async {
+  Future<SupabaseAttendanceRecord?> fetchTodaysAttendance({
+    DateTime? date,
+  }) async {
     final WorkPulseUserProfile profile = await _requireCurrentProfile();
+    await syncAttendanceClassifications(profile: profile);
     final String workDate = _dateOnlyLabel(date ?? DateTime.now());
 
-    final Map<String, dynamic>? row =
-        (await _client
-                .from(tableName)
-                .select()
-                .eq('user_id', profile.id)
-                .eq('work_date', workDate)
-                .maybeSingle())
-            as Map<String, dynamic>?;
+    final Map<String, dynamic>? row = await _client
+        .from(tableName)
+        .select()
+        .eq('user_id', profile.id)
+        .eq('work_date', workDate)
+        .maybeSingle();
 
     if (row == null) {
       return null;
@@ -114,11 +126,14 @@ class AttendanceService {
 
   Future<List<AttendanceRecord>> fetchHistoryRecords() async {
     final WorkPulseUserProfile profile = await _requireCurrentProfile();
+    await syncAttendanceClassifications(profile: profile);
+    final String today = _dateOnlyLabel(DateTime.now());
 
     final List<dynamic> rows = await _client
         .from(tableName)
         .select()
         .eq('user_id', profile.id)
+        .lte('work_date', today)
         .order('work_date', ascending: false)
         .order('created_at', ascending: false);
 
@@ -133,15 +148,14 @@ class AttendanceService {
 
   Future<AttendanceRecord?> fetchHistoryRecordById(String id) async {
     final WorkPulseUserProfile profile = await _requireCurrentProfile();
+    await syncAttendanceClassifications(profile: profile);
 
-    final Map<String, dynamic>? row =
-        (await _client
-                .from(tableName)
-                .select()
-                .eq('user_id', profile.id)
-                .eq('id', id)
-                .maybeSingle())
-            as Map<String, dynamic>?;
+    final Map<String, dynamic>? row = await _client
+        .from(tableName)
+        .select()
+        .eq('user_id', profile.id)
+        .eq('id', id)
+        .maybeSingle();
 
     if (row == null) {
       return null;
@@ -150,8 +164,134 @@ class AttendanceService {
     return SupabaseAttendanceRecord.fromMap(row).toHistoryRecord();
   }
 
+  Future<void> syncAttendanceClassifications({
+    WorkPulseUserProfile? profile,
+    DateTime? now,
+  }) async {
+    final WorkPulseUserProfile activeProfile =
+        profile ?? await _requireCurrentProfile();
+    final DateTime today = _dateOnly(now ?? DateTime.now());
+
+    final List<dynamic> attendanceRows = await _client
+        .from(tableName)
+        .select()
+        .eq('user_id', activeProfile.id);
+
+    final List<Map<String, dynamic>> attendance = attendanceRows
+        .map((dynamic row) => Map<String, dynamic>.from(row as Map))
+        .where((Map<String, dynamic> row) {
+          final DateTime workDate = _dateOnly(
+            DateTime.parse(row['work_date'] as String),
+          );
+          return !workDate.isAfter(today);
+        })
+        .toList(growable: false);
+
+    final List<dynamic> leaveRows = await _client
+        .from(leaveTableName)
+        .select()
+        .eq('user_id', activeProfile.id)
+        .lte('start_date', _dateOnlyLabel(today));
+
+    final List<Map<String, dynamic>> leaveRequests = leaveRows
+        .map((dynamic row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+
+    final List<dynamic> correctionRows = await _client
+        .from(correctionTableName)
+        .select('attendance_record_id')
+        .eq('user_id', activeProfile.id)
+        .eq('status', 'pending');
+
+    final Set<String> pendingCorrectionAttendanceIds = correctionRows
+        .map((dynamic row) => Map<String, dynamic>.from(row as Map))
+        .map(
+          (Map<String, dynamic> row) => row['attendance_record_id'] as String?,
+        )
+        .whereType<String>()
+        .where((String id) => id.isNotEmpty)
+        .toSet();
+
+    final Map<String, Map<String, dynamic>> attendanceByDate =
+        <String, Map<String, dynamic>>{};
+    DateTime? earliestActivityDate;
+    for (final Map<String, dynamic> row in attendance) {
+      final DateTime workDate = _dateOnly(
+        DateTime.parse(row['work_date'] as String),
+      );
+      attendanceByDate[_dateOnlyLabel(workDate)] = row;
+      earliestActivityDate = _earliestDate(earliestActivityDate, workDate);
+    }
+    for (final Map<String, dynamic> row in leaveRequests) {
+      final DateTime startDate = _dateOnly(
+        DateTime.parse(row['start_date'] as String),
+      );
+      if (!startDate.isAfter(today)) {
+        earliestActivityDate = _earliestDate(earliestActivityDate, startDate);
+      }
+    }
+
+    for (final Map<String, dynamic> row in attendance) {
+      final DateTime workDate = _dateOnly(
+        DateTime.parse(row['work_date'] as String),
+      );
+      final String? targetStatus = _statusForExistingAttendance(
+        row: row,
+        workDate: workDate,
+        today: today,
+        leaveStatus: _leaveStatusForDate(leaveRequests, workDate),
+        hasPendingCorrection: pendingCorrectionAttendanceIds.contains(
+          row['id'] as String,
+        ),
+      );
+
+      if (targetStatus == null) {
+        await _client
+            .from(tableName)
+            .delete()
+            .eq('id', row['id'] as String)
+            .eq('user_id', activeProfile.id);
+        continue;
+      }
+
+      if (row['status'] != targetStatus) {
+        await _client
+            .from(tableName)
+            .update(<String, dynamic>{'status': targetStatus})
+            .eq('id', row['id'] as String)
+            .eq('user_id', activeProfile.id);
+      }
+    }
+
+    final DateTime startDate = _classificationStartDate(
+      earliestActivityDate: earliestActivityDate,
+      today: today,
+    );
+    DateTime cursor = startDate;
+    while (!cursor.isAfter(today)) {
+      final String dateKey = _dateOnlyLabel(cursor);
+      if (!attendanceByDate.containsKey(dateKey)) {
+        final String? status = _statusForMissingAttendance(
+          leaveStatus: _leaveStatusForDate(leaveRequests, cursor),
+          date: cursor,
+          today: today,
+        );
+        if (status != null) {
+          await _client.from(tableName).insert(<String, dynamic>{
+            'user_id': activeProfile.id,
+            'employee_id': activeProfile.employeeId,
+            'work_date': dateKey,
+            'status': status,
+          });
+        }
+      }
+      cursor = cursor.add(const Duration(days: 1));
+    }
+  }
+
   Future<WorkPulseUserProfile> _requireCurrentProfile() async {
-    final WorkPulseUserProfile? profile = await _authService.fetchCurrentProfile();
+    final WorkPulseUserProfile? profile = await _authService
+        .fetchCurrentProfile();
     if (profile == null) {
       throw StateError(
         'No employee profile found for the current user. Confirm the profiles trigger and test user are set up in Supabase.',
@@ -160,8 +300,131 @@ class AttendanceService {
     return profile;
   }
 
+  String? _statusForExistingAttendance({
+    required Map<String, dynamic> row,
+    required DateTime workDate,
+    required DateTime today,
+    required String? leaveStatus,
+    required bool hasPendingCorrection,
+  }) {
+    final bool hasClockIn = row['clock_in'] != null;
+    final bool hasClockOut = row['clock_out'] != null;
+
+    if (hasPendingCorrection) {
+      return 'correction_pending';
+    }
+
+    if (hasClockIn && hasClockOut) {
+      return 'completed';
+    }
+
+    if (leaveStatus == 'approved') {
+      return 'on_leave';
+    }
+    if (leaveStatus == 'pending') {
+      return 'leave_pending';
+    }
+
+    if (hasClockIn && !hasClockOut) {
+      return workDate.isBefore(today) ? 'missed_punch' : 'on_duty';
+    }
+
+    if (workDate.isBefore(today) && _isWorkday(workDate)) {
+      return 'absent';
+    }
+
+    return null;
+  }
+
+  String? _statusForMissingAttendance({
+    required String? leaveStatus,
+    required DateTime date,
+    required DateTime today,
+  }) {
+    if (leaveStatus == 'approved') {
+      return 'on_leave';
+    }
+    if (leaveStatus == 'pending') {
+      return 'leave_pending';
+    }
+    if (date.isBefore(today) && _isWorkday(date)) {
+      return 'absent';
+    }
+    return null;
+  }
+
+  String? _leaveStatusForDate(
+    List<Map<String, dynamic>> leaveRequests,
+    DateTime date,
+  ) {
+    bool hasPending = false;
+    bool hasRejected = false;
+    for (final Map<String, dynamic> request in leaveRequests) {
+      final DateTime startDate = _dateOnly(
+        DateTime.parse(request['start_date'] as String),
+      );
+      final DateTime endDate = _dateOnly(
+        DateTime.parse(request['end_date'] as String),
+      );
+      if (date.isBefore(startDate) || date.isAfter(endDate)) {
+        continue;
+      }
+
+      switch (request['status'] as String) {
+        case 'approved':
+          return 'approved';
+        case 'pending':
+          hasPending = true;
+          break;
+        case 'rejected':
+          hasRejected = true;
+          break;
+      }
+    }
+
+    if (hasPending) {
+      return 'pending';
+    }
+    if (hasRejected) {
+      return 'rejected';
+    }
+    return null;
+  }
+
+  DateTime _classificationStartDate({
+    required DateTime? earliestActivityDate,
+    required DateTime today,
+  }) {
+    if (earliestActivityDate == null) {
+      return today;
+    }
+
+    final DateTime lookbackStart = today.subtract(
+      const Duration(days: _classificationLookbackDays),
+    );
+    if (earliestActivityDate.isBefore(lookbackStart)) {
+      return lookbackStart;
+    }
+    return earliestActivityDate;
+  }
+
+  DateTime? _earliestDate(DateTime? current, DateTime candidate) {
+    if (current == null || candidate.isBefore(current)) {
+      return candidate;
+    }
+    return current;
+  }
+
+  bool _isWorkday(DateTime date) {
+    return date.weekday >= DateTime.monday && date.weekday <= DateTime.friday;
+  }
+
+  DateTime _dateOnly(DateTime dateTime) {
+    return DateTime(dateTime.year, dateTime.month, dateTime.day);
+  }
+
   String _dateOnlyLabel(DateTime dateTime) {
-    final DateTime localDate = dateTime.toLocal();
+    final DateTime localDate = _dateOnly(dateTime.toLocal());
     final String year = localDate.year.toString().padLeft(4, '0');
     final String month = localDate.month.toString().padLeft(2, '0');
     final String day = localDate.day.toString().padLeft(2, '0');
@@ -239,7 +502,9 @@ class SupabaseAttendanceRecord {
   }
 
   AttendanceRecord toHistoryRecord() {
-    final String clockInTimeLabel = clockInAt == null ? '--' : timeLabel(clockInAt!);
+    final String clockInTimeLabel = clockInAt == null
+        ? '--'
+        : timeLabel(clockInAt!);
     final String clockOutTimeLabel = clockOutAt == null
         ? '--'
         : timeLabel(clockOutAt!);

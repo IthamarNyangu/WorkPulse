@@ -62,6 +62,10 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
     if (!mounted) {
       return;
     }
+    if (SupabaseBootstrap.isInitialized) {
+      setState(() {});
+      return;
+    }
     setState(() {
       _syncStateFromStore();
     });
@@ -108,9 +112,46 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
         punchInAt: record?.clockInAt,
         punchOutAt: record?.clockOutAt,
       );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _syncStateFromBackendRecord(record);
+      });
     } catch (_) {
       // Keep the existing mock state if the backend attendance lookup fails.
     }
+  }
+
+  void _syncStateFromBackendRecord(SupabaseAttendanceRecord? record) {
+    _punchInAt = record?.clockInAt;
+    _punchOutAt = record?.clockOutAt;
+    _lastWorkedDuration = _workedDurationFor(record);
+
+    switch (record?.status) {
+      case 'on_duty':
+        _status = AttendanceStatus.onDuty;
+        return;
+      case 'leave_pending':
+        _status = AttendanceStatus.leavePending;
+        return;
+      case 'on_leave':
+        _status = AttendanceStatus.onLeave;
+        return;
+      default:
+        _status = AttendanceStatus.offDuty;
+    }
+  }
+
+  Duration? _workedDurationFor(SupabaseAttendanceRecord? record) {
+    if (record?.clockInAt == null) {
+      return null;
+    }
+    if (record!.clockOutAt != null &&
+        !record.clockOutAt!.isBefore(record.clockInAt!)) {
+      return record.clockOutAt!.difference(record.clockInAt!);
+    }
+    return null;
   }
 
   void _onPrimaryActionPressed() async {
@@ -123,19 +164,22 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
         ? ClockActionMode.clockIn
         : ClockActionMode.clockOut;
 
-    final ClockConfirmationResult? result = await Navigator.of(
-      context,
-    ).push<ClockConfirmationResult>(
-      MaterialPageRoute<ClockConfirmationResult>(
-        builder: (BuildContext context) => ClockConfirmationScreen(mode: mode),
-      ),
-    );
+    final ClockConfirmationResult? result = await Navigator.of(context)
+        .push<ClockConfirmationResult>(
+          MaterialPageRoute<ClockConfirmationResult>(
+            builder: (BuildContext context) =>
+                ClockConfirmationScreen(mode: mode),
+          ),
+        );
 
     if (!mounted || result == null) {
       return;
     }
 
     _store.applyClockConfirmationResult(result);
+    if (SupabaseBootstrap.isInitialized) {
+      await _loadAttendanceFromBackend();
+    }
   }
 
   Future<void> _openNotifications() async {
@@ -230,7 +274,9 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
   }
 
   SummaryModel _summaryForHome() {
-    final String punchInLabel = _punchInAt == null ? '--' : timeLabel(_punchInAt!);
+    final String punchInLabel = _punchInAt == null
+        ? '--'
+        : timeLabel(_punchInAt!);
     final String punchOutLabel = _punchOutAt == null
         ? '--'
         : timeLabel(_punchOutAt!);
@@ -291,7 +337,10 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
               Color(0x55000000),
               BlendMode.darken,
             ),
-            child: Image.asset('assets/images/workpulse-bg.png', fit: BoxFit.cover),
+            child: Image.asset(
+              'assets/images/workpulse-bg.png',
+              fit: BoxFit.cover,
+            ),
           ),
         ),
       ),
@@ -323,6 +372,9 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
           setState(() {
             _selectedNavIndex = index;
           });
+          if (index == 0 && SupabaseBootstrap.isInitialized) {
+            _loadAttendanceFromBackend();
+          }
         },
       ),
     );
@@ -352,7 +404,8 @@ class HomeTabContent extends StatelessWidget {
   final int unreadNotifications;
 
   bool get _showsPrimaryAction {
-    return status == AttendanceStatus.offDuty || status == AttendanceStatus.onDuty;
+    return status == AttendanceStatus.offDuty ||
+        status == AttendanceStatus.onDuty;
   }
 
   @override

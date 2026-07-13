@@ -222,8 +222,6 @@ class _AttendanceHistoryDetailScreenState
                       const SizedBox(height: 12),
                       const Divider(color: PulseClockColors.cardBorder),
                       const SizedBox(height: 12),
-                      DetailInfoRow(label: 'Record ID', value: record.id),
-                      const SizedBox(height: 10),
                       DetailInfoRow(
                         label: 'Day',
                         value: weekdayName(record.date),
