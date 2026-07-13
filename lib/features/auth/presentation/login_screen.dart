@@ -78,6 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: PulseClockColors.appBackground,
+      resizeToAvoidBottomInset: true,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -87,107 +88,128 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              PulseClockDimensions.horizontalPadding,
-              28,
-              PulseClockDimensions.horizontalPadding,
-              28,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'WorkPulse',
-                  style: PulseClockTextStyles.headerTitle.copyWith(fontSize: 34),
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              return SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.fromLTRB(
+                  PulseClockDimensions.horizontalPadding,
+                  28,
+                  PulseClockDimensions.horizontalPadding,
+                  28 + MediaQuery.viewInsetsOf(context).bottom,
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  'Sign in to connect attendance to your Supabase account.',
-                  style: PulseClockTextStyles.headerSubtitle,
-                ),
-                const SizedBox(height: 28),
-                SurfaceCard(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Account Login',
-                        style: PulseClockTextStyles.cardTitle.copyWith(
-                          fontSize: 22,
+                        'WorkPulse',
+                        style: PulseClockTextStyles.headerTitle.copyWith(
+                          fontSize: 34,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       Text(
-                        'Use an email and password from Supabase Authentication.',
-                        style: PulseClockTextStyles.cardSubtitle,
+                        'Sign in to connect attendance to your Supabase account.',
+                        style: PulseClockTextStyles.headerSubtitle,
                       ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        autofillHints: const <String>[AutofillHints.username],
-                        enabled: !_isSubmitting,
-                        decoration: _inputDecoration('Email'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        autofillHints: const <String>[AutofillHints.password],
-                        enabled: !_isSubmitting,
-                        decoration: _inputDecoration('Password'),
-                      ),
-                      if (_errorMessage != null) ...<Widget>[
-                        const SizedBox(height: 12),
-                        Text(
-                          _errorMessage!,
-                          style: PulseClockTextStyles.cardSubtitle.copyWith(
-                            color: const Color(0xFFB42318),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isSubmitting ? null : _login,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: PulseClockColors.actionBlue,
-                            foregroundColor: PulseClockColors.surface,
-                            disabledBackgroundColor: PulseClockColors.actionBlue
-                                .withOpacity(0.55),
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                            textStyle: PulseClockTextStyles.contextAction.copyWith(
-                              color: PulseClockColors.surface,
-                              fontSize: 17,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                PulseClockDimensions.cardRadius,
+                      const SizedBox(height: 28),
+                      SurfaceCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Account Login',
+                              style: PulseClockTextStyles.cardTitle.copyWith(
+                                fontSize: 22,
                               ),
                             ),
-                          ),
-                          child: _isSubmitting
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      PulseClockColors.surface,
+                            const SizedBox(height: 8),
+                            Text(
+                              'Use an email and password from Supabase Authentication.',
+                              style: PulseClockTextStyles.cardSubtitle,
+                            ),
+                            const SizedBox(height: 16),
+                            TextField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              autofillHints: const <String>[
+                                AutofillHints.username,
+                              ],
+                              enabled: !_isSubmitting,
+                              decoration: _inputDecoration('Email'),
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _passwordController,
+                              obscureText: true,
+                              autofillHints: const <String>[
+                                AutofillHints.password,
+                              ],
+                              enabled: !_isSubmitting,
+                              decoration: _inputDecoration('Password'),
+                            ),
+                            if (_errorMessage != null) ...<Widget>[
+                              const SizedBox(height: 12),
+                              Text(
+                                _errorMessage!,
+                                style: PulseClockTextStyles.cardSubtitle
+                                    .copyWith(
+                                      color: const Color(0xFFB42318),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ],
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _isSubmitting ? null : _login,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: PulseClockColors.actionBlue,
+                                  foregroundColor: PulseClockColors.surface,
+                                  disabledBackgroundColor: PulseClockColors
+                                      .actionBlue
+                                      .withOpacity(0.55),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 15,
+                                  ),
+                                  textStyle: PulseClockTextStyles.contextAction
+                                      .copyWith(
+                                        color: PulseClockColors.surface,
+                                        fontSize: 17,
+                                      ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      PulseClockDimensions.cardRadius,
                                     ),
                                   ),
-                                )
-                              : const Text('Sign In'),
+                                ),
+                                child: _isSubmitting
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                PulseClockColors.surface,
+                                              ),
+                                        ),
+                                      )
+                                    : const Text('Sign In'),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),

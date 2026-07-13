@@ -69,6 +69,29 @@ class ApprovalService {
         .toList(growable: false);
   }
 
+  Future<List<LeaveApprovalItem>> fetchReviewedLeaveApprovals() async {
+    await _requireReviewerProfile();
+
+    final List<dynamic> rows = await _client
+        .from(leaveTableName)
+        .select()
+        .neq('status', 'pending')
+        .order('updated_at', ascending: false);
+
+    final List<Map<String, dynamic>> requests = rows
+        .map((dynamic row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+    final Map<String, ApprovalEmployeeProfile> profiles =
+        await _profilesForRequests(requests);
+
+    return requests
+        .map(
+          (Map<String, dynamic> row) =>
+              _leaveApprovalFromMap(row, profiles[row['user_id'] as String]),
+        )
+        .toList(growable: false);
+  }
+
   Future<List<CorrectionApprovalItem>> fetchPendingCorrectionApprovals() async {
     await _requireReviewerProfile();
 
@@ -77,6 +100,35 @@ class ApprovalService {
         .select()
         .eq('status', 'pending')
         .order('created_at', ascending: true);
+
+    final List<Map<String, dynamic>> requests = rows
+        .map((dynamic row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+    final Map<String, ApprovalEmployeeProfile> profiles =
+        await _profilesForRequests(requests);
+    final Map<String, Map<String, dynamic>> attendanceById =
+        await _attendanceForCorrectionRequests(requests);
+
+    return requests
+        .map(
+          (Map<String, dynamic> row) => _correctionApprovalFromMap(
+            row,
+            profiles[row['user_id'] as String],
+            attendanceById[row['attendance_record_id'] as String?],
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<List<CorrectionApprovalItem>>
+  fetchReviewedCorrectionApprovals() async {
+    await _requireReviewerProfile();
+
+    final List<dynamic> rows = await _client
+        .from(correctionTableName)
+        .select()
+        .neq('status', 'pending')
+        .order('updated_at', ascending: false);
 
     final List<Map<String, dynamic>> requests = rows
         .map((dynamic row) => Map<String, dynamic>.from(row as Map))
@@ -393,6 +445,9 @@ class LeaveApprovalItem {
     required this.durationDays,
     required this.reason,
     required this.submittedAt,
+    required this.status,
+    this.reviewedAt,
+    this.reviewerNote,
   });
 
   final String id;
@@ -403,6 +458,9 @@ class LeaveApprovalItem {
   final int durationDays;
   final String reason;
   final DateTime submittedAt;
+  final LeaveRequestStatus status;
+  final DateTime? reviewedAt;
+  final String? reviewerNote;
 }
 
 class CorrectionApprovalItem {
@@ -415,10 +473,13 @@ class CorrectionApprovalItem {
     required this.correctionType,
     required this.reason,
     required this.submittedAt,
+    required this.status,
     this.correctedClockInAt,
     this.correctedClockOutAt,
     this.originalClockInAt,
     this.originalClockOutAt,
+    this.reviewedAt,
+    this.reviewerNote,
   });
 
   final String id;
@@ -429,11 +490,16 @@ class CorrectionApprovalItem {
   final CorrectionType correctionType;
   final String reason;
   final DateTime submittedAt;
+  final CorrectionRequestApprovalStatus status;
   final DateTime? correctedClockInAt;
   final DateTime? correctedClockOutAt;
   final DateTime? originalClockInAt;
   final DateTime? originalClockOutAt;
+  final DateTime? reviewedAt;
+  final String? reviewerNote;
 }
+
+enum CorrectionRequestApprovalStatus { pending, approved, rejected }
 
 LeaveApprovalItem _leaveApprovalFromMap(
   Map<String, dynamic> map,
@@ -453,6 +519,9 @@ LeaveApprovalItem _leaveApprovalFromMap(
     durationDays: (map['duration_days'] as num).toInt(),
     reason: (map['reason'] as String?) ?? '',
     submittedAt: DateTime.parse(map['created_at'] as String).toLocal(),
+    status: _leaveStatusFromValue(map['status'] as String),
+    reviewedAt: _parseDateTime(map['reviewed_at']),
+    reviewerNote: map['reviewer_note'] as String?,
   );
 }
 
@@ -480,10 +549,13 @@ CorrectionApprovalItem _correctionApprovalFromMap(
     correctionType: correctionType,
     reason: map['reason'] as String,
     submittedAt: DateTime.parse(map['created_at'] as String).toLocal(),
+    status: _correctionStatusFromValue(map['status'] as String),
     correctedClockInAt: _parseDateTime(map['corrected_clock_in']),
     correctedClockOutAt: _parseDateTime(map['corrected_clock_out']),
     originalClockInAt: _parseDateTime(attendanceRow?['clock_in']),
     originalClockOutAt: _parseDateTime(attendanceRow?['clock_out']),
+    reviewedAt: _parseDateTime(map['reviewed_at']),
+    reviewerNote: map['reviewer_note'] as String?,
   );
 }
 
@@ -506,6 +578,32 @@ LeaveType _leaveTypeFromValue(String value) {
       return LeaveType.other;
     default:
       throw ArgumentError('Unsupported leave type: $value');
+  }
+}
+
+LeaveRequestStatus _leaveStatusFromValue(String value) {
+  switch (value) {
+    case 'pending':
+      return LeaveRequestStatus.pendingApproval;
+    case 'approved':
+      return LeaveRequestStatus.approved;
+    case 'rejected':
+      return LeaveRequestStatus.rejected;
+    default:
+      throw ArgumentError('Unsupported leave request status: $value');
+  }
+}
+
+CorrectionRequestApprovalStatus _correctionStatusFromValue(String value) {
+  switch (value) {
+    case 'pending':
+      return CorrectionRequestApprovalStatus.pending;
+    case 'approved':
+      return CorrectionRequestApprovalStatus.approved;
+    case 'rejected':
+      return CorrectionRequestApprovalStatus.rejected;
+    default:
+      throw ArgumentError('Unsupported correction request status: $value');
   }
 }
 

@@ -19,6 +19,9 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
   List<LeaveApprovalItem> _leaveApprovals = <LeaveApprovalItem>[];
   List<CorrectionApprovalItem> _correctionApprovals =
       <CorrectionApprovalItem>[];
+  List<LeaveApprovalItem> _reviewedLeaveApprovals = <LeaveApprovalItem>[];
+  List<CorrectionApprovalItem> _reviewedCorrectionApprovals =
+      <CorrectionApprovalItem>[];
   bool _isLoading = true;
   String? _loadError;
   String? _actioningId;
@@ -29,24 +32,33 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
     _loadApprovals();
   }
 
-  Future<void> _loadApprovals() async {
-    setState(() {
-      _isLoading = true;
-      _loadError = null;
-    });
+  Future<void> _loadApprovals({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _isLoading = true;
+        _loadError = null;
+      });
+    }
 
     try {
       final List<LeaveApprovalItem> leaveApprovals = await _approvalService
           .fetchPendingLeaveApprovals();
       final List<CorrectionApprovalItem> correctionApprovals =
           await _approvalService.fetchPendingCorrectionApprovals();
+      final List<LeaveApprovalItem> reviewedLeaveApprovals =
+          await _approvalService.fetchReviewedLeaveApprovals();
+      final List<CorrectionApprovalItem> reviewedCorrectionApprovals =
+          await _approvalService.fetchReviewedCorrectionApprovals();
       if (!mounted) {
         return;
       }
       setState(() {
         _leaveApprovals = leaveApprovals;
         _correctionApprovals = correctionApprovals;
+        _reviewedLeaveApprovals = reviewedLeaveApprovals;
+        _reviewedCorrectionApprovals = reviewedCorrectionApprovals;
         _isLoading = false;
+        _actioningId = null;
       });
     } catch (error) {
       if (!mounted) {
@@ -55,7 +67,10 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
       setState(() {
         _leaveApprovals = <LeaveApprovalItem>[];
         _correctionApprovals = <CorrectionApprovalItem>[];
+        _reviewedLeaveApprovals = <LeaveApprovalItem>[];
+        _reviewedCorrectionApprovals = <CorrectionApprovalItem>[];
         _isLoading = false;
+        _actioningId = null;
         _loadError = error.toString();
       });
     }
@@ -93,7 +108,7 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
           reviewerNote: result.note,
         );
       }
-      await _loadApprovals();
+      await _loadApprovals(showLoading: false);
       if (!mounted) {
         return;
       }
@@ -155,7 +170,7 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
           reviewerNote: result.note,
         );
       }
-      await _loadApprovals();
+      await _loadApprovals(showLoading: false);
       if (!mounted) {
         return;
       }
@@ -285,9 +300,26 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final bool showingLeave = _selectedQueue == _ApprovalQueue.leave;
+    final bool showingCorrections =
+        _selectedQueue == _ApprovalQueue.corrections;
+    final List<Object> reviewedApprovals = <Object>[
+      ..._reviewedLeaveApprovals,
+      ..._reviewedCorrectionApprovals,
+    ];
+    reviewedApprovals.sort((Object a, Object b) {
+      final DateTime aDate = a is LeaveApprovalItem
+          ? (a.reviewedAt ?? a.submittedAt)
+          : ((a as CorrectionApprovalItem).reviewedAt ?? a.submittedAt);
+      final DateTime bDate = b is LeaveApprovalItem
+          ? (b.reviewedAt ?? b.submittedAt)
+          : ((b as CorrectionApprovalItem).reviewedAt ?? b.submittedAt);
+      return bDate.compareTo(aDate);
+    });
     final int selectedCount = showingLeave
         ? _leaveApprovals.length
-        : _correctionApprovals.length;
+        : showingCorrections
+        ? _correctionApprovals.length
+        : reviewedApprovals.length;
 
     return Scaffold(
       backgroundColor: PulseClockColors.appBackground,
@@ -375,19 +407,34 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
                                           );
                                         }
 
-                                        final CorrectionApprovalItem request =
-                                            _correctionApprovals[index];
-                                        return _CorrectionApprovalCard(
-                                          request: request,
-                                          isBusy: _actioningId == request.id,
-                                          onApprove: () => _reviewCorrection(
-                                            request,
-                                            approve: true,
-                                          ),
-                                          onReject: () => _reviewCorrection(
-                                            request,
-                                            approve: false,
-                                          ),
+                                        if (showingCorrections) {
+                                          final CorrectionApprovalItem request =
+                                              _correctionApprovals[index];
+                                          return _CorrectionApprovalCard(
+                                            request: request,
+                                            isBusy: _actioningId == request.id,
+                                            onApprove: () => _reviewCorrection(
+                                              request,
+                                              approve: true,
+                                            ),
+                                            onReject: () => _reviewCorrection(
+                                              request,
+                                              approve: false,
+                                            ),
+                                          );
+                                        }
+
+                                        final Object reviewed =
+                                            reviewedApprovals[index];
+                                        if (reviewed is LeaveApprovalItem) {
+                                          return _ReviewedLeaveApprovalCard(
+                                            request: reviewed,
+                                          );
+                                        }
+                                        return _ReviewedCorrectionApprovalCard(
+                                          request:
+                                              reviewed
+                                                  as CorrectionApprovalItem,
                                         );
                                       },
                                 ),
@@ -574,6 +621,124 @@ class _CorrectionApprovalCard extends StatelessWidget {
   }
 }
 
+class _ReviewedLeaveApprovalCard extends StatelessWidget {
+  const _ReviewedLeaveApprovalCard({required this.request});
+
+  final LeaveApprovalItem request;
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      borderRadius: 14,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _ApprovalEmployeeHeader(employee: request.employee),
+              ),
+              const SizedBox(width: 8),
+              _LeaveApprovalStatusBadge(status: request.status),
+            ],
+          ),
+          const SizedBox(height: 12),
+          DetailInfoRow(label: 'Request Type', value: 'Leave'),
+          const SizedBox(height: 8),
+          DetailInfoRow(label: 'Leave Type', value: request.type.label),
+          const SizedBox(height: 8),
+          DetailInfoRow(
+            label: request.durationDays == 1 ? 'Date' : 'Date Range',
+            value: _leaveDateRangeLabel(request.startDate, request.endDate),
+          ),
+          const SizedBox(height: 8),
+          DetailInfoRow(
+            label: 'Reviewed',
+            value: request.reviewedAt == null
+                ? '--'
+                : dateLabel(request.reviewedAt!),
+          ),
+          const SizedBox(height: 12),
+          _ApprovalTextBlock(title: 'Reason', value: request.reason),
+          if (request.reviewerNote != null &&
+              request.reviewerNote!.trim().isNotEmpty) ...<Widget>[
+            const SizedBox(height: 8),
+            _ApprovalTextBlock(
+              title: 'Reviewer Note',
+              value: request.reviewerNote!,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewedCorrectionApprovalCard extends StatelessWidget {
+  const _ReviewedCorrectionApprovalCard({required this.request});
+
+  final CorrectionApprovalItem request;
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      borderRadius: 14,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _ApprovalEmployeeHeader(employee: request.employee),
+              ),
+              const SizedBox(width: 8),
+              _CorrectionApprovalStatusBadge(status: request.status),
+            ],
+          ),
+          const SizedBox(height: 12),
+          DetailInfoRow(label: 'Request Type', value: 'Correction'),
+          const SizedBox(height: 8),
+          DetailInfoRow(
+            label: 'Affected Date',
+            value: dateLabel(request.affectedDate),
+          ),
+          const SizedBox(height: 8),
+          DetailInfoRow(
+            label: 'Correction Type',
+            value: request.correctionType.label,
+          ),
+          const SizedBox(height: 8),
+          DetailInfoRow(
+            label: 'Reviewed',
+            value: request.reviewedAt == null
+                ? '--'
+                : dateLabel(request.reviewedAt!),
+          ),
+          const SizedBox(height: 12),
+          _ApprovalTextBlock(
+            title: 'Issue Summary',
+            value: request.issueSummary,
+          ),
+          const SizedBox(height: 8),
+          _ApprovalTextBlock(title: 'Reason', value: request.reason),
+          if (request.reviewerNote != null &&
+              request.reviewerNote!.trim().isNotEmpty) ...<Widget>[
+            const SizedBox(height: 8),
+            _ApprovalTextBlock(
+              title: 'Reviewer Note',
+              value: request.reviewerNote!,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _ApprovalEmployeeHeader extends StatelessWidget {
   const _ApprovalEmployeeHeader({required this.employee});
 
@@ -739,7 +904,9 @@ class _NoApprovalsState extends StatelessWidget {
                 child: Text(
                   queue == _ApprovalQueue.leave
                       ? 'No leave requests need review.'
-                      : 'No correction requests need review.',
+                      : queue == _ApprovalQueue.corrections
+                      ? 'No correction requests need review.'
+                      : 'No reviewed approvals yet.',
                   style: PulseClockTextStyles.cardSubtitle.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -807,7 +974,7 @@ class _ReviewNoteResult {
   final String note;
 }
 
-enum _ApprovalQueue { leave, corrections }
+enum _ApprovalQueue { leave, corrections, reviewed }
 
 extension _ApprovalQueueLabels on _ApprovalQueue {
   String get label {
@@ -816,7 +983,125 @@ extension _ApprovalQueueLabels on _ApprovalQueue {
         return 'Leave';
       case _ApprovalQueue.corrections:
         return 'Corrections';
+      case _ApprovalQueue.reviewed:
+        return 'Reviewed';
     }
+  }
+}
+
+class _LeaveApprovalStatusBadge extends StatelessWidget {
+  const _LeaveApprovalStatusBadge({required this.status});
+
+  final LeaveRequestStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final _ApprovalStatusStyle style = _leaveStatusStyle(status);
+    return _ApprovalStatusPill(label: status.label, style: style);
+  }
+}
+
+class _CorrectionApprovalStatusBadge extends StatelessWidget {
+  const _CorrectionApprovalStatusBadge({required this.status});
+
+  final CorrectionRequestApprovalStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final _ApprovalStatusStyle style = _correctionStatusStyle(status);
+    return _ApprovalStatusPill(
+      label: _correctionStatusLabel(status),
+      style: style,
+    );
+  }
+}
+
+class _ApprovalStatusPill extends StatelessWidget {
+  const _ApprovalStatusPill({required this.label, required this.style});
+
+  final String label;
+  final _ApprovalStatusStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: style.backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: PulseClockTextStyles.cardSubtitle.copyWith(
+          color: style.foregroundColor,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+class _ApprovalStatusStyle {
+  const _ApprovalStatusStyle({
+    required this.backgroundColor,
+    required this.foregroundColor,
+  });
+
+  final Color backgroundColor;
+  final Color foregroundColor;
+}
+
+_ApprovalStatusStyle _leaveStatusStyle(LeaveRequestStatus status) {
+  switch (status) {
+    case LeaveRequestStatus.pendingApproval:
+      return const _ApprovalStatusStyle(
+        backgroundColor: Color(0x22B45309),
+        foregroundColor: Color(0xFFB45309),
+      );
+    case LeaveRequestStatus.approved:
+      return const _ApprovalStatusStyle(
+        backgroundColor: Color(0x2215803D),
+        foregroundColor: Color(0xFF0F8A43),
+      );
+    case LeaveRequestStatus.rejected:
+      return const _ApprovalStatusStyle(
+        backgroundColor: Color(0x22B91C1C),
+        foregroundColor: Color(0xFFB91C1C),
+      );
+  }
+}
+
+_ApprovalStatusStyle _correctionStatusStyle(
+  CorrectionRequestApprovalStatus status,
+) {
+  switch (status) {
+    case CorrectionRequestApprovalStatus.pending:
+      return const _ApprovalStatusStyle(
+        backgroundColor: Color(0x22B45309),
+        foregroundColor: Color(0xFFB45309),
+      );
+    case CorrectionRequestApprovalStatus.approved:
+      return const _ApprovalStatusStyle(
+        backgroundColor: Color(0x2215803D),
+        foregroundColor: Color(0xFF0F8A43),
+      );
+    case CorrectionRequestApprovalStatus.rejected:
+      return const _ApprovalStatusStyle(
+        backgroundColor: Color(0x22B91C1C),
+        foregroundColor: Color(0xFFB91C1C),
+      );
+  }
+}
+
+String _correctionStatusLabel(CorrectionRequestApprovalStatus status) {
+  switch (status) {
+    case CorrectionRequestApprovalStatus.pending:
+      return 'Pending';
+    case CorrectionRequestApprovalStatus.approved:
+      return 'Approved';
+    case CorrectionRequestApprovalStatus.rejected:
+      return 'Rejected';
   }
 }
 
