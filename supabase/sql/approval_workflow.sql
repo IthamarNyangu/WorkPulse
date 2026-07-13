@@ -47,6 +47,18 @@ to authenticated
 using (public.current_user_role() in ('supervisor', 'hr', 'admin'))
 with check (public.current_user_role() in ('supervisor', 'hr', 'admin'));
 
+drop policy if exists "attendance_delete_generated_own" on public.attendance_records;
+create policy "attendance_delete_generated_own"
+on public.attendance_records
+for delete
+to authenticated
+using (
+  auth.uid() = user_id
+  and clock_in is null
+  and clock_out is null
+  and status in ('on_leave', 'leave_pending')
+);
+
 drop policy if exists "leave_select_reviewer" on public.leave_requests;
 create policy "leave_select_reviewer"
 on public.leave_requests

@@ -33,6 +33,7 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
   bool _isLoadingRequest = false;
   bool _isLoadingBalance = false;
   bool _isSubmitting = false;
+  String? _submitErrorMessage;
 
   bool get _isEditing => _editingRequest != null;
   bool get _usesBackend => SupabaseBootstrap.isInitialized;
@@ -115,7 +116,7 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
         return;
       }
       setState(() {
-        _isSubmitting = false;
+        _isLoadingRequest = false;
       });
       ScaffoldMessenger.of(
         context,
@@ -232,6 +233,7 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
       if (_endDate.isBefore(_startDate)) {
         _endDate = _startDate;
       }
+      _submitErrorMessage = null;
     });
   }
 
@@ -260,6 +262,7 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
       if (_endDate.isBefore(_startDate)) {
         _startDate = _endDate;
       }
+      _submitErrorMessage = null;
     });
   }
 
@@ -274,12 +277,18 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
     final DateTime now = DateTime.now();
     final DateTime today = DateTime(now.year, now.month, now.day);
     if (_startDate.isBefore(today)) {
+      setState(() {
+        _submitErrorMessage = 'Start date cannot be in the past.';
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Start date cannot be in the past.')),
       );
       return;
     }
     if (_endDate.isBefore(_startDate)) {
+      setState(() {
+        _submitErrorMessage = 'End date cannot be before start date.';
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('End date cannot be before start date.')),
       );
@@ -288,6 +297,7 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
 
     setState(() {
       _isSubmitting = true;
+      _submitErrorMessage = null;
     });
 
     try {
@@ -331,16 +341,18 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
         return;
       }
       Navigator.of(context).pop(true);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
+      final String message = _friendlyLeaveSubmitError(error);
       setState(() {
         _isSubmitting = false;
+        _submitErrorMessage = message;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to submit leave request.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -406,6 +418,7 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
                                             : (_) {
                                                 setState(() {
                                                   _selectedType = type;
+                                                  _submitErrorMessage = null;
                                                 });
                                                 if (type ==
                                                     LeaveType.annualLeave) {
@@ -498,6 +511,12 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
                                   return null;
                                 },
                               ),
+                              if (_submitErrorMessage != null) ...<Widget>[
+                                const SizedBox(height: 12),
+                                _LeaveSubmitErrorMessage(
+                                  message: _submitErrorMessage!,
+                                ),
+                              ],
                               const SizedBox(height: 14),
                               SizedBox(
                                 width: double.infinity,
@@ -633,6 +652,46 @@ class AnnualLeaveBalanceCard extends StatelessWidget {
   }
 }
 
+class _LeaveSubmitErrorMessage extends StatelessWidget {
+  const _LeaveSubmitErrorMessage({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFDF4F4),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF3B6B6)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.info_outline_rounded,
+            color: Color(0xFFB42318),
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                color: const Color(0xFF8A1F17),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _LeaveFormLoadingState extends StatelessWidget {
   const _LeaveFormLoadingState();
 
@@ -647,6 +706,27 @@ class _LeaveFormLoadingState extends StatelessWidget {
       ),
     );
   }
+}
+
+String _friendlyLeaveSubmitError(Object error) {
+  if (error is StateError && error.message.isNotEmpty) {
+    return error.message;
+  }
+
+  final String message = error.toString().toLowerCase();
+  if (message.contains('attendance activity') ||
+      message.contains('clock_in') ||
+      message.contains('clock_out') ||
+      message.contains('completed')) {
+    return 'Leave cannot be requested for a date that already has attendance activity. Choose a date with no Clock In or Clock Out record.';
+  }
+
+  if (message.contains('row-level security') ||
+      message.contains('permission')) {
+    return 'WorkPulse could not save this leave request because your account does not have permission for that action.';
+  }
+
+  return 'Unable to submit leave request. Please check the dates and try again.';
 }
 
 int _leaveDurationDays(DateTime startDate, DateTime endDate) {
