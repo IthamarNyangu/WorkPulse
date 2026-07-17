@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:postgrest/postgrest.dart';
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/attendance/data/attendance_service.dart';
+import 'package:pulseclock/features/attendance/location/workpulse_location_service.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
@@ -23,21 +24,20 @@ class ClockConfirmationScreen extends StatefulWidget {
 class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
   static const Duration _loadingIndicatorDelay = Duration(milliseconds: 250);
 
-  static const ClockLocationSnapshot _mockLocation = ClockLocationSnapshot(
-    coordinates: '-15.3875, 28.3228',
-    accuracyMeters: 8.0,
-    isInsideGeofence: true,
-  );
-
+  final WorkPulseLocationService _locationService = WorkPulseLocationService();
   late final TextEditingController _commentController;
+  WorkPulseLocationResult? _locationResult;
+  Future<void>? _locationLoad;
   bool _isSubmitting = false;
   bool _showLoadingIndicator = false;
+  bool _isLoadingLocation = true;
   Timer? _loadingTimer;
 
   @override
   void initState() {
     super.initState();
     _commentController = TextEditingController();
+    _locationLoad = _loadLocation();
   }
 
   @override
@@ -45,6 +45,28 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
     _loadingTimer?.cancel();
     _commentController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadLocation() async {
+    setState(() {
+      _isLoadingLocation = true;
+    });
+
+    final WorkPulseLocationResult result = await _locationService
+        .captureCurrentLocation();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _locationResult = result;
+      _isLoadingLocation = false;
+    });
+  }
+
+  Future<void> _refreshLocation() async {
+    _locationLoad = _loadLocation();
+    await _locationLoad;
   }
 
   Future<void> _confirm() async {
@@ -174,6 +196,10 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
   }
 
   Future<void> _submitConfirmation() async {
+    if (_isLoadingLocation) {
+      await _locationLoad;
+    }
+
     if (!SupabaseBootstrap.isInitialized) {
       await Future<void>.value();
       return;
@@ -181,8 +207,10 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
 
     final AttendanceService attendanceService = AttendanceService();
     final (double? latitude, double? longitude) = _coordinatesFromSnapshot(
-      _mockLocation,
+      _locationResult?.snapshot,
     );
+    final double? accuracyMeters = _locationResult?.snapshot?.accuracyMeters;
+    final bool? isInsideGeofence = _locationResult?.snapshot?.isInsideGeofence;
     final String comment = _commentController.text.trim();
     final String? safeComment = comment.isEmpty ? null : comment;
     final DateTime now = DateTime.now();
@@ -194,6 +222,8 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
             clockInAt: now,
             latitude: latitude,
             longitude: longitude,
+            accuracyMeters: accuracyMeters,
+            isInsideGeofence: isInsideGeofence,
           );
       developer.log(
         'Clock in saved to Supabase: ${record.id}',
@@ -215,6 +245,8 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
           clockOutAt: now,
           latitude: latitude,
           longitude: longitude,
+          accuracyMeters: accuracyMeters,
+          isInsideGeofence: isInsideGeofence,
         );
     developer.log(
       'Clock out saved to Supabase: ${record.id}',
@@ -266,7 +298,11 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
               children: [
                 ConfirmationDateTimeHeader(now: now),
                 const SizedBox(height: 24),
-                ClockMapPlaceholderCard(snapshot: _mockLocation),
+                ClockMapPlaceholderCard(
+                  result: _locationResult,
+                  isLoading: _isLoadingLocation,
+                  onRetry: _isSubmitting ? null : _refreshLocation,
+                ),
                 const SizedBox(height: 16),
                 SurfaceCard(
                   child: Column(
@@ -384,7 +420,10 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
   }
 }
 
-(double?, double?) _coordinatesFromSnapshot(ClockLocationSnapshot snapshot) {
+(double?, double?) _coordinatesFromSnapshot(ClockLocationSnapshot? snapshot) {
+  if (snapshot == null) {
+    return (null, null);
+  }
   final List<String> parts = snapshot.coordinates.split(',');
   if (parts.length != 2) {
     return (null, null);
@@ -469,54 +508,160 @@ class ConfirmationDateTimeHeader extends StatelessWidget {
 }
 
 class ClockMapPlaceholderCard extends StatelessWidget {
-  const ClockMapPlaceholderCard({super.key, required this.snapshot});
+  const ClockMapPlaceholderCard({
+    super.key,
+    required this.result,
+    required this.isLoading,
+    required this.onRetry,
+  });
 
-  // Kept for hot-reload compatibility while snapshot details are hidden.
-  final ClockLocationSnapshot snapshot;
+  final WorkPulseLocationResult? result;
+  final bool isLoading;
+  final Future<void> Function()? onRetry;
 
   @override
   Widget build(BuildContext context) {
-    assert(snapshot.coordinates.isNotEmpty);
+    final ClockLocationSnapshot? snapshot = result?.snapshot;
+    final bool hasLocation = snapshot != null;
+    final bool isInside = snapshot?.isInsideGeofence ?? false;
+    final Color statusColor = hasLocation
+        ? (isInside
+              ? PulseClockColors.statusOnDutyAccent
+              : PulseClockColors.statusMissedAccent)
+        : PulseClockColors.statusPendingAccent;
 
     return SurfaceCard(
-      padding: EdgeInsets.zero,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(PulseClockDimensions.cardRadius),
-        child: Container(
-          height: 170,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFFD7E0EC), Color(0xFFC4D0E2)],
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              height: 130,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFFD7E0EC), Color(0xFFC4D0E2)],
+                ),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      hasLocation
+                          ? Icons.location_on_outlined
+                          : Icons.location_searching_rounded,
+                      size: 42,
+                      color: PulseClockColors.textSecondary,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Map Preview Placeholder',
+                      style: PulseClockTextStyles.cardTitle.copyWith(
+                        fontSize: 20,
+                        color: PulseClockColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Live map integration coming soon',
+                      style: PulseClockTextStyles.cardSubtitle,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.map_outlined,
-                  size: 46,
-                  color: PulseClockColors.textSecondary,
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Text(
+                'Location Snapshot',
+                style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 19),
+              ),
+              const Spacer(),
+              if (isLoading)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Map Preview Placeholder',
-                  style: PulseClockTextStyles.cardTitle.copyWith(
-                    fontSize: 20,
-                    color: PulseClockColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Live map integration coming soon',
-                  style: PulseClockTextStyles.cardSubtitle,
-                ),
-              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (isLoading)
+            Text(
+              'Getting current GPS location...',
+              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else if (hasLocation) ...<Widget>[
+            DetailInfoRow(label: 'Coordinates', value: snapshot.coordinates),
+            const SizedBox(height: 8),
+            DetailInfoRow(
+              label: 'GPS Accuracy',
+              value: '${snapshot.accuracyMeters.toStringAsFixed(1)} m',
+            ),
+            const SizedBox(height: 8),
+            DetailInfoRow(label: 'Geofence', value: snapshot.geofenceLabel),
+            const SizedBox(height: 8),
+            Text(
+              'Office radius: ${result!.config.radiusMeters.toStringAsFixed(0)} m',
+              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                color: PulseClockColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+          ] else ...<Widget>[
+            Text(
+              result?.message ?? 'Location is unavailable.',
+              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'You can still continue. WorkPulse will save this attendance action without GPS details.',
+              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                color: PulseClockColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+            if (onRetry != null) ...<Widget>[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Try Again'),
+              ),
+            ],
+          ],
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              hasLocation
+                  ? (isInside
+                        ? 'You appear to be inside the office geofence.'
+                        : 'You appear to be outside the office geofence.')
+                  : 'GPS status will be attached when available.',
+              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                color: statusColor,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

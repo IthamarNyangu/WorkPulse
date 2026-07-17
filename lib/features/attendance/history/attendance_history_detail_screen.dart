@@ -260,6 +260,40 @@ class _AttendanceHistoryDetailScreenState
                     ],
                   ),
                 ),
+                if (record.clockInLocation != null ||
+                    record.clockOutLocation != null) ...<Widget>[
+                  const SizedBox(height: 14),
+                  SurfaceCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Location Details',
+                          style: PulseClockTextStyles.cardTitle.copyWith(
+                            fontSize: 20,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (record.clockInLocation != null)
+                          _AttendanceLocationBlock(
+                            title: 'Clock In Location',
+                            snapshot: record.clockInLocation!,
+                          ),
+                        if (record.clockInLocation != null &&
+                            record.clockOutLocation != null) ...<Widget>[
+                          const SizedBox(height: 12),
+                          const Divider(color: PulseClockColors.cardBorder),
+                          const SizedBox(height: 12),
+                        ],
+                        if (record.clockOutLocation != null)
+                          _AttendanceLocationBlock(
+                            title: 'Clock Out Location',
+                            snapshot: record.clockOutLocation!,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
                 if (showCorrectionAction) ...<Widget>[
                   const SizedBox(height: 16),
                   SizedBox(
@@ -290,6 +324,61 @@ class _AttendanceHistoryDetailScreenState
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AttendanceLocationBlock extends StatelessWidget {
+  const _AttendanceLocationBlock({required this.title, required this.snapshot});
+
+  final String title;
+  final ClockLocationSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accentColor = snapshot.isInsideGeofence
+        ? PulseClockColors.statusOnDutyAccent
+        : PulseClockColors.statusMissedAccent;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: PulseClockTextStyles.cardSubtitle.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          snapshot.coordinates,
+          style: PulseClockTextStyles.cardSubtitle.copyWith(
+            color: PulseClockColors.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Accuracy: ${snapshot.accuracyMeters.toStringAsFixed(1)} m',
+          style: PulseClockTextStyles.cardSubtitle,
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: accentColor.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            snapshot.geofenceLabel,
+            style: PulseClockTextStyles.cardSubtitle.copyWith(
+              color: accentColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

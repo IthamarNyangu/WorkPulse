@@ -268,6 +268,12 @@ class ClockLocationSnapshot {
   final bool isInsideGeofence;
 }
 
+extension ClockLocationSnapshotLabels on ClockLocationSnapshot {
+  String get geofenceLabel {
+    return isInsideGeofence ? 'Inside Geofence' : 'Outside Geofence';
+  }
+}
+
 class ReminderConfig {
   const ReminderConfig({
     required this.workdayStartHour,
@@ -410,6 +416,8 @@ class AttendanceRecord {
     required this.workHours,
     required this.status,
     this.note,
+    this.clockInLocation,
+    this.clockOutLocation,
   });
 
   final String id;
@@ -419,6 +427,8 @@ class AttendanceRecord {
   final String workHours;
   final AttendanceRecordStatus status;
   final String? note;
+  final ClockLocationSnapshot? clockInLocation;
+  final ClockLocationSnapshot? clockOutLocation;
 
   AttendanceRecord copyWith({
     String? id,
@@ -428,6 +438,8 @@ class AttendanceRecord {
     String? workHours,
     AttendanceRecordStatus? status,
     String? note,
+    ClockLocationSnapshot? clockInLocation,
+    ClockLocationSnapshot? clockOutLocation,
   }) {
     return AttendanceRecord(
       id: id ?? this.id,
@@ -437,6 +449,8 @@ class AttendanceRecord {
       workHours: workHours ?? this.workHours,
       status: status ?? this.status,
       note: note ?? this.note,
+      clockInLocation: clockInLocation ?? this.clockInLocation,
+      clockOutLocation: clockOutLocation ?? this.clockOutLocation,
     );
   }
 }

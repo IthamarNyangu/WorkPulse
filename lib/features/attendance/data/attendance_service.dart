@@ -22,6 +22,8 @@ class AttendanceService {
     DateTime? clockInAt,
     double? latitude,
     double? longitude,
+    double? accuracyMeters,
+    bool? isInsideGeofence,
   }) async {
     final DateTime effectiveClockInAt = clockInAt ?? DateTime.now();
     final WorkPulseUserProfile profile = await _requireCurrentProfile();
@@ -42,20 +44,20 @@ class AttendanceService {
       throw StateError('Attendance for today is already completed.');
     }
 
-    final Map<String, dynamic> row = await _client
-        .from(tableName)
-        .insert(<String, dynamic>{
-          'user_id': profile.id,
-          'employee_id': profile.employeeId,
-          'work_date': _dateOnlyLabel(effectiveClockInAt),
-          'clock_in': effectiveClockInAt.toUtc().toIso8601String(),
-          'clock_in_comment': comment,
-          'clock_in_lat': latitude,
-          'clock_in_lng': longitude,
-          'status': 'on_duty',
-        })
-        .select()
-        .single();
+    final Map<String, dynamic> payload = <String, dynamic>{
+      'user_id': profile.id,
+      'employee_id': profile.employeeId,
+      'work_date': _dateOnlyLabel(effectiveClockInAt),
+      'clock_in': effectiveClockInAt.toUtc().toIso8601String(),
+      'clock_in_comment': comment,
+      'clock_in_lat': latitude,
+      'clock_in_lng': longitude,
+      'clock_in_accuracy_m': accuracyMeters,
+      'clock_in_inside_geofence': isInsideGeofence,
+      'status': 'on_duty',
+    };
+
+    final Map<String, dynamic> row = await _insertAttendance(payload);
 
     return SupabaseAttendanceRecord.fromMap(row);
   }
@@ -65,6 +67,8 @@ class AttendanceService {
     DateTime? clockOutAt,
     double? latitude,
     double? longitude,
+    double? accuracyMeters,
+    bool? isInsideGeofence,
   }) async {
     final DateTime effectiveClockOutAt = clockOutAt ?? DateTime.now();
     final SupabaseAttendanceRecord? record = await fetchTodaysAttendance(
@@ -87,18 +91,20 @@ class AttendanceService {
       throw StateError('You are already clocked out for today.');
     }
 
-    final Map<String, dynamic> row = await _client
-        .from(tableName)
-        .update(<String, dynamic>{
-          'clock_out': effectiveClockOutAt.toUtc().toIso8601String(),
-          'clock_out_comment': comment,
-          'clock_out_lat': latitude,
-          'clock_out_lng': longitude,
-          'status': 'completed',
-        })
-        .eq('id', record.id)
-        .select()
-        .single();
+    final Map<String, dynamic> payload = <String, dynamic>{
+      'clock_out': effectiveClockOutAt.toUtc().toIso8601String(),
+      'clock_out_comment': comment,
+      'clock_out_lat': latitude,
+      'clock_out_lng': longitude,
+      'clock_out_accuracy_m': accuracyMeters,
+      'clock_out_inside_geofence': isInsideGeofence,
+      'status': 'completed',
+    };
+
+    final Map<String, dynamic> row = await _updateAttendance(
+      recordId: record.id,
+      payload: payload,
+    );
 
     return SupabaseAttendanceRecord.fromMap(row);
   }
@@ -300,6 +306,63 @@ class AttendanceService {
     return profile;
   }
 
+  Future<Map<String, dynamic>> _insertAttendance(
+    Map<String, dynamic> payload,
+  ) async {
+    try {
+      return await _client.from(tableName).insert(payload).select().single();
+    } catch (error) {
+      if (!_looksLikeMissingGeofenceColumns(error)) {
+        rethrow;
+      }
+      return _client
+          .from(tableName)
+          .insert(_withoutGeofenceColumns(payload))
+          .select()
+          .single();
+    }
+  }
+
+  Future<Map<String, dynamic>> _updateAttendance({
+    required String recordId,
+    required Map<String, dynamic> payload,
+  }) async {
+    try {
+      return await _client
+          .from(tableName)
+          .update(payload)
+          .eq('id', recordId)
+          .select()
+          .single();
+    } catch (error) {
+      if (!_looksLikeMissingGeofenceColumns(error)) {
+        rethrow;
+      }
+      return _client
+          .from(tableName)
+          .update(_withoutGeofenceColumns(payload))
+          .eq('id', recordId)
+          .select()
+          .single();
+    }
+  }
+
+  bool _looksLikeMissingGeofenceColumns(Object error) {
+    final String message = error.toString().toLowerCase();
+    return message.contains('accuracy_m') ||
+        message.contains('inside_geofence') ||
+        message.contains('schema cache');
+  }
+
+  Map<String, dynamic> _withoutGeofenceColumns(Map<String, dynamic> payload) {
+    final Map<String, dynamic> safePayload = Map<String, dynamic>.of(payload);
+    safePayload.remove('clock_in_accuracy_m');
+    safePayload.remove('clock_in_inside_geofence');
+    safePayload.remove('clock_out_accuracy_m');
+    safePayload.remove('clock_out_inside_geofence');
+    return safePayload;
+  }
+
   String? _statusForExistingAttendance({
     required Map<String, dynamic> row,
     required DateTime workDate,
@@ -444,8 +507,12 @@ class SupabaseAttendanceRecord {
     this.clockOutComment,
     this.clockInLatitude,
     this.clockInLongitude,
+    this.clockInAccuracyMeters,
+    this.clockInInsideGeofence,
     this.clockOutLatitude,
     this.clockOutLongitude,
+    this.clockOutAccuracyMeters,
+    this.clockOutInsideGeofence,
     this.status,
     this.createdAt,
     this.updatedAt,
@@ -461,8 +528,12 @@ class SupabaseAttendanceRecord {
   final String? clockOutComment;
   final double? clockInLatitude;
   final double? clockInLongitude;
+  final double? clockInAccuracyMeters;
+  final bool? clockInInsideGeofence;
   final double? clockOutLatitude;
   final double? clockOutLongitude;
+  final double? clockOutAccuracyMeters;
+  final bool? clockOutInsideGeofence;
   final String? status;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -479,8 +550,12 @@ class SupabaseAttendanceRecord {
       clockOutComment: map['clock_out_comment'] as String?,
       clockInLatitude: _parseDouble(map['clock_in_lat']),
       clockInLongitude: _parseDouble(map['clock_in_lng']),
+      clockInAccuracyMeters: _parseDouble(map['clock_in_accuracy_m']),
+      clockInInsideGeofence: map['clock_in_inside_geofence'] as bool?,
       clockOutLatitude: _parseDouble(map['clock_out_lat']),
       clockOutLongitude: _parseDouble(map['clock_out_lng']),
+      clockOutAccuracyMeters: _parseDouble(map['clock_out_accuracy_m']),
+      clockOutInsideGeofence: map['clock_out_inside_geofence'] as bool?,
       status: map['status'] as String?,
       createdAt: _parseDateTime(map['created_at']),
       updatedAt: _parseDateTime(map['updated_at']),
@@ -518,6 +593,18 @@ class SupabaseAttendanceRecord {
       workHours: _workHoursLabel(workedDuration),
       status: _historyStatus,
       note: _historyNote,
+      clockInLocation: _locationSnapshot(
+        latitude: clockInLatitude,
+        longitude: clockInLongitude,
+        accuracyMeters: clockInAccuracyMeters,
+        isInsideGeofence: clockInInsideGeofence,
+      ),
+      clockOutLocation: _locationSnapshot(
+        latitude: clockOutLatitude,
+        longitude: clockOutLongitude,
+        accuracyMeters: clockOutAccuracyMeters,
+        isInsideGeofence: clockOutInsideGeofence,
+      ),
     );
   }
 
@@ -583,4 +670,22 @@ class SupabaseAttendanceRecord {
     }
     return notes.join('\n');
   }
+}
+
+ClockLocationSnapshot? _locationSnapshot({
+  required double? latitude,
+  required double? longitude,
+  required double? accuracyMeters,
+  required bool? isInsideGeofence,
+}) {
+  if (latitude == null || longitude == null) {
+    return null;
+  }
+
+  return ClockLocationSnapshot(
+    coordinates:
+        '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
+    accuracyMeters: accuracyMeters ?? 0,
+    isInsideGeofence: isInsideGeofence ?? false,
+  );
 }

@@ -38,8 +38,12 @@ create table public.attendance_records (
   clock_out_comment text,
   clock_in_lat double precision,
   clock_in_lng double precision,
+  clock_in_accuracy_m double precision,
+  clock_in_inside_geofence boolean,
   clock_out_lat double precision,
   clock_out_lng double precision,
+  clock_out_accuracy_m double precision,
+  clock_out_inside_geofence boolean,
   status text not null check (
     status in (
       'on_duty',
