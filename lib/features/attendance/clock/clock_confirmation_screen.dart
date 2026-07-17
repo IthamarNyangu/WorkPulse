@@ -286,39 +286,40 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
         ),
         child: SafeArea(
           top: false,
-          child: SingleChildScrollView(
+          child: Padding(
             padding: const EdgeInsets.fromLTRB(
               PulseClockDimensions.horizontalPadding,
-              PulseClockDimensions.topPadding,
+              12,
               PulseClockDimensions.horizontalPadding,
-              28,
+              12,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ConfirmationDateTimeHeader(now: now),
-                const SizedBox(height: 24),
+                const SizedBox(height: 12),
                 ClockMapPlaceholderCard(
                   result: _locationResult,
                   isLoading: _isLoadingLocation,
                   onRetry: _isSubmitting ? null : _refreshLocation,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
                 SurfaceCard(
+                  padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Comment (Optional)',
                         style: PulseClockTextStyles.cardTitle.copyWith(
-                          fontSize: 20,
+                          fontSize: 18,
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       TextField(
                         controller: _commentController,
                         enabled: !_isSubmitting,
-                        maxLines: 3,
+                        maxLines: 2,
                         decoration: InputDecoration(
                           hintText: 'Add a note for this attendance action',
                           hintStyle: const TextStyle(
@@ -326,7 +327,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
                           ),
                           filled: true,
                           fillColor: PulseClockColors.surfaceMuted,
-                          contentPadding: const EdgeInsets.all(14),
+                          contentPadding: const EdgeInsets.all(12),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: const BorderSide(
@@ -351,7 +352,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -364,10 +365,10 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
                       ),
                       disabledForegroundColor: PulseClockColors.surface,
                       textStyle: PulseClockTextStyles.primaryAction.copyWith(
-                        fontSize: 20,
+                        fontSize: 18,
                       ),
                       padding: const EdgeInsets.symmetric(
-                        vertical: 16,
+                        vertical: 13,
                         horizontal: 18,
                       ),
                       shape: RoundedRectangleBorder(
@@ -382,7 +383,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
@@ -397,10 +398,10 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
                           .onBackgroundSecondary
                           .withOpacity(0.75),
                       disabledBackgroundColor: const Color(0x16000000),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
                       textStyle: PulseClockTextStyles.contextAction.copyWith(
                         color: PulseClockColors.onBackgroundPrimary,
-                        fontSize: 17,
+                        fontSize: 15,
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(
@@ -488,17 +489,17 @@ class ConfirmationDateTimeHeader extends StatelessWidget {
           Text(
             timeLabel(now),
             style: PulseClockTextStyles.timeOnBackground.copyWith(
-              fontSize: 34,
+              fontSize: 30,
               color: PulseClockColors.onBackgroundPrimary,
               letterSpacing: -0.6,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 1),
           Text(
             '$weekdayShort ${dateLabel(now)}',
             style: PulseClockTextStyles.weekdayOnBackground.copyWith(
               color: PulseClockColors.onBackgroundPrimary,
-              fontSize: 16,
+              fontSize: 15,
             ),
           ),
         ],
@@ -531,14 +532,14 @@ class ClockMapPlaceholderCard extends StatelessWidget {
         : PulseClockColors.statusPendingAccent;
 
     return SurfaceCard(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             child: Container(
-              height: 130,
+              height: 74,
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
@@ -554,33 +555,28 @@ class ClockMapPlaceholderCard extends StatelessWidget {
                       hasLocation
                           ? Icons.location_on_outlined
                           : Icons.location_searching_rounded,
-                      size: 42,
+                      size: 28,
                       color: PulseClockColors.textSecondary,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     Text(
                       'Map Preview Placeholder',
                       style: PulseClockTextStyles.cardTitle.copyWith(
-                        fontSize: 20,
+                        fontSize: 17,
                         color: PulseClockColors.textPrimary,
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Live map integration coming soon',
-                      style: PulseClockTextStyles.cardSubtitle,
                     ),
                   ],
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Row(
             children: [
               Text(
                 'Location Snapshot',
-                style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 19),
+                style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 17),
               ),
               const Spacer(),
               if (isLoading)
@@ -591,7 +587,7 @@ class ClockMapPlaceholderCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 7),
           if (isLoading)
             Text(
               'Getting current GPS location...',
@@ -600,21 +596,24 @@ class ClockMapPlaceholderCard extends StatelessWidget {
               ),
             )
           else if (hasLocation) ...<Widget>[
-            DetailInfoRow(label: 'Coordinates', value: snapshot.coordinates),
-            const SizedBox(height: 8),
-            DetailInfoRow(
+            _CompactLocationRow(
+              label: 'Coordinates',
+              value: snapshot.coordinates,
+            ),
+            const SizedBox(height: 5),
+            _CompactLocationRow(
               label: 'GPS Accuracy',
               value: '${snapshot.accuracyMeters.toStringAsFixed(1)} m',
             ),
-            const SizedBox(height: 8),
-            DetailInfoRow(label: 'Geofence', value: snapshot.geofenceLabel),
-            const SizedBox(height: 8),
-            Text(
-              'Office radius: ${result!.config.radiusMeters.toStringAsFixed(0)} m',
-              style: PulseClockTextStyles.cardSubtitle.copyWith(
-                color: PulseClockColors.textSecondary,
-                fontSize: 13,
-              ),
+            const SizedBox(height: 5),
+            _CompactLocationRow(
+              label: 'Geofence',
+              value: snapshot.geofenceLabel,
+            ),
+            const SizedBox(height: 5),
+            _CompactLocationRow(
+              label: 'Office Radius',
+              value: '${result!.config.radiusMeters.toStringAsFixed(0)} m',
             ),
           ] else ...<Widget>[
             Text(
@@ -623,16 +622,16 @@ class ClockMapPlaceholderCard extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               'You can still continue. WorkPulse will save this attendance action without GPS details.',
               style: PulseClockTextStyles.cardSubtitle.copyWith(
                 color: PulseClockColors.textSecondary,
-                fontSize: 13,
+                fontSize: 12,
               ),
             ),
             if (onRetry != null) ...<Widget>[
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh_rounded, size: 18),
@@ -640,10 +639,10 @@ class ClockMapPlaceholderCard extends StatelessWidget {
               ),
             ],
           ],
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             decoration: BoxDecoration(
               color: statusColor.withOpacity(0.12),
               borderRadius: BorderRadius.circular(12),
@@ -657,12 +656,47 @@ class ClockMapPlaceholderCard extends StatelessWidget {
               style: PulseClockTextStyles.cardSubtitle.copyWith(
                 color: statusColor,
                 fontWeight: FontWeight.w700,
-                fontSize: 13,
+                fontSize: 12,
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CompactLocationRow extends StatelessWidget {
+  const _CompactLocationRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: PulseClockTextStyles.cardSubtitle.copyWith(fontSize: 13),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: PulseClockTextStyles.cardSubtitle.copyWith(
+              color: PulseClockColors.textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
