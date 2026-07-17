@@ -297,7 +297,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ConfirmationDateTimeHeader(now: now),
-                const SizedBox(height: 12),
+                const SizedBox(height: 18),
                 ClockMapPlaceholderCard(
                   result: _locationResult,
                   isLoading: _isLoadingLocation,
