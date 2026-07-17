@@ -15,7 +15,7 @@ StatusCardModel statusCardFor(AttendanceStatus status) {
     case AttendanceStatus.onDuty:
       return const StatusCardModel(
         title: 'On Duty',
-        subtitle: 'You clocked in at 09:15 AM',
+        subtitle: 'You clocked in at 09:15',
         icon: Icons.check_circle_outline,
         backgroundColor: PulseClockColors.statusOnDutyBg,
         accentColor: PulseClockColors.statusOnDutyAccent,
@@ -170,15 +170,15 @@ List<AttendanceRecord> attendanceHistoryRecords({DateTime? now}) {
     AttendanceRecord(
       id: 'WRK-1001',
       date: today,
-      clockInTime: '08:01 AM',
-      clockOutTime: '05:10 PM',
+      clockInTime: '08:01',
+      clockOutTime: '17:10',
       workHours: '9h 9m',
       status: AttendanceRecordStatus.completed,
     ),
     AttendanceRecord(
       id: 'WRK-1002',
       date: today.subtract(const Duration(days: 1)),
-      clockInTime: '08:08 AM',
+      clockInTime: '08:08',
       clockOutTime: '--',
       workHours: '--',
       status: AttendanceRecordStatus.missedPunch,
@@ -187,8 +187,8 @@ List<AttendanceRecord> attendanceHistoryRecords({DateTime? now}) {
     AttendanceRecord(
       id: 'WRK-1003',
       date: today.subtract(const Duration(days: 2)),
-      clockInTime: '08:15 AM',
-      clockOutTime: '04:59 PM',
+      clockInTime: '08:15',
+      clockOutTime: '16:59',
       workHours: '8h 44m',
       status: AttendanceRecordStatus.correctionPending,
       note: 'Correction requested for late Clock In.',
@@ -205,23 +205,23 @@ List<AttendanceRecord> attendanceHistoryRecords({DateTime? now}) {
     AttendanceRecord(
       id: 'WRK-1005',
       date: today.subtract(const Duration(days: 4)),
-      clockInTime: '07:56 AM',
-      clockOutTime: '05:03 PM',
+      clockInTime: '07:56',
+      clockOutTime: '17:03',
       workHours: '9h 7m',
       status: AttendanceRecordStatus.completed,
     ),
     AttendanceRecord(
       id: 'WRK-1006',
       date: today.subtract(const Duration(days: 6)),
-      clockInTime: '08:09 AM',
-      clockOutTime: '05:02 PM',
+      clockInTime: '08:09',
+      clockOutTime: '17:02',
       workHours: '8h 53m',
       status: AttendanceRecordStatus.completed,
     ),
     AttendanceRecord(
       id: 'WRK-1007',
       date: today.subtract(const Duration(days: 8)),
-      clockInTime: '08:21 AM',
+      clockInTime: '08:21',
       clockOutTime: '--',
       workHours: '--',
       status: AttendanceRecordStatus.missedPunch,
@@ -230,16 +230,18 @@ List<AttendanceRecord> attendanceHistoryRecords({DateTime? now}) {
     AttendanceRecord(
       id: 'WRK-1008',
       date: today.subtract(const Duration(days: 10)),
-      clockInTime: '08:02 AM',
-      clockOutTime: '04:57 PM',
+      clockInTime: '08:02',
+      clockOutTime: '16:57',
       workHours: '8h 55m',
       status: AttendanceRecordStatus.completed,
     ),
     AttendanceRecord(
       id: 'WRK-1009',
-      date: DateTime(today.year, today.month, 1).subtract(
-        const Duration(days: 2),
-      ),
+      date: DateTime(
+        today.year,
+        today.month,
+        1,
+      ).subtract(const Duration(days: 2)),
       clockInTime: '--',
       clockOutTime: '--',
       workHours: '--',
@@ -248,31 +250,37 @@ List<AttendanceRecord> attendanceHistoryRecords({DateTime? now}) {
     ),
     AttendanceRecord(
       id: 'WRK-1010',
-      date: DateTime(today.year, today.month, 1).subtract(
-        const Duration(days: 4),
-      ),
-      clockInTime: '08:05 AM',
-      clockOutTime: '05:00 PM',
+      date: DateTime(
+        today.year,
+        today.month,
+        1,
+      ).subtract(const Duration(days: 4)),
+      clockInTime: '08:05',
+      clockOutTime: '17:00',
       workHours: '8h 55m',
       status: AttendanceRecordStatus.completed,
     ),
     AttendanceRecord(
       id: 'WRK-1011',
-      date: DateTime(today.year, today.month, 1).subtract(
-        const Duration(days: 6),
-      ),
-      clockInTime: '08:33 AM',
-      clockOutTime: '05:04 PM',
+      date: DateTime(
+        today.year,
+        today.month,
+        1,
+      ).subtract(const Duration(days: 6)),
+      clockInTime: '08:33',
+      clockOutTime: '17:04',
       workHours: '8h 31m',
       status: AttendanceRecordStatus.correctionPending,
       note: 'Correction submitted for late Clock In.',
     ),
     AttendanceRecord(
       id: 'WRK-1012',
-      date: DateTime(today.year, today.month, 1).subtract(
-        const Duration(days: 8),
-      ),
-      clockInTime: '08:11 AM',
+      date: DateTime(
+        today.year,
+        today.month,
+        1,
+      ).subtract(const Duration(days: 8)),
+      clockInTime: '08:11',
       clockOutTime: '--',
       workHours: '--',
       status: AttendanceRecordStatus.missedPunch,
@@ -297,23 +305,23 @@ List<AttendanceRecord> filterAttendanceHistoryRecords({
   final _DateWindow window = _windowForDateRange(today, dateRange);
   final AttendanceRecordStatus? selectedStatus = statusFilter.statusOrNull;
 
-  return records.where((AttendanceRecord record) {
-    final DateTime recordDate = _dateOnly(record.date);
-    final bool inWindow =
-        !recordDate.isBefore(window.start) && recordDate.isBefore(window.end);
-    final bool statusMatches =
-        selectedStatus == null || record.status == selectedStatus;
-    return inWindow && statusMatches;
-  }).toList(growable: false);
+  return records
+      .where((AttendanceRecord record) {
+        final DateTime recordDate = _dateOnly(record.date);
+        final bool inWindow =
+            !recordDate.isBefore(window.start) &&
+            recordDate.isBefore(window.end);
+        final bool statusMatches =
+            selectedStatus == null || record.status == selectedStatus;
+        return inWindow && statusMatches;
+      })
+      .toList(growable: false);
 }
 
 _DateWindow _windowForDateRange(DateTime today, HistoryDateRangeFilter filter) {
   switch (filter) {
     case HistoryDateRangeFilter.today:
-      return _DateWindow(
-        start: today,
-        end: today.add(const Duration(days: 1)),
-      );
+      return _DateWindow(start: today, end: today.add(const Duration(days: 1)));
     case HistoryDateRangeFilter.yesterday:
       final DateTime start = today.subtract(const Duration(days: 1));
       return _DateWindow(start: start, end: start.add(const Duration(days: 1)));
@@ -322,7 +330,10 @@ _DateWindow _windowForDateRange(DateTime today, HistoryDateRangeFilter filter) {
       return _DateWindow(start: start, end: start.add(const Duration(days: 7)));
     case HistoryDateRangeFilter.lastWeek:
       final DateTime end = today.subtract(Duration(days: today.weekday - 1));
-      return _DateWindow(start: end.subtract(const Duration(days: 7)), end: end);
+      return _DateWindow(
+        start: end.subtract(const Duration(days: 7)),
+        end: end,
+      );
     case HistoryDateRangeFilter.thisMonth:
       final DateTime start = DateTime(today.year, today.month, 1);
       final DateTime end = DateTime(today.year, today.month + 1, 1);
@@ -384,12 +395,12 @@ class WorkPulseMockStore extends ChangeNotifier {
 
   List<AttendanceRecord> get historyAttendanceRecords {
     final DateTime today = _dateOnly(DateTime.now());
-    final List<AttendanceRecord> records = _attendanceRecords.where((
-      AttendanceRecord record,
-    ) {
-      final DateTime recordDate = _dateOnly(record.date);
-      return !recordDate.isAfter(today);
-    }).toList(growable: false);
+    final List<AttendanceRecord> records = _attendanceRecords
+        .where((AttendanceRecord record) {
+          final DateTime recordDate = _dateOnly(record.date);
+          return !recordDate.isAfter(today);
+        })
+        .toList(growable: false);
     return List<AttendanceRecord>.unmodifiable(records);
   }
 
@@ -456,9 +467,7 @@ class WorkPulseMockStore extends ChangeNotifier {
     records.sort((AttendanceRecord a, AttendanceRecord b) {
       return a.date.compareTo(b.date);
     });
-    return List<AttendanceRecord>.unmodifiable(
-      records,
-    );
+    return List<AttendanceRecord>.unmodifiable(records);
   }
 
   List<WorkPulseNotification> get notifications {
@@ -584,10 +593,7 @@ class WorkPulseMockStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void syncLiveAttendance({
-    DateTime? punchInAt,
-    DateTime? punchOutAt,
-  }) {
+  void syncLiveAttendance({DateTime? punchInAt, DateTime? punchOutAt}) {
     _livePunchInAt = punchInAt;
     _livePunchOutAt = punchOutAt;
 
@@ -621,7 +627,8 @@ class WorkPulseMockStore extends ChangeNotifier {
     } else {
       _liveAttendanceStatus = AttendanceStatus.offDuty;
       _livePunchOutAt = result.timestamp;
-      if (_livePunchInAt != null && !_livePunchOutAt!.isBefore(_livePunchInAt!)) {
+      if (_livePunchInAt != null &&
+          !_livePunchOutAt!.isBefore(_livePunchInAt!)) {
         _lastWorkedDuration = _livePunchOutAt!.difference(_livePunchInAt!);
       } else {
         _lastWorkedDuration = Duration.zero;
@@ -645,7 +652,9 @@ class WorkPulseMockStore extends ChangeNotifier {
       attendanceRecordId,
     );
     if (existingRecord == null) {
-      throw ArgumentError('Attendance record not found for ID: $attendanceRecordId');
+      throw ArgumentError(
+        'Attendance record not found for ID: $attendanceRecordId',
+      );
     }
 
     if (existingRequestId != null) {
@@ -685,7 +694,8 @@ class WorkPulseMockStore extends ChangeNotifier {
       }
     }
 
-    final String requestId = 'CR-${_correctionSequence.toString().padLeft(4, '0')}';
+    final String requestId =
+        'CR-${_correctionSequence.toString().padLeft(4, '0')}';
     _correctionSequence += 1;
 
     final CorrectionRequest request = CorrectionRequest(
@@ -703,9 +713,7 @@ class WorkPulseMockStore extends ChangeNotifier {
 
     _correctionRequests.insert(0, request);
     _rebuildAttendanceRecords();
-    _resolveNotificationSilently(
-      _missedPunchReminderId(attendanceRecordId),
-    );
+    _resolveNotificationSilently(_missedPunchReminderId(attendanceRecordId));
     notifyListeners();
 
     return request;
@@ -790,10 +798,7 @@ class WorkPulseMockStore extends ChangeNotifier {
     final LeaveRequest removed = _leaveRequests.removeAt(index);
     _rebuildAttendanceRecords();
     _resolveNotificationSilently(
-      _leaveUpdateReminderId(
-        removed.id,
-        LeaveRequestStatus.pendingApproval,
-      ),
+      _leaveUpdateReminderId(removed.id, LeaveRequestStatus.pendingApproval),
     );
     notifyListeners();
     return removed;
@@ -820,7 +825,7 @@ class WorkPulseMockStore extends ChangeNotifier {
         reason: 'Submitted for manager review.',
         status: CorrectionRequestStatus.pending,
         submittedAt: DateTime.now().subtract(const Duration(hours: 6)),
-        correctedClockInTime: '08:00 AM',
+        correctedClockInTime: '08:00',
       ),
     );
     _correctionSequence = 2;
@@ -886,7 +891,10 @@ class WorkPulseMockStore extends ChangeNotifier {
     });
 
     for (final LeaveRequest request in orderedRequests) {
-      final List<DateTime> dates = _datesInRange(request.startDate, request.endDate);
+      final List<DateTime> dates = _datesInRange(
+        request.startDate,
+        request.endDate,
+      );
       for (final DateTime date in dates) {
         _applyLeaveRequestForDate(request: request, date: date, today: today);
       }
@@ -973,7 +981,8 @@ class WorkPulseMockStore extends ChangeNotifier {
     }
 
     final AttendanceRecord? missedRecord = _yesterdayMissedPunchRecord();
-    if (missedRecord != null && _shouldAddMissedPunchReminder(now: now, today: today)) {
+    if (missedRecord != null &&
+        _shouldAddMissedPunchReminder(now: now, today: today)) {
       final DateTime reminderTime = DateTime(
         today.year,
         today.month,
@@ -985,7 +994,8 @@ class WorkPulseMockStore extends ChangeNotifier {
           id: _missedPunchReminderId(missedRecord.id),
           type: WorkPulseNotificationType.missedPunchReminder,
           title: 'Missed Punch Reminder',
-          message: 'Yesterday\'s attendance is incomplete. Submit a correction.',
+          message:
+              'Yesterday\'s attendance is incomplete. Submit a correction.',
           timestamp: reminderTime,
           actionLabel: 'Request Correction',
           navigationTarget: NotificationNavigationTarget.correctionList,
@@ -1044,7 +1054,10 @@ class WorkPulseMockStore extends ChangeNotifier {
     );
   }
 
-  bool _shouldAddClockInReminder({required DateTime now, required DateTime today}) {
+  bool _shouldAddClockInReminder({
+    required DateTime now,
+    required DateTime today,
+  }) {
     if (!_isInsideGeofence ||
         effectiveHomeAttendanceStatus != AttendanceStatus.offDuty) {
       return false;
@@ -1192,7 +1205,9 @@ class WorkPulseMockStore extends ChangeNotifier {
     final int index = _attendanceRecords.indexWhere(
       (AttendanceRecord record) => _dateOnly(record.date) == date,
     );
-    final AttendanceRecord? existing = index >= 0 ? _attendanceRecords[index] : null;
+    final AttendanceRecord? existing = index >= 0
+        ? _attendanceRecords[index]
+        : null;
     final bool hasClockIn = existing != null && existing.clockInTime != '--';
     final bool hasClockOut = existing != null && existing.clockOutTime != '--';
 

@@ -138,6 +138,7 @@ class _CorrectionFormScreenState extends State<CorrectionFormScreen> {
     final TimeOfDay? selected = await showTimePicker(
       context: context,
       initialTime: initialTime,
+      builder: _timePickerBuilder,
     );
     if (selected == null || !mounted) {
       return;
@@ -153,6 +154,7 @@ class _CorrectionFormScreenState extends State<CorrectionFormScreen> {
     final TimeOfDay? selected = await showTimePicker(
       context: context,
       initialTime: initialTime,
+      builder: _timePickerBuilder,
     );
     if (selected == null || !mounted) {
       return;
@@ -551,16 +553,39 @@ class _TimeField extends StatelessWidget {
   }
 }
 
+Widget _timePickerBuilder(BuildContext context, Widget? child) {
+  return MediaQuery(
+    data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+    child: child ?? const SizedBox.shrink(),
+  );
+}
+
 TimeOfDay? _parseTimeOrDefault(String value) {
-  final RegExp expression = RegExp(r'^(\d{1,2}):(\d{2})\s?(AM|PM)$');
-  final Match? match = expression.firstMatch(value.trim().toUpperCase());
-  if (match == null) {
+  final String text = value.trim().toUpperCase();
+  final RegExp twentyFourHourExpression = RegExp(r'^(\d{1,2}):(\d{2})$');
+  final Match? twentyFourHourMatch = twentyFourHourExpression.firstMatch(text);
+  if (twentyFourHourMatch != null) {
+    final int hour = int.parse(twentyFourHourMatch.group(1)!);
+    final int minute = int.parse(twentyFourHourMatch.group(2)!);
+    if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+      return TimeOfDay(hour: hour, minute: minute);
+    }
     return null;
   }
 
-  int hour = int.parse(match.group(1)!);
-  final int minute = int.parse(match.group(2)!);
-  final String period = match.group(3)!;
+  final RegExp twelveHourExpression = RegExp(r'^(\d{1,2}):(\d{2})\s?(AM|PM)$');
+  final Match? twelveHourMatch = twelveHourExpression.firstMatch(text);
+  if (twelveHourMatch == null) {
+    return null;
+  }
+
+  int hour = int.parse(twelveHourMatch.group(1)!);
+  final int minute = int.parse(twelveHourMatch.group(2)!);
+  final String period = twelveHourMatch.group(3)!;
+
+  if (hour < 1 || hour > 12 || minute < 0 || minute > 59) {
+    return null;
+  }
 
   if (period == 'PM' && hour != 12) {
     hour += 12;
@@ -572,8 +597,7 @@ TimeOfDay? _parseTimeOrDefault(String value) {
 }
 
 String _formatTimeOfDay(TimeOfDay value) {
-  final int hour = value.hourOfPeriod == 0 ? 12 : value.hourOfPeriod;
-  final String period = value.period == DayPeriod.am ? 'AM' : 'PM';
+  final String hour = value.hour.toString().padLeft(2, '0');
   final String minute = value.minute.toString().padLeft(2, '0');
-  return '$hour:$minute $period';
+  return '$hour:$minute';
 }

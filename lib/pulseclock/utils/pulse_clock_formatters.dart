@@ -30,9 +30,7 @@ String dateLabel(DateTime now) {
 }
 
 String timeLabel(DateTime now) {
-  final int hour = now.hour % 12 == 0 ? 12 : now.hour % 12;
-  final String period = now.hour >= 12 ? 'PM' : 'AM';
-  return '${_twoDigits(hour)}:${_twoDigits(now.minute)} $period';
+  return '${_twoDigits(now.hour)}:${_twoDigits(now.minute)}';
 }
 
 String durationLabel(Duration duration) {

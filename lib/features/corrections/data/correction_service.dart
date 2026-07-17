@@ -272,15 +272,31 @@ DateTime? _correctedDateTime(DateTime date, String? timeText) {
     return null;
   }
 
-  final RegExp expression = RegExp(r'^(\d{1,2}):(\d{2})\s?(AM|PM)$');
-  final Match? match = expression.firstMatch(timeText.trim().toUpperCase());
-  if (match == null) {
+  final String text = timeText.trim().toUpperCase();
+  final RegExp twentyFourHourExpression = RegExp(r'^(\d{1,2}):(\d{2})$');
+  final Match? twentyFourHourMatch = twentyFourHourExpression.firstMatch(text);
+  if (twentyFourHourMatch != null) {
+    final int hour = int.parse(twentyFourHourMatch.group(1)!);
+    final int minute = int.parse(twentyFourHourMatch.group(2)!);
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      return null;
+    }
+    return DateTime(date.year, date.month, date.day, hour, minute);
+  }
+
+  final RegExp twelveHourExpression = RegExp(r'^(\d{1,2}):(\d{2})\s?(AM|PM)$');
+  final Match? twelveHourMatch = twelveHourExpression.firstMatch(text);
+  if (twelveHourMatch == null) {
     return null;
   }
 
-  int hour = int.parse(match.group(1)!);
-  final int minute = int.parse(match.group(2)!);
-  final String period = match.group(3)!;
+  int hour = int.parse(twelveHourMatch.group(1)!);
+  final int minute = int.parse(twelveHourMatch.group(2)!);
+  final String period = twelveHourMatch.group(3)!;
+
+  if (hour < 1 || hour > 12 || minute < 0 || minute > 59) {
+    return null;
+  }
 
   if (period == 'PM' && hour != 12) {
     hour += 12;

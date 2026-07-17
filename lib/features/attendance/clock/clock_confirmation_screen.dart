@@ -71,9 +71,9 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message.toString())));
       setState(() {
         _isSubmitting = false;
         _showLoadingIndicator = false;
@@ -88,9 +88,9 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_friendlyPostgrestError(error))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_friendlyPostgrestError(error))));
       setState(() {
         _isSubmitting = false;
         _showLoadingIndicator = false;
@@ -102,7 +102,9 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Unable to confirm action right now. Please try again.'),
+          content: Text(
+            'Unable to confirm action right now. Please try again.',
+          ),
         ),
       );
       setState(() {
@@ -134,11 +136,16 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
         return AlertDialog(
           backgroundColor: const Color(0xFFFCFDFE),
           surfaceTintColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 44, vertical: 24),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 44,
+            vertical: 24,
+          ),
           titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           contentPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           actionsPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           title: Text(
             isClockIn ? 'Clock In Successful' : 'Clock Out Successful',
             style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
@@ -163,9 +170,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
       return;
     }
 
-    Navigator.of(context).pop(
-      result,
-    );
+    Navigator.of(context).pop(result);
   }
 
   Future<void> _submitConfirmation() async {
@@ -183,12 +188,13 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
     final DateTime now = DateTime.now();
 
     if (widget.mode == ClockActionMode.clockIn) {
-      final SupabaseAttendanceRecord record = await attendanceService.insertClockIn(
-        comment: safeComment,
-        clockInAt: now,
-        latitude: latitude,
-        longitude: longitude,
-      );
+      final SupabaseAttendanceRecord record = await attendanceService
+          .insertClockIn(
+            comment: safeComment,
+            clockInAt: now,
+            latitude: latitude,
+            longitude: longitude,
+          );
       developer.log(
         'Clock in saved to Supabase: ${record.id}',
         name: 'workpulse.clock_confirmation',
@@ -203,18 +209,19 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
       return;
     }
 
-    final SupabaseAttendanceRecord record = await attendanceService.insertClockOut(
-      comment: safeComment,
-      clockOutAt: now,
-      latitude: latitude,
-      longitude: longitude,
-    );
+    final SupabaseAttendanceRecord record = await attendanceService
+        .insertClockOut(
+          comment: safeComment,
+          clockOutAt: now,
+          latitude: latitude,
+          longitude: longitude,
+        );
     developer.log(
       'Clock out saved to Supabase: ${record.id}',
       name: 'workpulse.clock_confirmation',
     );
-    final SupabaseAttendanceRecord? verificationRecord =
-        await attendanceService.fetchTodaysAttendance(date: now);
+    final SupabaseAttendanceRecord? verificationRecord = await attendanceService
+        .fetchTodaysAttendance(date: now);
     if (verificationRecord == null) {
       throw StateError(
         'Clock out could not be verified from Supabase after saving.',
@@ -382,10 +389,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
   if (parts.length != 2) {
     return (null, null);
   }
-  return (
-    double.tryParse(parts[0].trim()),
-    double.tryParse(parts[1].trim()),
-  );
+  return (double.tryParse(parts[0].trim()), double.tryParse(parts[1].trim()));
 }
 
 String _friendlyPostgrestError(PostgrestException error) {
@@ -443,7 +447,7 @@ class ConfirmationDateTimeHeader extends StatelessWidget {
       child: Column(
         children: [
           Text(
-            _time24Label(now),
+            timeLabel(now),
             style: PulseClockTextStyles.timeOnBackground.copyWith(
               fontSize: 34,
               color: PulseClockColors.onBackgroundPrimary,
@@ -516,10 +520,4 @@ class ClockMapPlaceholderCard extends StatelessWidget {
       ),
     );
   }
-}
-
-String _time24Label(DateTime now) {
-  final String hour = now.hour.toString().padLeft(2, '0');
-  final String minute = now.minute.toString().padLeft(2, '0');
-  return '$hour:$minute';
 }
