@@ -26,6 +26,9 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
 
   final WorkPulseLocationService _locationService = WorkPulseLocationService();
   late final TextEditingController _commentController;
+  late final FocusNode _commentFocusNode;
+  late final ScrollController _scrollController;
+  final GlobalKey _commentCardKey = GlobalKey();
   WorkPulseLocationResult? _locationResult;
   Future<void>? _locationLoad;
   bool _isSubmitting = false;
@@ -37,14 +40,54 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
   void initState() {
     super.initState();
     _commentController = TextEditingController();
+    _commentFocusNode = FocusNode();
+    _commentFocusNode.addListener(_onCommentFocusChanged);
+    _scrollController = ScrollController();
     _locationLoad = _loadLocation();
   }
 
   @override
   void dispose() {
     _loadingTimer?.cancel();
+    _commentFocusNode.removeListener(_onCommentFocusChanged);
+    _commentFocusNode.dispose();
+    _scrollController.dispose();
     _commentController.dispose();
     super.dispose();
+  }
+
+  void _onCommentFocusChanged() {
+    if (!_commentFocusNode.hasFocus) {
+      return;
+    }
+
+    _queueCommentScroll();
+  }
+
+  void _queueCommentScroll() {
+    _scrollCommentIntoView(delay: const Duration(milliseconds: 80));
+    _scrollCommentIntoView(delay: const Duration(milliseconds: 220));
+    _scrollCommentIntoView(delay: const Duration(milliseconds: 560));
+  }
+
+  Future<void> _scrollCommentIntoView({required Duration delay}) async {
+    await Future<void>.delayed(delay);
+    if (!mounted || !_commentFocusNode.hasFocus) {
+      return;
+    }
+
+    final BuildContext? commentContext = _commentCardKey.currentContext;
+    if (commentContext == null) {
+      return;
+    }
+
+    await Scrollable.ensureVisible(
+      commentContext,
+      alignment: 0.56,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   Future<void> _loadLocation() async {
@@ -266,6 +309,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
     final DateTime now = DateTime.now();
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: PulseClockColors.appBackgroundSolid,
       appBar: AppBar(
         title: Text(widget.mode.title),
@@ -286,134 +330,162 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
         ),
         child: SafeArea(
           top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              PulseClockDimensions.horizontalPadding,
-              12,
-              PulseClockDimensions.horizontalPadding,
-              12,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ConfirmationDateTimeHeader(now: now),
-                const SizedBox(height: 18),
-                ClockMapPlaceholderCard(
-                  result: _locationResult,
-                  isLoading: _isLoadingLocation,
-                  onRetry: _isSubmitting ? null : _refreshLocation,
-                ),
-                const SizedBox(height: 10),
-                SurfaceCard(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Comment (Optional)',
-                        style: PulseClockTextStyles.cardTitle.copyWith(
-                          fontSize: 18,
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final double keyboardInset = MediaQuery.viewInsetsOf(
+                context,
+              ).bottom;
+              final bool isKeyboardOpen = keyboardInset > 0;
+
+              return SingleChildScrollView(
+                controller: _scrollController,
+                physics: isKeyboardOpen
+                    ? const ClampingScrollPhysics()
+                    : const NeverScrollableScrollPhysics(),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.manual,
+                padding: EdgeInsets.only(bottom: isKeyboardOpen ? 16 : 0),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      PulseClockDimensions.horizontalPadding,
+                      22,
+                      PulseClockDimensions.horizontalPadding,
+                      12,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ConfirmationDateTimeHeader(now: now),
+                        const SizedBox(height: 22),
+                        ClockMapPlaceholderCard(
+                          result: _locationResult,
+                          isLoading: _isLoadingLocation,
+                          onRetry: _isSubmitting ? null : _refreshLocation,
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _commentController,
-                        enabled: !_isSubmitting,
-                        maxLines: 2,
-                        decoration: InputDecoration(
-                          hintText: 'Add a note for this attendance action',
-                          hintStyle: const TextStyle(
-                            color: PulseClockColors.textSecondary,
+                        const SizedBox(height: 10),
+                        SurfaceCard(
+                          key: _commentCardKey,
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Comment (Optional)',
+                                style: PulseClockTextStyles.cardTitle.copyWith(
+                                  fontSize: 18,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: _commentController,
+                                focusNode: _commentFocusNode,
+                                enabled: !_isSubmitting,
+                                maxLines: 2,
+                                onTap: _queueCommentScroll,
+                                scrollPadding: const EdgeInsets.only(
+                                  bottom: 28,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText:
+                                      'Add a note for this attendance action',
+                                  hintStyle: const TextStyle(
+                                    color: PulseClockColors.textSecondary,
+                                  ),
+                                  filled: true,
+                                  fillColor: PulseClockColors.surfaceMuted,
+                                  contentPadding: const EdgeInsets.all(12),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: PulseClockColors.cardBorder,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: PulseClockColors.cardBorder,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: widget.mode.color,
+                                      width: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          filled: true,
-                          fillColor: PulseClockColors.surfaceMuted,
-                          contentPadding: const EdgeInsets.all(12),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: PulseClockColors.cardBorder,
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _isSubmitting ? null : _confirm,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: widget.mode.color,
+                              foregroundColor: PulseClockColors.surface,
+                              disabledBackgroundColor: widget.mode.color
+                                  .withOpacity(0.65),
+                              disabledForegroundColor: PulseClockColors.surface,
+                              textStyle: PulseClockTextStyles.primaryAction
+                                  .copyWith(fontSize: 18),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 13,
+                                horizontal: 18,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  PulseClockDimensions.cardRadius,
+                                ),
+                              ),
+                            ),
+                            child: _ConfirmButtonContent(
+                              mode: widget.mode,
+                              showLoadingIndicator: _showLoadingIndicator,
                             ),
                           ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: PulseClockColors.cardBorder,
+                        ),
+                        const SizedBox(height: 6),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: _isSubmitting
+                                ? null
+                                : () => Navigator.of(context).pop(),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor:
+                                  PulseClockColors.onBackgroundPrimary,
+                              backgroundColor: const Color(0x22000000),
+                              side: BorderSide.none,
+                              disabledForegroundColor: PulseClockColors
+                                  .onBackgroundSecondary
+                                  .withOpacity(0.75),
+                              disabledBackgroundColor: const Color(0x16000000),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              textStyle: PulseClockTextStyles.contextAction
+                                  .copyWith(
+                                    color: PulseClockColors.onBackgroundPrimary,
+                                    fontSize: 15,
+                                  ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  PulseClockDimensions.cardRadius,
+                                ),
+                              ),
                             ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: widget.mode.color,
-                              width: 1.4,
-                            ),
+                            child: const Text('Cancel'),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isSubmitting ? null : _confirm,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: widget.mode.color,
-                      foregroundColor: PulseClockColors.surface,
-                      disabledBackgroundColor: widget.mode.color.withOpacity(
-                        0.65,
-                      ),
-                      disabledForegroundColor: PulseClockColors.surface,
-                      textStyle: PulseClockTextStyles.primaryAction.copyWith(
-                        fontSize: 18,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 13,
-                        horizontal: 18,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          PulseClockDimensions.cardRadius,
-                        ),
-                      ),
-                    ),
-                    child: _ConfirmButtonContent(
-                      mode: widget.mode,
-                      showLoadingIndicator: _showLoadingIndicator,
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 6),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: _isSubmitting
-                        ? null
-                        : () => Navigator.of(context).pop(),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: PulseClockColors.onBackgroundPrimary,
-                      backgroundColor: const Color(0x22000000),
-                      side: BorderSide.none,
-                      disabledForegroundColor: PulseClockColors
-                          .onBackgroundSecondary
-                          .withOpacity(0.75),
-                      disabledBackgroundColor: const Color(0x16000000),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      textStyle: PulseClockTextStyles.contextAction.copyWith(
-                        color: PulseClockColors.onBackgroundPrimary,
-                        fontSize: 15,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          PulseClockDimensions.cardRadius,
-                        ),
-                      ),
-                    ),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -481,22 +553,20 @@ class ConfirmationDateTimeHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String weekdayShort = weekdayName(now).substring(0, 3);
-
     return Center(
       child: Column(
         children: [
           Text(
             timeLabel(now),
             style: PulseClockTextStyles.timeOnBackground.copyWith(
-              fontSize: 30,
+              fontSize: 31,
               color: PulseClockColors.onBackgroundPrimary,
               letterSpacing: -0.6,
             ),
           ),
-          const SizedBox(height: 1),
+          const SizedBox(height: 8),
           Text(
-            '$weekdayShort ${dateLabel(now)}',
+            fullDateLabel(now),
             style: PulseClockTextStyles.weekdayOnBackground.copyWith(
               color: PulseClockColors.onBackgroundPrimary,
               fontSize: 15,

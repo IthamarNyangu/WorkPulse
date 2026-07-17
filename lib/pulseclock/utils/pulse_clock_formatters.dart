@@ -29,6 +29,24 @@ String dateLabel(DateTime now) {
   return '${_twoDigits(now.day)} ${monthAbbreviations[now.month - 1]} ${now.year}';
 }
 
+String fullDateLabel(DateTime now) {
+  const List<String> monthNames = <String>[
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  return '${weekdayName(now)}, ${_twoDigits(now.day)} ${monthNames[now.month - 1]} ${now.year}';
+}
+
 String timeLabel(DateTime now) {
   return '${_twoDigits(now.hour)}:${_twoDigits(now.minute)}';
 }

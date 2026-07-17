@@ -134,8 +134,8 @@ class LiveTimeSection extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: Text(
-            dateLabel(now),
-            style: PulseClockTextStyles.dateOnBackground,
+            timeLabel(now),
+            style: PulseClockTextStyles.timeOnBackground,
             textAlign: TextAlign.center,
           ),
         ),
@@ -143,8 +143,8 @@ class LiveTimeSection extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: Text(
-            timeLabel(now),
-            style: PulseClockTextStyles.timeOnBackground,
+            dateLabel(now),
+            style: PulseClockTextStyles.dateOnBackground,
             textAlign: TextAlign.center,
           ),
         ),
@@ -268,10 +268,16 @@ class _PrimaryActionButtonSectionState
                       Set<WidgetState> states,
                     ) {
                       if (states.contains(WidgetState.hovered)) {
-                        return _brightenColor(widget.model.backgroundColor, 0.06);
+                        return _brightenColor(
+                          widget.model.backgroundColor,
+                          0.06,
+                        );
                       }
                       if (states.contains(WidgetState.pressed)) {
-                        return _brightenColor(widget.model.backgroundColor, -0.03);
+                        return _brightenColor(
+                          widget.model.backgroundColor,
+                          -0.03,
+                        );
                       }
                       return widget.model.backgroundColor;
                     }),
@@ -286,7 +292,9 @@ class _PrimaryActionButtonSectionState
                       }
                       return 10;
                     }),
-                    shadowColor: WidgetStateProperty.all(const Color(0x5A000000)),
+                    shadowColor: WidgetStateProperty.all(
+                      const Color(0x5A000000),
+                    ),
                     overlayColor: WidgetStateProperty.resolveWith((
                       Set<WidgetState> states,
                     ) {
@@ -307,10 +315,16 @@ class _PrimaryActionButtonSectionState
                       Set<WidgetState> states,
                     ) {
                       if (states.contains(WidgetState.hovered)) {
-                        return _brightenColor(widget.model.backgroundColor, 0.06);
+                        return _brightenColor(
+                          widget.model.backgroundColor,
+                          0.06,
+                        );
                       }
                       if (states.contains(WidgetState.pressed)) {
-                        return _brightenColor(widget.model.backgroundColor, -0.03);
+                        return _brightenColor(
+                          widget.model.backgroundColor,
+                          -0.03,
+                        );
                       }
                       return widget.model.backgroundColor;
                     }),
@@ -325,7 +339,9 @@ class _PrimaryActionButtonSectionState
                       }
                       return 10;
                     }),
-                    shadowColor: WidgetStateProperty.all(const Color(0x5A000000)),
+                    shadowColor: WidgetStateProperty.all(
+                      const Color(0x5A000000),
+                    ),
                     overlayColor: WidgetStateProperty.resolveWith((
                       Set<WidgetState> states,
                     ) {
@@ -592,36 +608,41 @@ class HistoryFilterChipBar<T> extends StatelessWidget {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: items.map((T item) {
-          final bool isSelected = item == selectedValue;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(labelBuilder(item)),
-              selected: isSelected,
-              onSelected: (_) => onSelected(item),
-              labelStyle: PulseClockTextStyles.cardSubtitle.copyWith(
-                color: isSelected
-                    ? PulseClockColors.surface
-                    : PulseClockColors.textPrimary,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
-              side: BorderSide(
-                color: isSelected
-                    ? PulseClockColors.actionBlue
-                    : PulseClockColors.cardBorder,
-              ),
-              selectedColor: PulseClockColors.actionBlue,
-              backgroundColor: PulseClockColors.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(999),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              showCheckmark: false,
-            ),
-          );
-        }).toList(growable: false),
+        children: items
+            .map((T item) {
+              final bool isSelected = item == selectedValue;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(labelBuilder(item)),
+                  selected: isSelected,
+                  onSelected: (_) => onSelected(item),
+                  labelStyle: PulseClockTextStyles.cardSubtitle.copyWith(
+                    color: isSelected
+                        ? PulseClockColors.surface
+                        : PulseClockColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                  side: BorderSide(
+                    color: isSelected
+                        ? PulseClockColors.actionBlue
+                        : PulseClockColors.cardBorder,
+                  ),
+                  selectedColor: PulseClockColors.actionBlue,
+                  backgroundColor: PulseClockColors.surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                  showCheckmark: false,
+                ),
+              );
+            })
+            .toList(growable: false),
       ),
     );
   }
