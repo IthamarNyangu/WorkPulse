@@ -169,15 +169,46 @@ class _OfficeLocationsAdminScreenState
   };
 
   final OfficeLocationService _officeLocationService = OfficeLocationService();
+  final TextEditingController _searchController = TextEditingController();
 
   bool _isLoading = true;
   String? _errorMessage;
+  String _searchQuery = '';
   List<OfficeLocation> _officeLocations = const <OfficeLocation>[];
+
+  List<OfficeLocation> get _filteredOfficeLocations {
+    final String query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) {
+      return _officeLocations;
+    }
+
+    return _officeLocations
+        .where((OfficeLocation officeLocation) {
+          final String searchableText = <String>[
+            officeLocation.officeName,
+            officeLocation.province ?? '',
+            officeLocation.district ?? '',
+            officeLocation.isActive ? 'active' : 'inactive',
+            '${officeLocation.radiusMeters.toStringAsFixed(0)}m',
+            officeLocation.latitude.toStringAsFixed(6),
+            officeLocation.longitude.toStringAsFixed(6),
+          ].join(' ').toLowerCase();
+
+          return searchableText.contains(query);
+        })
+        .toList(growable: false);
+  }
 
   @override
   void initState() {
     super.initState();
     _loadOfficeLocations();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadOfficeLocations() async {
@@ -360,6 +391,9 @@ class _OfficeLocationsAdminScreenState
   }
 
   Widget _buildBody() {
+    final List<OfficeLocation> filteredOfficeLocations =
+        _filteredOfficeLocations;
+
     if (_isLoading) {
       return const Center(
         child: CircularProgressIndicator(
@@ -415,22 +449,54 @@ class _OfficeLocationsAdminScreenState
           ),
         ),
         const SizedBox(height: 16),
+        _OfficeLocationSearchField(
+          controller: _searchController,
+          onChanged: (String value) {
+            setState(() {
+              _searchQuery = value;
+            });
+          },
+          onClear: _searchQuery.isEmpty
+              ? null
+              : () {
+                  _searchController.clear();
+                  setState(() {
+                    _searchQuery = '';
+                  });
+                },
+        ),
+        const SizedBox(height: 10),
+        Text(
+          _searchQuery.trim().isEmpty
+              ? '${_officeLocations.length} office locations'
+              : '${filteredOfficeLocations.length} matching office locations',
+          style: PulseClockTextStyles.cardSubtitle.copyWith(
+            color: PulseClockColors.onBackgroundSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 12),
         Expanded(
           child: RefreshIndicator(
             onRefresh: _loadOfficeLocations,
-            child: _officeLocations.isEmpty
+            child: filteredOfficeLocations.isEmpty
                 ? ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    children: const [
-                      SizedBox(height: 160),
-                      _EmptyOfficeLocationsCard(),
+                    children: [
+                      const SizedBox(height: 160),
+                      _EmptyOfficeLocationsCard(
+                        message: _officeLocations.isEmpty
+                            ? 'No office locations found.'
+                            : 'No office locations match your search.',
+                      ),
                     ],
                   )
                 : ListView.separated(
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemBuilder: (BuildContext context, int index) {
                       final OfficeLocation officeLocation =
-                          _officeLocations[index];
+                          filteredOfficeLocations[index];
                       return _OfficeLocationCard(
                         officeLocation: officeLocation,
                         onEdit: () => _openForm(officeLocation: officeLocation),
@@ -440,7 +506,7 @@ class _OfficeLocationsAdminScreenState
                     },
                     separatorBuilder: (BuildContext context, int index) =>
                         const SizedBox(height: 8),
-                    itemCount: _officeLocations.length,
+                    itemCount: filteredOfficeLocations.length,
                   ),
           ),
         ),
@@ -678,8 +744,10 @@ class _OfficeLocationFormScreenState extends State<OfficeLocationFormScreen> {
                   children: [
                     Text(
                       'Office Details',
-                      style: PulseClockTextStyles.cardTitle.copyWith(
-                        fontSize: 22,
+                      style: PulseClockTextStyles.cardSubtitle.copyWith(
+                        color: PulseClockColors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -1100,6 +1168,69 @@ class _OfficeLocationCard extends StatelessWidget {
   }
 }
 
+class _OfficeLocationSearchField extends StatelessWidget {
+  const _OfficeLocationSearchField({
+    required this.controller,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      textInputAction: TextInputAction.search,
+      style: PulseClockTextStyles.cardSubtitle.copyWith(
+        color: PulseClockColors.textPrimary,
+        fontWeight: FontWeight.w700,
+      ),
+      decoration: InputDecoration(
+        hintText: 'Search name, province, district, status',
+        prefixIcon: const Icon(
+          Icons.search_rounded,
+          color: PulseClockColors.textSecondary,
+        ),
+        suffixIcon: onClear == null
+            ? null
+            : IconButton(
+                onPressed: onClear,
+                icon: const Icon(
+                  Icons.close_rounded,
+                  color: PulseClockColors.textSecondary,
+                ),
+              ),
+        filled: true,
+        fillColor: PulseClockColors.surface,
+        hintStyle: PulseClockTextStyles.cardSubtitle.copyWith(fontSize: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: PulseClockColors.cardBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: PulseClockColors.cardBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: PulseClockColors.actionBlue,
+            width: 1.4,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AdminTextField extends StatelessWidget {
   const _AdminTextField({
     required this.controller,
@@ -1218,7 +1349,9 @@ class _AdminDropdownField extends StatelessWidget {
 }
 
 class _EmptyOfficeLocationsCard extends StatelessWidget {
-  const _EmptyOfficeLocationsCard();
+  const _EmptyOfficeLocationsCard({required this.message});
+
+  final String message;
 
   @override
   Widget build(BuildContext context) {
@@ -1232,7 +1365,7 @@ class _EmptyOfficeLocationsCard extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'No office locations found.',
+              message,
               style: PulseClockTextStyles.cardSubtitle.copyWith(
                 color: PulseClockColors.textPrimary,
                 fontWeight: FontWeight.w700,
