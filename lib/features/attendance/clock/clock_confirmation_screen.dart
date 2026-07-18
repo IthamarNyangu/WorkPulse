@@ -582,46 +582,10 @@ class ClockMapPlaceholderCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              height: 74,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFFD7E0EC), Color(0xFFC4D0E2)],
-                ),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      hasLocation
-                          ? Icons.location_on_outlined
-                          : Icons.location_searching_rounded,
-                      size: 28,
-                      color: PulseClockColors.textSecondary,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Map Preview Placeholder',
-                      style: PulseClockTextStyles.cardTitle.copyWith(
-                        fontSize: 17,
-                        color: PulseClockColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
           Row(
             children: [
               Text(
-                'Location Snapshot',
+                'Location Verification',
                 style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 17),
               ),
               const Spacer(),
@@ -632,93 +596,38 @@ class ClockMapPlaceholderCard extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               else if (onRetry != null)
-                TextButton.icon(
+                OutlinedButton.icon(
                   onPressed: onRetry,
                   icon: const Icon(Icons.refresh_rounded, size: 16),
                   label: const Text('Retry'),
-                  style: TextButton.styleFrom(
+                  style: OutlinedButton.styleFrom(
                     visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     foregroundColor: PulseClockColors.actionBlue,
+                    side: const BorderSide(
+                      color: PulseClockColors.actionBlue,
+                      width: 1,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 7),
-          if (isLoading)
-            Text(
-              'Getting current GPS location...',
-              style: PulseClockTextStyles.cardSubtitle.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            )
-          else if (hasLocation) ...<Widget>[
-            _CompactLocationRow(
-              label: 'Coordinates',
-              value: snapshot.coordinates,
-            ),
-            const SizedBox(height: 5),
-            _CompactLocationRow(
-              label: 'GPS Accuracy',
-              value:
-                  '${snapshot.accuracyMeters.toStringAsFixed(1)} m (${snapshot.accuracyQualityLabel})',
-            ),
-            const SizedBox(height: 5),
-            _CompactLocationRow(
-              label: 'Location Status',
-              value: snapshot.geofenceLabel,
-            ),
-            if (snapshot.officeDisplayName != null) ...<Widget>[
-              const SizedBox(height: 5),
-              _CompactLocationRow(
-                label: snapshot.isInsideGeofence
-                    ? 'Verified Office'
-                    : 'Nearest Office',
-                value: snapshot.officeDisplayName!,
-              ),
-            ],
-            if (snapshot.distanceMeters != null) ...<Widget>[
-              const SizedBox(height: 5),
-              _CompactLocationRow(
-                label: 'Distance',
-                value: _metersLabel(snapshot.distanceMeters!),
-              ),
-            ],
-            if (snapshot.geofenceRadiusMeters != null) ...<Widget>[
-              const SizedBox(height: 5),
-              _CompactLocationRow(
-                label: 'Allowed Radius',
-                value: _metersLabel(snapshot.geofenceRadiusMeters!),
-              ),
-            ],
-          ] else ...<Widget>[
-            Text(
-              result?.message ?? 'Location is unavailable.',
-              style: PulseClockTextStyles.cardSubtitle.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'You can still continue. WorkPulse will save this attendance action without GPS details.',
-              style: PulseClockTextStyles.cardSubtitle.copyWith(
-                color: PulseClockColors.textSecondary,
-                fontSize: 12,
-              ),
-            ),
-            if (onRetry != null) ...<Widget>[
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('Try Again'),
-              ),
-            ],
-          ],
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
+          _MapPreview(
+            hasLocation: hasLocation,
+            isLoading: isLoading,
+            statusColor: statusColor,
+          ),
+          const SizedBox(height: 10),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
               color: statusColor.withOpacity(0.12),
               borderRadius: BorderRadius.circular(12),
@@ -726,11 +635,12 @@ class ClockMapPlaceholderCard extends StatelessWidget {
             child: Text(
               hasLocation
                   ? _locationStatusMessage(snapshot)
-                  : 'GPS status will be attached when available.',
+                  : (result?.message ??
+                        'GPS status will be attached when available.'),
               style: PulseClockTextStyles.cardSubtitle.copyWith(
                 color: statusColor,
                 fontWeight: FontWeight.w700,
-                fontSize: 12,
+                fontSize: 13,
               ),
             ),
           ),
@@ -740,39 +650,130 @@ class ClockMapPlaceholderCard extends StatelessWidget {
   }
 }
 
-class _CompactLocationRow extends StatelessWidget {
-  const _CompactLocationRow({required this.label, required this.value});
+class _MapPreview extends StatelessWidget {
+  const _MapPreview({
+    required this.hasLocation,
+    required this.isLoading,
+    required this.statusColor,
+  });
 
-  final String label;
-  final String value;
+  final bool hasLocation;
+  final bool isLoading;
+  final Color statusColor;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: PulseClockTextStyles.cardSubtitle.copyWith(fontSize: 13),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: PulseClockTextStyles.cardSubtitle.copyWith(
-              color: PulseClockColors.textPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 136,
+        decoration: const BoxDecoration(color: Color(0xFFE7EEF8)),
+        child: Stack(
+          children: [
+            Positioned.fill(child: CustomPaint(painter: _MapPreviewPainter())),
+            Center(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                child: isLoading
+                    ? const SizedBox(
+                        key: ValueKey<String>('loading'),
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(strokeWidth: 2.6),
+                      )
+                    : Icon(
+                        hasLocation
+                            ? Icons.location_pin
+                            : Icons.location_searching_rounded,
+                        key: ValueKey<bool>(hasLocation),
+                        size: 46,
+                        color: hasLocation
+                            ? statusColor
+                            : PulseClockColors.textSecondary,
+                      ),
+              ),
             ),
-          ),
+            Positioned(
+              left: 10,
+              bottom: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: PulseClockColors.surface.withOpacity(0.85),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'Map Preview',
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    color: PulseClockColors.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
+}
+
+class _MapPreviewPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint blockPaint = Paint()..color = const Color(0xFFDCE6F2);
+    final Paint roadPaint = Paint()
+      ..color = Colors.white.withOpacity(0.92)
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 14;
+    final Paint minorRoadPaint = Paint()
+      ..color = Colors.white.withOpacity(0.72)
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 7;
+    final Paint routePaint = Paint()
+      ..color = const Color(0xFFB9C8DA)
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 3;
+
+    canvas.drawRect(Offset.zero & size, blockPaint);
+
+    canvas.drawLine(
+      Offset(-16, size.height * 0.18),
+      Offset(size.width + 20, size.height * 0.04),
+      roadPaint,
+    );
+    canvas.drawLine(
+      Offset(size.width * 0.18, -12),
+      Offset(size.width * 0.76, size.height + 16),
+      roadPaint,
+    );
+    canvas.drawLine(
+      Offset(-12, size.height * 0.72),
+      Offset(size.width + 16, size.height * 0.54),
+      minorRoadPaint,
+    );
+    canvas.drawLine(
+      Offset(size.width * 0.06, size.height + 12),
+      Offset(size.width * 0.42, -14),
+      minorRoadPaint,
+    );
+    canvas.drawLine(
+      Offset(size.width * 0.62, -10),
+      Offset(size.width * 0.93, size.height + 10),
+      minorRoadPaint,
+    );
+
+    for (double y = 18; y < size.height; y += 34) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y + 14), routePaint);
+    }
+    for (double x = 26; x < size.width; x += 44) {
+      canvas.drawLine(Offset(x, 0), Offset(x - 26, size.height), routePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 Color _locationStatusColor(ClockLocationStatus status) {
@@ -792,9 +793,9 @@ Color _locationStatusColor(ClockLocationStatus status) {
 String _locationStatusMessage(ClockLocationSnapshot snapshot) {
   switch (snapshot.status) {
     case ClockLocationStatus.insideOffice:
-      return 'Verified at ${snapshot.verifiedOfficeName ?? 'an approved WorkPulse office'}.';
+      return 'Within Geofence of ${snapshot.verifiedOfficeName ?? 'an approved WorkPulse office'}.';
     case ClockLocationStatus.outsideAllOffices:
-      return 'You are outside all approved WorkPulse offices. This clock action will be flagged for review.';
+      return 'Outside Geofence of all approved WorkPulse offices.';
     case ClockLocationStatus.lowAccuracy:
       return 'GPS accuracy is too low to verify this location. This clock action will be flagged for review.';
     case ClockLocationStatus.noOfficesConfigured:
