@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/auth/data/auth_service.dart';
+import 'package:pulseclock/features/geofence/presentation/geofence_exception_review_screen.dart';
 import 'package:pulseclock/features/notifications/notifications_screen.dart';
 import 'package:pulseclock/features/office_locations/office_locations_admin_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
@@ -82,6 +83,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Animation<double> secondaryAnimation,
             ) {
               return const OfficeLocationsAdminScreen();
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
+
+  Future<void> _openGeofenceReview(BuildContext context) async {
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return const GeofenceExceptionReviewScreen();
             },
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
@@ -367,6 +385,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         icon: Icons.business_outlined,
                         title: 'Office Locations',
                         onTap: () => _openOfficeLocations(context),
+                      ),
+                      _ProfileActionItem(
+                        icon: Icons.gpp_maybe_outlined,
+                        title: 'Geofence Review',
+                        onTap: () => _openGeofenceReview(context),
                       ),
                     ],
                   ),
