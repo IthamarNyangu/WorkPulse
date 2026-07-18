@@ -4,6 +4,7 @@ import 'package:pulseclock/features/auth/data/auth_service.dart';
 import 'package:pulseclock/features/geofence/presentation/geofence_exception_review_screen.dart';
 import 'package:pulseclock/features/notifications/notifications_screen.dart';
 import 'package:pulseclock/features/office_locations/office_locations_admin_screen.dart';
+import 'package:pulseclock/features/supervisor/attendance/presentation/supervisor_attendance_dashboard_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
@@ -100,6 +101,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Animation<double> secondaryAnimation,
             ) {
               return const GeofenceExceptionReviewScreen();
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
+
+  Future<void> _openAttendanceDashboard(BuildContext context) async {
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return const SupervisorAttendanceDashboardScreen();
             },
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
@@ -381,6 +399,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 8),
                   _ProfileSectionCard(
                     items: [
+                      _ProfileActionItem(
+                        icon: Icons.dashboard_outlined,
+                        title: 'Attendance Dashboard',
+                        onTap: () => _openAttendanceDashboard(context),
+                      ),
                       _ProfileActionItem(
                         icon: Icons.business_outlined,
                         title: 'Office Locations',
