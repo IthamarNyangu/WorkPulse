@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pulseclock/features/supervisor/attendance/data/supervisor_attendance_service.dart';
+import 'package:pulseclock/features/supervisor/attendance/presentation/supervisor_attendance_reports_screen.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
@@ -192,6 +193,28 @@ class _SupervisorAttendanceDashboardScreenState
     await _loadAttendance();
   }
 
+  Future<void> _setDate(DateTime date) async {
+    setState(() {
+      _selectedDate = _dateOnly(date);
+    });
+    await _loadAttendance();
+  }
+
+  void _openReports() {
+    Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) => const SupervisorAttendanceReportsScreen(),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
+
   void _openDetails(SupervisorAttendanceEmployeeRecord record) {
     Navigator.of(context).push<void>(
       PageRouteBuilder<void>(
@@ -293,15 +316,34 @@ class _SupervisorAttendanceDashboardScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Daily employee attendance overview for supervisors.',
-          style: PulseClockTextStyles.headerSubtitle.copyWith(fontSize: 15),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                'Daily employee attendance overview for supervisors.',
+                style: PulseClockTextStyles.headerSubtitle.copyWith(
+                  fontSize: 15,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            _ReportsButton(onTap: _openReports),
+          ],
         ),
         const SizedBox(height: 12),
         _DashboardDateSelector(
           date: _selectedDate,
           onPrevious: () => _changeDateBy(-1),
           onNext: () => _changeDateBy(1),
+          onPickDate: _pickDate,
+        ),
+        const SizedBox(height: 10),
+        _DashboardQuickDateChips(
+          selectedDate: _selectedDate,
+          onToday: () => _setDate(DateTime.now()),
+          onYesterday: () =>
+              _setDate(DateTime.now().subtract(const Duration(days: 1))),
           onPickDate: _pickDate,
         ),
         const SizedBox(height: 12),
@@ -323,7 +365,7 @@ class _SupervisorAttendanceDashboardScreenState
                   });
                 },
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         HistoryFilterChipBar<_SupervisorAttendanceFilter>(
           items: _SupervisorAttendanceFilter.values,
           selectedValue: _selectedFilter,
@@ -563,6 +605,118 @@ class _DashboardDateSelector extends StatelessWidget {
             tooltip: 'Pick date',
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DashboardQuickDateChips extends StatelessWidget {
+  const _DashboardQuickDateChips({
+    required this.selectedDate,
+    required this.onToday,
+    required this.onYesterday,
+    required this.onPickDate,
+  });
+
+  final DateTime selectedDate;
+  final VoidCallback onToday;
+  final VoidCallback onYesterday;
+  final VoidCallback onPickDate;
+
+  @override
+  Widget build(BuildContext context) {
+    final DateTime today = _dateOnly(DateTime.now());
+    final DateTime yesterday = today.subtract(const Duration(days: 1));
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _QuickDateChip(
+            label: 'Today',
+            isSelected: _dateOnly(selectedDate) == today,
+            onTap: onToday,
+          ),
+          const SizedBox(width: 8),
+          _QuickDateChip(
+            label: 'Yesterday',
+            isSelected: _dateOnly(selectedDate) == yesterday,
+            onTap: onYesterday,
+          ),
+          const SizedBox(width: 8),
+          _QuickDateChip(
+            label: 'Pick Date',
+            isSelected: false,
+            onTap: onPickDate,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickDateChip extends StatelessWidget {
+  const _QuickDateChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? PulseClockColors.actionBlue
+              : PulseClockColors.surface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: PulseClockColors.cardBorder),
+        ),
+        child: Text(
+          label,
+          style: PulseClockTextStyles.cardSubtitle.copyWith(
+            color: isSelected
+                ? PulseClockColors.surface
+                : PulseClockColors.textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReportsButton extends StatelessWidget {
+  const _ReportsButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: const Icon(Icons.analytics_outlined, size: 17),
+      label: const Text('Reports'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: PulseClockColors.surface,
+        side: BorderSide(
+          color: PulseClockColors.surface.withValues(alpha: 0.72),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        textStyle: PulseClockTextStyles.cardSubtitle.copyWith(
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
     );
   }

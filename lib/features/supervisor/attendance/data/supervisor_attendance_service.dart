@@ -52,6 +52,18 @@ class SupervisorAttendanceDay {
   final List<SupervisorAttendanceEmployeeRecord> records;
 }
 
+class SupervisorAttendanceReport {
+  const SupervisorAttendanceReport({
+    required this.startDate,
+    required this.endDate,
+    required this.records,
+  });
+
+  final DateTime startDate;
+  final DateTime endDate;
+  final List<SupervisorAttendanceEmployeeRecord> records;
+}
+
 class SupervisorAttendanceSummary {
   const SupervisorAttendanceSummary({
     required this.totalEmployees,
@@ -86,6 +98,8 @@ class SupervisorAttendanceEmployeeRecord {
     this.clockOutComment,
     this.clockInLocation,
     this.clockOutLocation,
+    this.officeProvince,
+    this.officeDistrict,
   });
 
   final String employeeId;
@@ -102,6 +116,8 @@ class SupervisorAttendanceEmployeeRecord {
   final String? clockOutComment;
   final ClockLocationSnapshot? clockInLocation;
   final ClockLocationSnapshot? clockOutLocation;
+  final String? officeProvince;
+  final String? officeDistrict;
 
   String get clockInLabel => clockInAt == null ? '--' : timeLabel(clockInAt!);
   String get clockOutLabel =>
@@ -117,6 +133,10 @@ class SupervisorAttendanceEmployeeRecord {
   String? get officeDisplayName {
     return clockInLocation?.officeDisplayName ??
         clockOutLocation?.officeDisplayName;
+  }
+
+  bool matchesOfficeProvince(String province) {
+    return officeProvince?.toLowerCase() == province.toLowerCase();
   }
 
   static bool _isLocationException(ClockLocationSnapshot? snapshot) {
@@ -165,7 +185,7 @@ class SupervisorAttendanceService {
     final List<Map<String, dynamic>> leaveRows = await _fetchLeaveRows(
       selectedDateLabel,
     );
-    final Map<String, String> officeNamesById = await _officeNamesById();
+    final Map<String, _OfficeLookup> officesById = await _officesById();
 
     final Map<String, SupabaseAttendanceRecord> attendanceByUserId =
         <String, SupabaseAttendanceRecord>{
@@ -185,7 +205,7 @@ class SupervisorAttendanceService {
                 date: selectedDate,
                 attendance: attendanceByUserId[employee.id],
                 leaveStatus: leaveStatusByUserId[employee.id],
-                officeNamesById: officeNamesById,
+                officesById: officesById,
               ),
             )
             .toList(growable: false)
@@ -200,6 +220,107 @@ class SupervisorAttendanceService {
       date: selectedDate,
       records: records,
       summary: _summaryFor(records),
+    );
+  }
+
+  Future<SupervisorAttendanceReport> fetchAttendanceReport({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final WorkPulseUserProfile reviewer = await _requireReviewerProfile();
+    if (!reviewerRoles.contains(reviewer.role)) {
+      throw StateError(
+        'Only supervisors, HR, and admins can view attendance reports.',
+      );
+    }
+
+    final DateTime reportStartDate = _dateOnly(startDate);
+    final DateTime reportEndDate = _dateOnly(endDate);
+    final DateTime normalizedStartDate = reportStartDate.isAfter(reportEndDate)
+        ? reportEndDate
+        : reportStartDate;
+    final DateTime normalizedEndDate = reportStartDate.isAfter(reportEndDate)
+        ? reportStartDate
+        : reportEndDate;
+
+    final String startLabel = _dateOnlyLabel(normalizedStartDate);
+    final String endLabel = _dateOnlyLabel(normalizedEndDate);
+
+    final List<_DashboardEmployee> employees = await _fetchEmployees();
+    final List<Map<String, dynamic>> attendanceRows =
+        await _fetchAttendanceRowsForRange(
+          startLabel: startLabel,
+          endLabel: endLabel,
+        );
+    final List<Map<String, dynamic>> leaveRows = await _fetchLeaveRowsForRange(
+      startLabel: startLabel,
+      endLabel: endLabel,
+    );
+    final Map<String, _OfficeLookup> officesById = await _officesById();
+
+    final Map<String, SupabaseAttendanceRecord> attendanceByKey =
+        <String, SupabaseAttendanceRecord>{
+          for (final Map<String, dynamic> row in attendanceRows)
+            _attendanceKey(
+              userId: row['user_id'] as String,
+              dateLabel: row['work_date'] as String,
+            ): SupabaseAttendanceRecord.fromMap(
+              row,
+            ),
+        };
+
+    final List<SupervisorAttendanceEmployeeRecord> records =
+        <SupervisorAttendanceEmployeeRecord>[];
+    DateTime cursor = normalizedStartDate;
+    while (!cursor.isAfter(normalizedEndDate)) {
+      final String dateKey = _dateOnlyLabel(cursor);
+      for (final _DashboardEmployee employee in employees) {
+        final SupabaseAttendanceRecord? attendance =
+            attendanceByKey[_attendanceKey(
+              userId: employee.id,
+              dateLabel: dateKey,
+            )];
+        final String? leaveStatus = _leaveStatusForEmployeeDate(
+          leaveRows: leaveRows,
+          userId: employee.id,
+          date: cursor,
+        );
+
+        if (attendance == null &&
+            leaveStatus == null &&
+            !cursor.isBefore(_dateOnly(DateTime.now())) &&
+            !_isWorkday(cursor)) {
+          continue;
+        }
+
+        records.add(
+          _recordForEmployee(
+            employee: employee,
+            date: cursor,
+            attendance: attendance,
+            leaveStatus: leaveStatus,
+            officesById: officesById,
+          ),
+        );
+      }
+      cursor = cursor.add(const Duration(days: 1));
+    }
+
+    records.sort((
+      SupervisorAttendanceEmployeeRecord a,
+      SupervisorAttendanceEmployeeRecord b,
+    ) {
+      final int dateComparison = b.date.compareTo(a.date);
+      if (dateComparison != 0) {
+        return dateComparison;
+      }
+      return a.employeeName.compareTo(b.employeeName);
+    });
+
+    return SupervisorAttendanceReport(
+      startDate: normalizedStartDate,
+      endDate: normalizedEndDate,
+      records: records,
     );
   }
 
@@ -240,6 +361,21 @@ class SupervisorAttendanceService {
         .toList(growable: false);
   }
 
+  Future<List<Map<String, dynamic>>> _fetchAttendanceRowsForRange({
+    required String startLabel,
+    required String endLabel,
+  }) async {
+    final List<dynamic> rows = await _client
+        .from(attendanceTableName)
+        .select()
+        .gte('work_date', startLabel)
+        .lte('work_date', endLabel);
+
+    return rows
+        .map((dynamic row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+  }
+
   Future<List<Map<String, dynamic>>> _fetchLeaveRows(String dateLabel) async {
     final List<dynamic> rows = await _client
         .from(leaveTableName)
@@ -252,11 +388,32 @@ class SupervisorAttendanceService {
         .toList(growable: false);
   }
 
-  Future<Map<String, String>> _officeNamesById() async {
+  Future<List<Map<String, dynamic>>> _fetchLeaveRowsForRange({
+    required String startLabel,
+    required String endLabel,
+  }) async {
+    final List<dynamic> rows = await _client
+        .from(leaveTableName)
+        .select('user_id, status, start_date, end_date')
+        .lte('start_date', endLabel)
+        .gte('end_date', startLabel);
+
+    return rows
+        .map((dynamic row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+  }
+
+  Future<Map<String, _OfficeLookup>> _officesById() async {
     final List<OfficeLocation> offices = await _officeLocationService
         .fetchOfficeLocations();
-    return <String, String>{
-      for (final OfficeLocation office in offices) office.id: office.officeName,
+    return <String, _OfficeLookup>{
+      for (final OfficeLocation office in offices)
+        office.id: _OfficeLookup(
+          id: office.id,
+          officeName: office.officeName,
+          province: office.province,
+          district: office.district,
+        ),
     };
   }
 
@@ -277,12 +434,44 @@ class SupervisorAttendanceService {
     return statuses;
   }
 
+  String? _leaveStatusForEmployeeDate({
+    required List<Map<String, dynamic>> leaveRows,
+    required String userId,
+    required DateTime date,
+  }) {
+    bool hasPending = false;
+    for (final Map<String, dynamic> row in leaveRows) {
+      if (row['user_id'] != userId) {
+        continue;
+      }
+
+      final DateTime startDate = _dateOnly(
+        DateTime.parse(row['start_date'] as String),
+      );
+      final DateTime endDate = _dateOnly(
+        DateTime.parse(row['end_date'] as String),
+      );
+      if (date.isBefore(startDate) || date.isAfter(endDate)) {
+        continue;
+      }
+
+      switch (row['status'] as String?) {
+        case 'approved':
+          return 'approved';
+        case 'pending':
+          hasPending = true;
+          break;
+      }
+    }
+    return hasPending ? 'pending' : null;
+  }
+
   SupervisorAttendanceEmployeeRecord _recordForEmployee({
     required _DashboardEmployee employee,
     required DateTime date,
     required SupabaseAttendanceRecord? attendance,
     required String? leaveStatus,
-    required Map<String, String> officeNamesById,
+    required Map<String, _OfficeLookup> officesById,
   }) {
     if (attendance == null) {
       return SupervisorAttendanceEmployeeRecord(
@@ -308,6 +497,14 @@ class SupervisorAttendanceService {
       workedDuration: _workedDuration(attendance),
       clockInComment: attendance.clockInComment,
       clockOutComment: attendance.clockOutComment,
+      officeProvince: _officeLookupForAttendance(
+        attendance,
+        officesById,
+      )?.province,
+      officeDistrict: _officeLookupForAttendance(
+        attendance,
+        officesById,
+      )?.district,
       clockInLocation: _locationSnapshot(
         latitude: attendance.clockInLatitude,
         longitude: attendance.clockInLongitude,
@@ -316,10 +513,10 @@ class SupervisorAttendanceService {
         locationStatus: attendance.clockInLocationStatus,
         verifiedOfficeLocationId: attendance.clockInVerifiedOfficeLocationId,
         verifiedOfficeName:
-            officeNamesById[attendance.clockInVerifiedOfficeLocationId],
+            officesById[attendance.clockInVerifiedOfficeLocationId]?.officeName,
         nearestOfficeLocationId: attendance.clockInNearestOfficeLocationId,
         nearestOfficeName:
-            officeNamesById[attendance.clockInNearestOfficeLocationId],
+            officesById[attendance.clockInNearestOfficeLocationId]?.officeName,
         distanceMeters: attendance.clockInDistanceMeters,
         geofenceRadiusMeters: attendance.clockInGeofenceRadiusMeters,
       ),
@@ -331,10 +528,11 @@ class SupervisorAttendanceService {
         locationStatus: attendance.clockOutLocationStatus,
         verifiedOfficeLocationId: attendance.clockOutVerifiedOfficeLocationId,
         verifiedOfficeName:
-            officeNamesById[attendance.clockOutVerifiedOfficeLocationId],
+            officesById[attendance.clockOutVerifiedOfficeLocationId]
+                ?.officeName,
         nearestOfficeLocationId: attendance.clockOutNearestOfficeLocationId,
         nearestOfficeName:
-            officeNamesById[attendance.clockOutNearestOfficeLocationId],
+            officesById[attendance.clockOutNearestOfficeLocationId]?.officeName,
         distanceMeters: attendance.clockOutDistanceMeters,
         geofenceRadiusMeters: attendance.clockOutGeofenceRadiusMeters,
       ),
@@ -377,6 +575,21 @@ class SupervisorAttendanceService {
       default:
         return SupervisorAttendanceStatus.noClockIn;
     }
+  }
+
+  _OfficeLookup? _officeLookupForAttendance(
+    SupabaseAttendanceRecord attendance,
+    Map<String, _OfficeLookup> officesById,
+  ) {
+    final String? officeId =
+        attendance.clockInVerifiedOfficeLocationId ??
+        attendance.clockInNearestOfficeLocationId ??
+        attendance.clockOutVerifiedOfficeLocationId ??
+        attendance.clockOutNearestOfficeLocationId;
+    if (officeId == null) {
+      return null;
+    }
+    return officesById[officeId];
   }
 
   Duration? _workedDuration(SupabaseAttendanceRecord attendance) {
@@ -444,6 +657,10 @@ class SupervisorAttendanceService {
     final String day = localDate.day.toString().padLeft(2, '0');
     return '$year-$month-$day';
   }
+
+  String _attendanceKey({required String userId, required String dateLabel}) {
+    return '$userId::$dateLabel';
+  }
 }
 
 class _DashboardEmployee {
@@ -470,6 +687,20 @@ class _DashboardEmployee {
       department: map['department'] as String?,
     );
   }
+}
+
+class _OfficeLookup {
+  const _OfficeLookup({
+    required this.id,
+    required this.officeName,
+    this.province,
+    this.district,
+  });
+
+  final String id;
+  final String officeName;
+  final String? province;
+  final String? district;
 }
 
 ClockLocationSnapshot? _locationSnapshot({
