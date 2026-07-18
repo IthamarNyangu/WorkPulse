@@ -21,7 +21,8 @@ class ClockConfirmationScreen extends StatefulWidget {
       _ClockConfirmationScreenState();
 }
 
-class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
+class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
+    with WidgetsBindingObserver {
   static const Duration _loadingIndicatorDelay = Duration(milliseconds: 250);
 
   final WorkPulseLocationService _locationService = WorkPulseLocationService();
@@ -39,6 +40,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _commentController = TextEditingController();
     _commentFocusNode = FocusNode();
     _commentFocusNode.addListener(_onCommentFocusChanged);
@@ -49,11 +51,22 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
   @override
   void dispose() {
     _loadingTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _commentFocusNode.removeListener(_onCommentFocusChanged);
     _commentFocusNode.dispose();
     _scrollController.dispose();
     _commentController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    if (!_commentFocusNode.hasFocus) {
+      return;
+    }
+    _scrollCommentIntoView(delay: const Duration(milliseconds: 120));
+    _scrollCommentIntoView(delay: const Duration(milliseconds: 360));
   }
 
   void _onCommentFocusChanged() {
@@ -578,7 +591,7 @@ class ClockMapPlaceholderCard extends StatelessWidget {
         : PulseClockColors.statusPendingAccent;
 
     return SurfaceCard(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -586,16 +599,14 @@ class ClockMapPlaceholderCard extends StatelessWidget {
             children: [
               Text(
                 'Location Verification',
-                style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 17),
+                style: PulseClockTextStyles.cardSubtitle.copyWith(
+                  color: PulseClockColors.textSecondary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const Spacer(),
-              if (isLoading)
-                const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else if (onRetry != null)
+              if (!isLoading && onRetry != null)
                 OutlinedButton.icon(
                   onPressed: onRetry,
                   icon: const Icon(Icons.refresh_rounded, size: 16),
@@ -610,6 +621,10 @@ class ClockMapPlaceholderCard extends StatelessWidget {
                     side: const BorderSide(
                       color: PulseClockColors.actionBlue,
                       width: 1,
+                    ),
+                    textStyle: PulseClockTextStyles.cardSubtitle.copyWith(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(999),
@@ -664,10 +679,10 @@ class _MapPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(7),
       child: Container(
-        height: 136,
-        decoration: const BoxDecoration(color: Color(0xFFE7EEF8)),
+        height: 154,
+        decoration: const BoxDecoration(color: Color(0xFF596C52)),
         child: Stack(
           children: [
             Positioned.fill(child: CustomPaint(painter: _MapPreviewPainter())),
@@ -681,15 +696,20 @@ class _MapPreview extends StatelessWidget {
                         height: 28,
                         child: CircularProgressIndicator(strokeWidth: 2.6),
                       )
-                    : Icon(
-                        hasLocation
-                            ? Icons.location_pin
-                            : Icons.location_searching_rounded,
+                    : Column(
                         key: ValueKey<bool>(hasLocation),
-                        size: 46,
-                        color: hasLocation
-                            ? statusColor
-                            : PulseClockColors.textSecondary,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            hasLocation
+                                ? Icons.location_pin
+                                : Icons.location_searching_rounded,
+                            size: 46,
+                            color: hasLocation
+                                ? statusColor
+                                : PulseClockColors.textSecondary,
+                          ),
+                        ],
                       ),
               ),
             ),
@@ -722,54 +742,126 @@ class _MapPreview extends StatelessWidget {
 class _MapPreviewPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint blockPaint = Paint()..color = const Color(0xFFDCE6F2);
+    final Paint basePaint = Paint()..color = const Color(0xFF5F714F);
+    final Paint fieldPaint = Paint()..color = const Color(0xFF6F805A);
+    final Paint darkFieldPaint = Paint()..color = const Color(0xFF455C3D);
+    final Paint earthPaint = Paint()..color = const Color(0xFF9B8A63);
+    final Paint roofPaint = Paint()..color = const Color(0xFFB9B1A3);
     final Paint roadPaint = Paint()
-      ..color = Colors.white.withOpacity(0.92)
+      ..color = const Color(0xFFDDD8C9).withOpacity(0.94)
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = 14;
+      ..strokeWidth = 10;
     final Paint minorRoadPaint = Paint()
-      ..color = Colors.white.withOpacity(0.72)
+      ..color = const Color(0xFFC8C3B6).withOpacity(0.82)
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = 7;
-    final Paint routePaint = Paint()
-      ..color = const Color(0xFFB9C8DA)
+      ..strokeWidth = 5;
+    final Paint boundaryPaint = Paint()
+      ..color = Colors.black.withOpacity(0.08)
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = 3;
+      ..strokeWidth = 1.4;
 
-    canvas.drawRect(Offset.zero & size, blockPaint);
+    canvas.drawRect(Offset.zero & size, basePaint);
+
+    void drawParcel(List<Offset> points, Paint paint) {
+      final Path path = Path()..moveTo(points.first.dx, points.first.dy);
+      for (final Offset point in points.skip(1)) {
+        path.lineTo(point.dx, point.dy);
+      }
+      path.close();
+      canvas.drawPath(path, paint);
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = Colors.black.withOpacity(0.05),
+      );
+    }
+
+    drawParcel(<Offset>[
+      const Offset(-10, 0),
+      Offset(size.width * 0.35, 0),
+      Offset(size.width * 0.26, size.height * 0.42),
+      Offset(0, size.height * 0.36),
+    ], fieldPaint);
+    drawParcel(<Offset>[
+      Offset(size.width * 0.35, 0),
+      Offset(size.width, 0),
+      Offset(size.width * 0.9, size.height * 0.35),
+      Offset(size.width * 0.26, size.height * 0.42),
+    ], darkFieldPaint);
+    drawParcel(<Offset>[
+      Offset(0, size.height * 0.36),
+      Offset(size.width * 0.26, size.height * 0.42),
+      Offset(size.width * 0.18, size.height),
+      const Offset(-12, 140),
+    ], earthPaint);
+    drawParcel(<Offset>[
+      Offset(size.width * 0.26, size.height * 0.42),
+      Offset(size.width * 0.9, size.height * 0.35),
+      Offset(size.width, size.height),
+      Offset(size.width * 0.18, size.height),
+    ], fieldPaint);
 
     canvas.drawLine(
-      Offset(-16, size.height * 0.18),
-      Offset(size.width + 20, size.height * 0.04),
+      Offset(-18, size.height * 0.2),
+      Offset(size.width + 18, size.height * 0.1),
       roadPaint,
     );
     canvas.drawLine(
-      Offset(size.width * 0.18, -12),
+      Offset(size.width * 0.2, -12),
       Offset(size.width * 0.76, size.height + 16),
       roadPaint,
     );
     canvas.drawLine(
-      Offset(-12, size.height * 0.72),
-      Offset(size.width + 16, size.height * 0.54),
+      Offset(-14, size.height * 0.72),
+      Offset(size.width + 14, size.height * 0.56),
       minorRoadPaint,
     );
     canvas.drawLine(
-      Offset(size.width * 0.06, size.height + 12),
-      Offset(size.width * 0.42, -14),
+      Offset(size.width * 0.08, size.height + 12),
+      Offset(size.width * 0.44, -14),
       minorRoadPaint,
     );
     canvas.drawLine(
-      Offset(size.width * 0.62, -10),
-      Offset(size.width * 0.93, size.height + 10),
+      Offset(size.width * 0.64, -10),
+      Offset(size.width * 0.92, size.height + 10),
       minorRoadPaint,
     );
 
-    for (double y = 18; y < size.height; y += 34) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y + 14), routePaint);
+    for (double y = 18; y < size.height; y += 32) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y + 13), boundaryPaint);
     }
-    for (double x = 26; x < size.width; x += 44) {
-      canvas.drawLine(Offset(x, 0), Offset(x - 26, size.height), routePaint);
+    for (double x = 24; x < size.width; x += 42) {
+      canvas.drawLine(Offset(x, 0), Offset(x - 24, size.height), boundaryPaint);
     }
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.width * 0.13, size.height * 0.48, 36, 18),
+        const Radius.circular(3),
+      ),
+      roofPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.width * 0.73, size.height * 0.22, 42, 22),
+        const Radius.circular(4),
+      ),
+      roofPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.width * 0.58, size.height * 0.72, 54, 20),
+        const Radius.circular(4),
+      ),
+      Paint()..color = roofPaint.color.withOpacity(0.9),
+    );
+
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = const Color(0xFF1C2740).withOpacity(0.1),
+    );
   }
 
   @override
