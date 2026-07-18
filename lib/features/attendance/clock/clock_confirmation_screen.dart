@@ -896,10 +896,3 @@ String _locationStatusMessage(ClockLocationSnapshot snapshot) {
       return 'GPS status will be attached when available.';
   }
 }
-
-String _metersLabel(double meters) {
-  if (meters >= 1000) {
-    return '${(meters / 1000).toStringAsFixed(2)} km';
-  }
-  return '${meters.toStringAsFixed(0)} m';
-}

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/auth/data/auth_service.dart';
 import 'package:pulseclock/features/notifications/notifications_screen.dart';
+import 'package:pulseclock/features/office_locations/office_locations_admin_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
@@ -13,9 +14,19 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  static const Set<String> _officeManagerRoles = <String>{
+    'supervisor',
+    'hr',
+    'admin',
+  };
+
   String _employeeName = 'Ithamar Nyangu';
   String _employeeId = 'IN-2048';
+  String _employeeRole = 'employee';
   bool _isLoggingOut = false;
+
+  bool get _canManageOfficeLocations =>
+      _officeManagerRoles.contains(_employeeRole);
 
   @override
   void initState() {
@@ -37,6 +48,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _employeeName = profile.fullName;
         _employeeId = profile.employeeId;
+        _employeeRole = profile.role;
       });
     } catch (_) {
       // Keep existing mock values if the backend profile is unavailable.
@@ -53,6 +65,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Animation<double> secondaryAnimation,
             ) {
               return const NotificationsScreen();
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
+
+  Future<void> _openOfficeLocations(BuildContext context) async {
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return const OfficeLocationsAdminScreen();
             },
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
@@ -329,6 +358,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Expanded(
             child: ListView(
               children: [
+                if (_canManageOfficeLocations) ...<Widget>[
+                  _SectionHeader(title: 'Administration'),
+                  const SizedBox(height: 8),
+                  _ProfileSectionCard(
+                    items: [
+                      _ProfileActionItem(
+                        icon: Icons.business_outlined,
+                        title: 'Office Locations',
+                        onTap: () => _openOfficeLocations(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 _SectionHeader(title: 'Preferences'),
                 const SizedBox(height: 8),
                 _ProfileSectionCard(

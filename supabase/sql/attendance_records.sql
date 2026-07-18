@@ -32,9 +32,10 @@ create table public.office_locations (
   id uuid primary key default gen_random_uuid(),
   office_name text not null unique,
   province text,
+  district text,
   latitude double precision not null,
   longitude double precision not null,
-  radius_m double precision not null check (radius_m >= 80),
+  radius_m double precision not null check (radius_m >= 80 and radius_m <= 500),
   is_active boolean not null default true,
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default timezone('utc', now()),
@@ -235,6 +236,7 @@ on conflict (id) do nothing;
 insert into public.office_locations (
   office_name,
   province,
+  district,
   latitude,
   longitude,
   radius_m,
@@ -244,6 +246,7 @@ values
   (
     'Lusaka Test Office',
     'Lusaka',
+    'Lusaka',
     -15.446036,
     28.321079,
     100,
@@ -251,6 +254,7 @@ values
   ),
   (
     'Lusaka HQ',
+    'Lusaka',
     'Lusaka',
     -15.4136425,
     28.3414573,
@@ -260,6 +264,7 @@ values
 on conflict (office_name) do update
 set
   province = excluded.province,
+  district = excluded.district,
   latitude = excluded.latitude,
   longitude = excluded.longitude,
   radius_m = excluded.radius_m,
@@ -296,6 +301,25 @@ on public.office_locations
 for select
 to authenticated
 using (is_active = true);
+
+create policy "office_locations_select_manager"
+on public.office_locations
+for select
+to authenticated
+using (public.current_user_role() in ('supervisor', 'hr', 'admin'));
+
+create policy "office_locations_insert_manager"
+on public.office_locations
+for insert
+to authenticated
+with check (public.current_user_role() in ('supervisor', 'hr', 'admin'));
+
+create policy "office_locations_update_manager"
+on public.office_locations
+for update
+to authenticated
+using (public.current_user_role() in ('supervisor', 'hr', 'admin'))
+with check (public.current_user_role() in ('supervisor', 'hr', 'admin'));
 
 create policy "attendance_select_own"
 on public.attendance_records

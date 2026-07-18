@@ -17,14 +17,39 @@ create table if not exists public.office_locations (
   id uuid primary key default gen_random_uuid(),
   office_name text not null,
   province text,
+  district text,
   latitude double precision not null,
   longitude double precision not null,
-  radius_m double precision not null check (radius_m >= 80),
+  radius_m double precision not null check (radius_m >= 80 and radius_m <= 500),
   is_active boolean not null default true,
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.office_locations
+add column if not exists district text;
+
+alter table public.office_locations
+drop constraint if exists office_locations_radius_m_check;
+
+alter table public.office_locations
+add constraint office_locations_radius_m_check
+check (radius_m >= 80 and radius_m <= 500);
+
+create or replace function public.current_user_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select role
+  from public.profiles
+  where id = auth.uid()
+$$;
+
+grant execute on function public.current_user_role() to authenticated;
 
 create unique index if not exists office_locations_office_name_key
 on public.office_locations (office_name);
@@ -95,9 +120,38 @@ for select
 to authenticated
 using (is_active = true);
 
+drop policy if exists "office_locations_select_manager"
+on public.office_locations;
+
+create policy "office_locations_select_manager"
+on public.office_locations
+for select
+to authenticated
+using (public.current_user_role() in ('supervisor', 'hr', 'admin'));
+
+drop policy if exists "office_locations_insert_manager"
+on public.office_locations;
+
+create policy "office_locations_insert_manager"
+on public.office_locations
+for insert
+to authenticated
+with check (public.current_user_role() in ('supervisor', 'hr', 'admin'));
+
+drop policy if exists "office_locations_update_manager"
+on public.office_locations;
+
+create policy "office_locations_update_manager"
+on public.office_locations
+for update
+to authenticated
+using (public.current_user_role() in ('supervisor', 'hr', 'admin'))
+with check (public.current_user_role() in ('supervisor', 'hr', 'admin'));
+
 insert into public.office_locations (
   office_name,
   province,
+  district,
   latitude,
   longitude,
   radius_m,
@@ -107,6 +161,7 @@ values
   (
     'Lusaka Test Office',
     'Lusaka',
+    'Lusaka',
     -15.446036,
     28.321079,
     100,
@@ -114,6 +169,7 @@ values
   ),
   (
     'Lusaka HQ',
+    'Lusaka',
     'Lusaka',
     -15.4136425,
     28.3414573,
@@ -123,6 +179,7 @@ values
 on conflict (office_name) do update
 set
   province = excluded.province,
+  district = excluded.district,
   latitude = excluded.latitude,
   longitude = excluded.longitude,
   radius_m = excluded.radius_m,
