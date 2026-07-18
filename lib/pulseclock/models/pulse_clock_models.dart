@@ -44,6 +44,14 @@ enum LeaveRequestStatus { pendingApproval, approved, rejected }
 
 enum ClockActionMode { clockIn, clockOut }
 
+enum ClockLocationStatus {
+  insideOffice,
+  outsideAllOffices,
+  locationUnavailable,
+  lowAccuracy,
+  noOfficesConfigured,
+}
+
 enum WorkPulseNotificationType {
   clockInReminder,
   clockOutReminder,
@@ -227,6 +235,55 @@ extension ClockActionModeLabels on ClockActionMode {
   }
 }
 
+extension ClockLocationStatusLabels on ClockLocationStatus {
+  String get dbValue {
+    switch (this) {
+      case ClockLocationStatus.insideOffice:
+        return 'inside_office';
+      case ClockLocationStatus.outsideAllOffices:
+        return 'outside_all_offices';
+      case ClockLocationStatus.locationUnavailable:
+        return 'location_unavailable';
+      case ClockLocationStatus.lowAccuracy:
+        return 'low_accuracy';
+      case ClockLocationStatus.noOfficesConfigured:
+        return 'no_offices_configured';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case ClockLocationStatus.insideOffice:
+        return 'Verified Location';
+      case ClockLocationStatus.outsideAllOffices:
+        return 'Outside All Approved Offices';
+      case ClockLocationStatus.locationUnavailable:
+        return 'Location Unavailable';
+      case ClockLocationStatus.lowAccuracy:
+        return 'Low Accuracy';
+      case ClockLocationStatus.noOfficesConfigured:
+        return 'No Offices Configured';
+    }
+  }
+
+  static ClockLocationStatus fromDbValue(String? value) {
+    switch (value) {
+      case 'inside_office':
+        return ClockLocationStatus.insideOffice;
+      case 'outside_all_offices':
+        return ClockLocationStatus.outsideAllOffices;
+      case 'location_unavailable':
+        return ClockLocationStatus.locationUnavailable;
+      case 'low_accuracy':
+        return ClockLocationStatus.lowAccuracy;
+      case 'no_offices_configured':
+        return ClockLocationStatus.noOfficesConfigured;
+      default:
+        return ClockLocationStatus.locationUnavailable;
+    }
+  }
+}
+
 extension WorkPulseNotificationTypeLabels on WorkPulseNotificationType {
   String get label {
     switch (this) {
@@ -260,17 +317,41 @@ class ClockLocationSnapshot {
   const ClockLocationSnapshot({
     required this.coordinates,
     required this.accuracyMeters,
-    required this.isInsideGeofence,
+    required this.status,
+    this.verifiedOfficeLocationId,
+    this.verifiedOfficeName,
+    this.nearestOfficeLocationId,
+    this.nearestOfficeName,
+    this.distanceMeters,
+    this.geofenceRadiusMeters,
   });
 
   final String coordinates;
   final double accuracyMeters;
-  final bool isInsideGeofence;
+  final ClockLocationStatus status;
+  final String? verifiedOfficeLocationId;
+  final String? verifiedOfficeName;
+  final String? nearestOfficeLocationId;
+  final String? nearestOfficeName;
+  final double? distanceMeters;
+  final double? geofenceRadiusMeters;
+
+  bool get isInsideGeofence => status == ClockLocationStatus.insideOffice;
 }
 
 extension ClockLocationSnapshotLabels on ClockLocationSnapshot {
   String get geofenceLabel {
-    return isInsideGeofence ? 'Inside Geofence' : 'Outside Geofence';
+    return status.label;
+  }
+
+  String get accuracyQualityLabel {
+    return status == ClockLocationStatus.lowAccuracy || accuracyMeters > 100
+        ? 'Low Accuracy'
+        : 'Good Accuracy';
+  }
+
+  String? get officeDisplayName {
+    return verifiedOfficeName ?? nearestOfficeName;
   }
 }
 

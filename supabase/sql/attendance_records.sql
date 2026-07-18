@@ -6,6 +6,7 @@ drop trigger if exists on_auth_user_created on auth.users;
 drop table if exists public.correction_requests cascade;
 drop table if exists public.leave_requests cascade;
 drop table if exists public.attendance_records cascade;
+drop table if exists public.office_locations cascade;
 drop table if exists public.profiles cascade;
 
 drop function if exists public.handle_new_user();
@@ -27,6 +28,19 @@ create table public.profiles (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create table public.office_locations (
+  id uuid primary key default gen_random_uuid(),
+  office_name text not null unique,
+  province text,
+  latitude double precision not null,
+  longitude double precision not null,
+  radius_m double precision not null check (radius_m >= 80),
+  is_active boolean not null default true,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
 create table public.attendance_records (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
@@ -40,10 +54,38 @@ create table public.attendance_records (
   clock_in_lng double precision,
   clock_in_accuracy_m double precision,
   clock_in_inside_geofence boolean,
+  clock_in_verified_office_location_id uuid references public.office_locations(id) on delete set null,
+  clock_in_nearest_office_location_id uuid references public.office_locations(id) on delete set null,
+  clock_in_distance_m double precision,
+  clock_in_geofence_radius_m double precision,
+  clock_in_location_status text check (
+    clock_in_location_status is null
+    or clock_in_location_status in (
+      'inside_office',
+      'outside_all_offices',
+      'location_unavailable',
+      'low_accuracy',
+      'no_offices_configured'
+    )
+  ),
   clock_out_lat double precision,
   clock_out_lng double precision,
   clock_out_accuracy_m double precision,
   clock_out_inside_geofence boolean,
+  clock_out_verified_office_location_id uuid references public.office_locations(id) on delete set null,
+  clock_out_nearest_office_location_id uuid references public.office_locations(id) on delete set null,
+  clock_out_distance_m double precision,
+  clock_out_geofence_radius_m double precision,
+  clock_out_location_status text check (
+    clock_out_location_status is null
+    or clock_out_location_status in (
+      'inside_office',
+      'outside_all_offices',
+      'location_unavailable',
+      'low_accuracy',
+      'no_offices_configured'
+    )
+  ),
   status text not null check (
     status in (
       'on_duty',
@@ -107,6 +149,10 @@ $$;
 
 create trigger set_profiles_updated_at
 before update on public.profiles
+for each row execute function public.set_updated_at();
+
+create trigger set_office_locations_updated_at
+before update on public.office_locations
 for each row execute function public.set_updated_at();
 
 create trigger set_attendance_records_updated_at
@@ -186,7 +232,42 @@ select
 from auth.users as users
 on conflict (id) do nothing;
 
+insert into public.office_locations (
+  office_name,
+  province,
+  latitude,
+  longitude,
+  radius_m,
+  is_active
+)
+values
+  (
+    'Lusaka Test Office',
+    'Lusaka',
+    -15.446036,
+    28.321079,
+    100,
+    true
+  ),
+  (
+    'Lusaka HQ',
+    'Lusaka',
+    -15.4136425,
+    28.3414573,
+    100,
+    true
+  )
+on conflict (office_name) do update
+set
+  province = excluded.province,
+  latitude = excluded.latitude,
+  longitude = excluded.longitude,
+  radius_m = excluded.radius_m,
+  is_active = excluded.is_active,
+  updated_at = timezone('utc', now());
+
 alter table public.profiles enable row level security;
+alter table public.office_locations enable row level security;
 alter table public.attendance_records enable row level security;
 alter table public.leave_requests enable row level security;
 alter table public.correction_requests enable row level security;
@@ -209,6 +290,12 @@ for update
 to authenticated
 using (auth.uid() = id)
 with check (auth.uid() = id);
+
+create policy "office_locations_select_active"
+on public.office_locations
+for select
+to authenticated
+using (is_active = true);
 
 create policy "attendance_select_own"
 on public.attendance_records

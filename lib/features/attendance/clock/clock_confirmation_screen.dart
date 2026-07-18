@@ -77,7 +77,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
     }
 
     final BuildContext? commentContext = _commentCardKey.currentContext;
-    if (commentContext == null) {
+    if (commentContext == null || !commentContext.mounted) {
       return;
     }
 
@@ -249,11 +249,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
     }
 
     final AttendanceService attendanceService = AttendanceService();
-    final (double? latitude, double? longitude) = _coordinatesFromSnapshot(
-      _locationResult?.snapshot,
-    );
-    final double? accuracyMeters = _locationResult?.snapshot?.accuracyMeters;
-    final bool? isInsideGeofence = _locationResult?.snapshot?.isInsideGeofence;
+    final ClockLocationSnapshot? locationSnapshot = _locationResult?.snapshot;
     final String comment = _commentController.text.trim();
     final String? safeComment = comment.isEmpty ? null : comment;
     final DateTime now = DateTime.now();
@@ -263,10 +259,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
           .insertClockIn(
             comment: safeComment,
             clockInAt: now,
-            latitude: latitude,
-            longitude: longitude,
-            accuracyMeters: accuracyMeters,
-            isInsideGeofence: isInsideGeofence,
+            locationSnapshot: locationSnapshot,
           );
       developer.log(
         'Clock in saved to Supabase: ${record.id}',
@@ -286,10 +279,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
         .insertClockOut(
           comment: safeComment,
           clockOutAt: now,
-          latitude: latitude,
-          longitude: longitude,
-          accuracyMeters: accuracyMeters,
-          isInsideGeofence: isInsideGeofence,
+          locationSnapshot: locationSnapshot,
         );
     developer.log(
       'Clock out saved to Supabase: ${record.id}',
@@ -493,17 +483,6 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen> {
   }
 }
 
-(double?, double?) _coordinatesFromSnapshot(ClockLocationSnapshot? snapshot) {
-  if (snapshot == null) {
-    return (null, null);
-  }
-  final List<String> parts = snapshot.coordinates.split(',');
-  if (parts.length != 2) {
-    return (null, null);
-  }
-  return (double.tryParse(parts[0].trim()), double.tryParse(parts[1].trim()));
-}
-
 String _friendlyPostgrestError(PostgrestException error) {
   final String details = error.message.trim();
   if (details.isEmpty) {
@@ -594,11 +573,8 @@ class ClockMapPlaceholderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final ClockLocationSnapshot? snapshot = result?.snapshot;
     final bool hasLocation = snapshot != null;
-    final bool isInside = snapshot?.isInsideGeofence ?? false;
     final Color statusColor = hasLocation
-        ? (isInside
-              ? PulseClockColors.statusOnDutyAccent
-              : PulseClockColors.statusMissedAccent)
+        ? _locationStatusColor(snapshot.status)
         : PulseClockColors.statusPendingAccent;
 
     return SurfaceCard(
@@ -654,6 +630,17 @@ class ClockMapPlaceholderCard extends StatelessWidget {
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else if (onRetry != null)
+                TextButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('Retry'),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    foregroundColor: PulseClockColors.actionBlue,
+                  ),
                 ),
             ],
           ),
@@ -673,18 +660,37 @@ class ClockMapPlaceholderCard extends StatelessWidget {
             const SizedBox(height: 5),
             _CompactLocationRow(
               label: 'GPS Accuracy',
-              value: '${snapshot.accuracyMeters.toStringAsFixed(1)} m',
+              value:
+                  '${snapshot.accuracyMeters.toStringAsFixed(1)} m (${snapshot.accuracyQualityLabel})',
             ),
             const SizedBox(height: 5),
             _CompactLocationRow(
-              label: 'Geofence',
+              label: 'Location Status',
               value: snapshot.geofenceLabel,
             ),
-            const SizedBox(height: 5),
-            _CompactLocationRow(
-              label: 'Office Radius',
-              value: '${result!.config.radiusMeters.toStringAsFixed(0)} m',
-            ),
+            if (snapshot.officeDisplayName != null) ...<Widget>[
+              const SizedBox(height: 5),
+              _CompactLocationRow(
+                label: snapshot.isInsideGeofence
+                    ? 'Verified Office'
+                    : 'Nearest Office',
+                value: snapshot.officeDisplayName!,
+              ),
+            ],
+            if (snapshot.distanceMeters != null) ...<Widget>[
+              const SizedBox(height: 5),
+              _CompactLocationRow(
+                label: 'Distance',
+                value: _metersLabel(snapshot.distanceMeters!),
+              ),
+            ],
+            if (snapshot.geofenceRadiusMeters != null) ...<Widget>[
+              const SizedBox(height: 5),
+              _CompactLocationRow(
+                label: 'Allowed Radius',
+                value: _metersLabel(snapshot.geofenceRadiusMeters!),
+              ),
+            ],
           ] else ...<Widget>[
             Text(
               result?.message ?? 'Location is unavailable.',
@@ -719,9 +725,7 @@ class ClockMapPlaceholderCard extends StatelessWidget {
             ),
             child: Text(
               hasLocation
-                  ? (isInside
-                        ? 'You appear to be inside the office geofence.'
-                        : 'You appear to be outside the office geofence.')
+                  ? _locationStatusMessage(snapshot)
                   : 'GPS status will be attached when available.',
               style: PulseClockTextStyles.cardSubtitle.copyWith(
                 color: statusColor,
@@ -769,4 +773,40 @@ class _CompactLocationRow extends StatelessWidget {
       ],
     );
   }
+}
+
+Color _locationStatusColor(ClockLocationStatus status) {
+  switch (status) {
+    case ClockLocationStatus.insideOffice:
+      return PulseClockColors.statusOnDutyAccent;
+    case ClockLocationStatus.outsideAllOffices:
+      return PulseClockColors.statusMissedAccent;
+    case ClockLocationStatus.lowAccuracy:
+    case ClockLocationStatus.noOfficesConfigured:
+      return PulseClockColors.statusPendingAccent;
+    case ClockLocationStatus.locationUnavailable:
+      return PulseClockColors.textSecondary;
+  }
+}
+
+String _locationStatusMessage(ClockLocationSnapshot snapshot) {
+  switch (snapshot.status) {
+    case ClockLocationStatus.insideOffice:
+      return 'Verified at ${snapshot.verifiedOfficeName ?? 'an approved WorkPulse office'}.';
+    case ClockLocationStatus.outsideAllOffices:
+      return 'You are outside all approved WorkPulse offices. This clock action will be flagged for review.';
+    case ClockLocationStatus.lowAccuracy:
+      return 'GPS accuracy is too low to verify this location. This clock action will be flagged for review.';
+    case ClockLocationStatus.noOfficesConfigured:
+      return 'No active WorkPulse office locations are configured yet.';
+    case ClockLocationStatus.locationUnavailable:
+      return 'GPS status will be attached when available.';
+  }
+}
+
+String _metersLabel(double meters) {
+  if (meters >= 1000) {
+    return '${(meters / 1000).toStringAsFixed(2)} km';
+  }
+  return '${meters.toStringAsFixed(0)} m';
 }

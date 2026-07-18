@@ -336,9 +336,7 @@ class _AttendanceLocationBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color accentColor = snapshot.isInsideGeofence
-        ? PulseClockColors.statusOnDutyAccent
-        : PulseClockColors.statusMissedAccent;
+    final Color accentColor = _locationStatusColor(snapshot.status);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,18 +348,36 @@ class _AttendanceLocationBlock extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          snapshot.coordinates,
-          style: PulseClockTextStyles.cardSubtitle.copyWith(
-            color: PulseClockColors.textPrimary,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        _LocationDetailLine(label: 'Coordinates', value: snapshot.coordinates),
         const SizedBox(height: 6),
-        Text(
-          'Accuracy: ${snapshot.accuracyMeters.toStringAsFixed(1)} m',
-          style: PulseClockTextStyles.cardSubtitle,
+        _LocationDetailLine(
+          label: 'Accuracy',
+          value:
+              '${snapshot.accuracyMeters.toStringAsFixed(1)} m (${snapshot.accuracyQualityLabel})',
         ),
+        if (snapshot.officeDisplayName != null) ...<Widget>[
+          const SizedBox(height: 6),
+          _LocationDetailLine(
+            label: snapshot.isInsideGeofence
+                ? 'Verified Office'
+                : 'Nearest Office',
+            value: snapshot.officeDisplayName!,
+          ),
+        ],
+        if (snapshot.distanceMeters != null) ...<Widget>[
+          const SizedBox(height: 6),
+          _LocationDetailLine(
+            label: 'Distance',
+            value: _metersLabel(snapshot.distanceMeters!),
+          ),
+        ],
+        if (snapshot.geofenceRadiusMeters != null) ...<Widget>[
+          const SizedBox(height: 6),
+          _LocationDetailLine(
+            label: 'Allowed Radius',
+            value: _metersLabel(snapshot.geofenceRadiusMeters!),
+          ),
+        ],
         const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -381,6 +397,58 @@ class _AttendanceLocationBlock extends StatelessWidget {
       ],
     );
   }
+}
+
+class _LocationDetailLine extends StatelessWidget {
+  const _LocationDetailLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 116,
+          child: Text(label, style: PulseClockTextStyles.cardSubtitle),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: PulseClockTextStyles.cardSubtitle.copyWith(
+              color: PulseClockColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Color _locationStatusColor(ClockLocationStatus status) {
+  switch (status) {
+    case ClockLocationStatus.insideOffice:
+      return PulseClockColors.statusOnDutyAccent;
+    case ClockLocationStatus.outsideAllOffices:
+      return PulseClockColors.statusMissedAccent;
+    case ClockLocationStatus.lowAccuracy:
+    case ClockLocationStatus.noOfficesConfigured:
+      return PulseClockColors.statusPendingAccent;
+    case ClockLocationStatus.locationUnavailable:
+      return PulseClockColors.textSecondary;
+  }
+}
+
+String _metersLabel(double meters) {
+  if (meters >= 1000) {
+    return '${(meters / 1000).toStringAsFixed(2)} km';
+  }
+  return '${meters.toStringAsFixed(0)} m';
 }
 
 String _issueSummaryFor(AttendanceRecord record) {

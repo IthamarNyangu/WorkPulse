@@ -1,5 +1,6 @@
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/auth/data/auth_service.dart';
+import 'package:pulseclock/features/attendance/location/office_location_service.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -24,6 +25,7 @@ class AttendanceService {
     double? longitude,
     double? accuracyMeters,
     bool? isInsideGeofence,
+    ClockLocationSnapshot? locationSnapshot,
   }) async {
     final DateTime effectiveClockInAt = clockInAt ?? DateTime.now();
     final WorkPulseUserProfile profile = await _requireCurrentProfile();
@@ -56,6 +58,9 @@ class AttendanceService {
       'clock_in_inside_geofence': isInsideGeofence,
       'status': 'on_duty',
     };
+    payload.addAll(
+      _locationPayload(prefix: 'clock_in', snapshot: locationSnapshot),
+    );
 
     final Map<String, dynamic> row = await _insertAttendance(payload);
 
@@ -69,6 +74,7 @@ class AttendanceService {
     double? longitude,
     double? accuracyMeters,
     bool? isInsideGeofence,
+    ClockLocationSnapshot? locationSnapshot,
   }) async {
     final DateTime effectiveClockOutAt = clockOutAt ?? DateTime.now();
     final SupabaseAttendanceRecord? record = await fetchTodaysAttendance(
@@ -100,6 +106,9 @@ class AttendanceService {
       'clock_out_inside_geofence': isInsideGeofence,
       'status': 'completed',
     };
+    payload.addAll(
+      _locationPayload(prefix: 'clock_out', snapshot: locationSnapshot),
+    );
 
     final Map<String, dynamic> row = await _updateAttendance(
       recordId: record.id,
@@ -143,11 +152,15 @@ class AttendanceService {
         .order('work_date', ascending: false)
         .order('created_at', ascending: false);
 
+    final Map<String, String> officeNamesById = await _officeNamesForRows(
+      rows.cast<dynamic>(),
+    );
+
     return rows
         .map(
           (dynamic row) => SupabaseAttendanceRecord.fromMap(
             Map<String, dynamic>.from(row as Map),
-          ).toHistoryRecord(),
+          ).toHistoryRecord(officeNamesById: officeNamesById),
         )
         .toList(growable: false);
   }
@@ -167,7 +180,13 @@ class AttendanceService {
       return null;
     }
 
-    return SupabaseAttendanceRecord.fromMap(row).toHistoryRecord();
+    final Map<String, String> officeNamesById = await _officeNamesForRows(
+      <dynamic>[row],
+    );
+
+    return SupabaseAttendanceRecord.fromMap(
+      row,
+    ).toHistoryRecord(officeNamesById: officeNamesById);
   }
 
   Future<void> syncAttendanceClassifications({
@@ -351,6 +370,10 @@ class AttendanceService {
     final String message = error.toString().toLowerCase();
     return message.contains('accuracy_m') ||
         message.contains('inside_geofence') ||
+        message.contains('office_location') ||
+        message.contains('location_status') ||
+        message.contains('distance_m') ||
+        message.contains('geofence_radius_m') ||
         message.contains('schema cache');
   }
 
@@ -360,7 +383,72 @@ class AttendanceService {
     safePayload.remove('clock_in_inside_geofence');
     safePayload.remove('clock_out_accuracy_m');
     safePayload.remove('clock_out_inside_geofence');
+    safePayload.remove('clock_in_verified_office_location_id');
+    safePayload.remove('clock_out_verified_office_location_id');
+    safePayload.remove('clock_in_nearest_office_location_id');
+    safePayload.remove('clock_out_nearest_office_location_id');
+    safePayload.remove('clock_in_distance_m');
+    safePayload.remove('clock_out_distance_m');
+    safePayload.remove('clock_in_geofence_radius_m');
+    safePayload.remove('clock_out_geofence_radius_m');
+    safePayload.remove('clock_in_location_status');
+    safePayload.remove('clock_out_location_status');
     return safePayload;
+  }
+
+  Map<String, dynamic> _locationPayload({
+    required String prefix,
+    required ClockLocationSnapshot? snapshot,
+  }) {
+    if (snapshot == null) {
+      return <String, dynamic>{
+        '${prefix}_location_status':
+            ClockLocationStatus.locationUnavailable.dbValue,
+      };
+    }
+
+    final (double? latitude, double? longitude) = _coordinatesFromSnapshot(
+      snapshot,
+    );
+
+    return <String, dynamic>{
+      '${prefix}_lat': latitude,
+      '${prefix}_lng': longitude,
+      '${prefix}_accuracy_m': snapshot.accuracyMeters,
+      '${prefix}_inside_geofence': snapshot.isInsideGeofence,
+      '${prefix}_verified_office_location_id':
+          snapshot.verifiedOfficeLocationId,
+      '${prefix}_nearest_office_location_id': snapshot.nearestOfficeLocationId,
+      '${prefix}_distance_m': snapshot.distanceMeters,
+      '${prefix}_geofence_radius_m': snapshot.geofenceRadiusMeters,
+      '${prefix}_location_status': snapshot.status.dbValue,
+    };
+  }
+
+  Future<Map<String, String>> _officeNamesForRows(List<dynamic> rows) async {
+    final Set<String> ids = <String>{};
+    for (final dynamic rawRow in rows) {
+      final Map<String, dynamic> row = Map<String, dynamic>.from(rawRow as Map);
+      ids.addAll(
+        <String?>[
+          row['clock_in_verified_office_location_id'] as String?,
+          row['clock_out_verified_office_location_id'] as String?,
+          row['clock_in_nearest_office_location_id'] as String?,
+          row['clock_out_nearest_office_location_id'] as String?,
+        ].whereType<String>(),
+      );
+    }
+
+    if (ids.isEmpty) {
+      return const <String, String>{};
+    }
+
+    final List<OfficeLocation> offices = await OfficeLocationService()
+        .fetchActiveOffices();
+    return <String, String>{
+      for (final OfficeLocation office in offices)
+        if (ids.contains(office.id)) office.id: office.officeName,
+    };
   }
 
   String? _statusForExistingAttendance({
@@ -509,10 +597,20 @@ class SupabaseAttendanceRecord {
     this.clockInLongitude,
     this.clockInAccuracyMeters,
     this.clockInInsideGeofence,
+    this.clockInVerifiedOfficeLocationId,
+    this.clockInNearestOfficeLocationId,
+    this.clockInDistanceMeters,
+    this.clockInGeofenceRadiusMeters,
+    this.clockInLocationStatus,
     this.clockOutLatitude,
     this.clockOutLongitude,
     this.clockOutAccuracyMeters,
     this.clockOutInsideGeofence,
+    this.clockOutVerifiedOfficeLocationId,
+    this.clockOutNearestOfficeLocationId,
+    this.clockOutDistanceMeters,
+    this.clockOutGeofenceRadiusMeters,
+    this.clockOutLocationStatus,
     this.status,
     this.createdAt,
     this.updatedAt,
@@ -530,10 +628,20 @@ class SupabaseAttendanceRecord {
   final double? clockInLongitude;
   final double? clockInAccuracyMeters;
   final bool? clockInInsideGeofence;
+  final String? clockInVerifiedOfficeLocationId;
+  final String? clockInNearestOfficeLocationId;
+  final double? clockInDistanceMeters;
+  final double? clockInGeofenceRadiusMeters;
+  final String? clockInLocationStatus;
   final double? clockOutLatitude;
   final double? clockOutLongitude;
   final double? clockOutAccuracyMeters;
   final bool? clockOutInsideGeofence;
+  final String? clockOutVerifiedOfficeLocationId;
+  final String? clockOutNearestOfficeLocationId;
+  final double? clockOutDistanceMeters;
+  final double? clockOutGeofenceRadiusMeters;
+  final String? clockOutLocationStatus;
   final String? status;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -552,10 +660,28 @@ class SupabaseAttendanceRecord {
       clockInLongitude: _parseDouble(map['clock_in_lng']),
       clockInAccuracyMeters: _parseDouble(map['clock_in_accuracy_m']),
       clockInInsideGeofence: map['clock_in_inside_geofence'] as bool?,
+      clockInVerifiedOfficeLocationId:
+          map['clock_in_verified_office_location_id'] as String?,
+      clockInNearestOfficeLocationId:
+          map['clock_in_nearest_office_location_id'] as String?,
+      clockInDistanceMeters: _parseDouble(map['clock_in_distance_m']),
+      clockInGeofenceRadiusMeters: _parseDouble(
+        map['clock_in_geofence_radius_m'],
+      ),
+      clockInLocationStatus: map['clock_in_location_status'] as String?,
       clockOutLatitude: _parseDouble(map['clock_out_lat']),
       clockOutLongitude: _parseDouble(map['clock_out_lng']),
       clockOutAccuracyMeters: _parseDouble(map['clock_out_accuracy_m']),
       clockOutInsideGeofence: map['clock_out_inside_geofence'] as bool?,
+      clockOutVerifiedOfficeLocationId:
+          map['clock_out_verified_office_location_id'] as String?,
+      clockOutNearestOfficeLocationId:
+          map['clock_out_nearest_office_location_id'] as String?,
+      clockOutDistanceMeters: _parseDouble(map['clock_out_distance_m']),
+      clockOutGeofenceRadiusMeters: _parseDouble(
+        map['clock_out_geofence_radius_m'],
+      ),
+      clockOutLocationStatus: map['clock_out_location_status'] as String?,
       status: map['status'] as String?,
       createdAt: _parseDateTime(map['created_at']),
       updatedAt: _parseDateTime(map['updated_at']),
@@ -576,7 +702,9 @@ class SupabaseAttendanceRecord {
     return (value as num).toDouble();
   }
 
-  AttendanceRecord toHistoryRecord() {
+  AttendanceRecord toHistoryRecord({
+    Map<String, String> officeNamesById = const <String, String>{},
+  }) {
     final String clockInTimeLabel = clockInAt == null
         ? '--'
         : timeLabel(clockInAt!);
@@ -598,12 +726,26 @@ class SupabaseAttendanceRecord {
         longitude: clockInLongitude,
         accuracyMeters: clockInAccuracyMeters,
         isInsideGeofence: clockInInsideGeofence,
+        locationStatus: clockInLocationStatus,
+        verifiedOfficeLocationId: clockInVerifiedOfficeLocationId,
+        verifiedOfficeName: officeNamesById[clockInVerifiedOfficeLocationId],
+        nearestOfficeLocationId: clockInNearestOfficeLocationId,
+        nearestOfficeName: officeNamesById[clockInNearestOfficeLocationId],
+        distanceMeters: clockInDistanceMeters,
+        geofenceRadiusMeters: clockInGeofenceRadiusMeters,
       ),
       clockOutLocation: _locationSnapshot(
         latitude: clockOutLatitude,
         longitude: clockOutLongitude,
         accuracyMeters: clockOutAccuracyMeters,
         isInsideGeofence: clockOutInsideGeofence,
+        locationStatus: clockOutLocationStatus,
+        verifiedOfficeLocationId: clockOutVerifiedOfficeLocationId,
+        verifiedOfficeName: officeNamesById[clockOutVerifiedOfficeLocationId],
+        nearestOfficeLocationId: clockOutNearestOfficeLocationId,
+        nearestOfficeName: officeNamesById[clockOutNearestOfficeLocationId],
+        distanceMeters: clockOutDistanceMeters,
+        geofenceRadiusMeters: clockOutGeofenceRadiusMeters,
       ),
     );
   }
@@ -677,15 +819,42 @@ ClockLocationSnapshot? _locationSnapshot({
   required double? longitude,
   required double? accuracyMeters,
   required bool? isInsideGeofence,
+  required String? locationStatus,
+  required String? verifiedOfficeLocationId,
+  required String? verifiedOfficeName,
+  required String? nearestOfficeLocationId,
+  required String? nearestOfficeName,
+  required double? distanceMeters,
+  required double? geofenceRadiusMeters,
 }) {
   if (latitude == null || longitude == null) {
     return null;
   }
 
+  final ClockLocationStatus status = locationStatus == null
+      ? ((isInsideGeofence ?? false)
+            ? ClockLocationStatus.insideOffice
+            : ClockLocationStatus.outsideAllOffices)
+      : ClockLocationStatusLabels.fromDbValue(locationStatus);
+
   return ClockLocationSnapshot(
     coordinates:
         '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
     accuracyMeters: accuracyMeters ?? 0,
-    isInsideGeofence: isInsideGeofence ?? false,
+    status: status,
+    verifiedOfficeLocationId: verifiedOfficeLocationId,
+    verifiedOfficeName: verifiedOfficeName,
+    nearestOfficeLocationId: nearestOfficeLocationId,
+    nearestOfficeName: nearestOfficeName,
+    distanceMeters: distanceMeters,
+    geofenceRadiusMeters: geofenceRadiusMeters,
   );
+}
+
+(double?, double?) _coordinatesFromSnapshot(ClockLocationSnapshot snapshot) {
+  final List<String> parts = snapshot.coordinates.split(',');
+  if (parts.length != 2) {
+    return (null, null);
+  }
+  return (double.tryParse(parts[0].trim()), double.tryParse(parts[1].trim()));
 }
