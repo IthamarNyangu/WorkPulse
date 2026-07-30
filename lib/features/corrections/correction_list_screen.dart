@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
-import 'package:pulseclock/features/corrections/data/correction_service.dart';
-import 'package:pulseclock/features/corrections/correction_details_screen.dart';
+import 'package:pulseclock/features/attendance/data/attendance_service.dart';
 import 'package:pulseclock/features/corrections/correction_form_screen.dart';
+import 'package:pulseclock/features/corrections/data/correction_service.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
+
+enum _CorrectionTab { needAction, submitted }
 
 class CorrectionListScreen extends StatefulWidget {
   const CorrectionListScreen({super.key});
@@ -21,13 +23,32 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
 
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
   final Set<String> _expandedRecordIds = <String>{};
-  List<AttendanceRecord> _missedPunchRecords = <AttendanceRecord>[];
-  int _pendingCorrectionCount = 0;
-  int _currentPage = 0;
+  final Set<String> _expandedRequestIds = <String>{};
+
+  List<AttendanceRecord> _recordsNeedingAction = <AttendanceRecord>[];
+  List<CorrectionRequest> _submittedRequests = <CorrectionRequest>[];
+  int _needActionPage = 0;
+  int _submittedPage = 0;
   bool _isLoading = true;
   String? _loadError;
+  _CorrectionTab _selectedTab = _CorrectionTab.needAction;
 
   bool get _usesBackend => SupabaseBootstrap.isInitialized;
+
+  int get _needActionTotalPages => _pageCount(_recordsNeedingAction.length);
+  int get _submittedTotalPages => _pageCount(_submittedRequests.length);
+
+  int get _selectedPage => _selectedTab == _CorrectionTab.needAction
+      ? _needActionPage
+      : _submittedPage;
+
+  int get _selectedTotalPages => _selectedTab == _CorrectionTab.needAction
+      ? _needActionTotalPages
+      : _submittedTotalPages;
+
+  bool get _selectedTabHasItems => _selectedTab == _CorrectionTab.needAction
+      ? _recordsNeedingAction.isNotEmpty
+      : _submittedRequests.isNotEmpty;
 
   @override
   void initState() {
@@ -53,15 +74,9 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
     }
 
     setState(() {
-      _missedPunchRecords = _store.missedPunchRecords;
-      _pendingCorrectionCount = _store.pendingCorrectionRequests.length;
-      final int totalPages = _totalPages;
-      if (_currentPage >= totalPages) {
-        _currentPage = totalPages - 1;
-      }
-      if (_currentPage < 0) {
-        _currentPage = 0;
-      }
+      _recordsNeedingAction = _store.missedPunchRecords;
+      _submittedRequests = _store.pendingCorrectionRequests;
+      _clampPages();
     });
   }
 
@@ -71,10 +86,11 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
         return;
       }
       setState(() {
-        _missedPunchRecords = _store.missedPunchRecords;
-        _pendingCorrectionCount = _store.pendingCorrectionRequests.length;
+        _recordsNeedingAction = _store.missedPunchRecords;
+        _submittedRequests = _store.pendingCorrectionRequests;
         _isLoading = false;
         _loadError = null;
+        _clampPages();
       });
       return;
     }
@@ -86,77 +102,70 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
 
     try {
       final CorrectionService service = CorrectionService();
-      final List<AttendanceRecord> missedPunchRecords = await service
+      final List<AttendanceRecord> records = await service
           .fetchMissedPunchRecords();
-      final int pendingCorrectionCount = await service
-          .fetchPendingCorrectionRequestCount();
+      final List<CorrectionRequest> requests = await service
+          .fetchPendingCorrectionRequests();
       if (!mounted) {
         return;
       }
       setState(() {
-        _missedPunchRecords = missedPunchRecords;
-        _pendingCorrectionCount = pendingCorrectionCount;
+        _recordsNeedingAction = records;
+        _submittedRequests = requests;
         _isLoading = false;
-        _currentPage = 0;
+        _needActionPage = 0;
+        _submittedPage = 0;
+        _clampPages();
       });
     } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _missedPunchRecords = <AttendanceRecord>[];
-        _pendingCorrectionCount = 0;
+        _recordsNeedingAction = <AttendanceRecord>[];
+        _submittedRequests = <CorrectionRequest>[];
         _isLoading = false;
         _loadError = error.toString();
       });
     }
   }
 
-  int get _totalPages {
-    final int count = _missedPunchRecords.length;
+  int _pageCount(int count) {
     if (count == 0) {
       return 1;
     }
     return ((count - 1) ~/ _pageSize) + 1;
   }
 
-  List<AttendanceRecord> _recordsOnCurrentPage() {
-    final List<AttendanceRecord> all = _missedPunchRecords;
-    if (all.isEmpty) {
-      return const <AttendanceRecord>[];
+  void _clampPages() {
+    if (_needActionPage >= _needActionTotalPages) {
+      _needActionPage = _needActionTotalPages - 1;
     }
-
-    final int start = _currentPage * _pageSize;
-    if (start >= all.length) {
-      return const <AttendanceRecord>[];
+    if (_submittedPage >= _submittedTotalPages) {
+      _submittedPage = _submittedTotalPages - 1;
     }
-
-    final int end = (start + _pageSize) > all.length
-        ? all.length
-        : start + _pageSize;
-    return all.sublist(start, end);
+    if (_needActionPage < 0) {
+      _needActionPage = 0;
+    }
+    if (_submittedPage < 0) {
+      _submittedPage = 0;
+    }
   }
 
-  Future<void> _openPendingCorrections() async {
-    await Navigator.of(context).push<bool>(
-      PageRouteBuilder<bool>(
-        pageBuilder:
-            (
-              BuildContext context,
-              Animation<double> animation,
-              Animation<double> secondaryAnimation,
-            ) {
-              return const CorrectionDetailsScreen();
-            },
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-      ),
-    );
-
-    if (!mounted) {
-      return;
+  List<T> _itemsOnPage<T>(List<T> items, int page) {
+    if (items.isEmpty) {
+      return <T>[];
     }
-    await _loadCorrectionOverview();
+
+    final int start = page * _pageSize;
+    if (start >= items.length) {
+      return <T>[];
+    }
+
+    final int end = (start + _pageSize) > items.length
+        ? items.length
+        : start + _pageSize;
+    return items.sublist(start, end);
   }
 
   Future<void> _openCorrectionForm(AttendanceRecord record) async {
@@ -191,16 +200,203 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
     if (!mounted) {
       return;
     }
+    setState(() {
+      _selectedTab = _CorrectionTab.submitted;
+    });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Correction request submitted.')),
     );
   }
 
+  Future<void> _openEditRequestForm(CorrectionRequest request) async {
+    AttendanceRecord? record;
+    if (_usesBackend) {
+      if (request.attendanceRecordId.isNotEmpty) {
+        try {
+          record = await AttendanceService().fetchHistoryRecordById(
+            request.attendanceRecordId,
+          );
+        } catch (_) {
+          record = null;
+        }
+      }
+    } else {
+      record = _store.attendanceRecordById(request.attendanceRecordId);
+    }
+
+    if (record == null && !_usesBackend) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Attendance record no longer exists.')),
+      );
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    final bool? updated = await Navigator.of(context).push<bool>(
+      PageRouteBuilder<bool>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return CorrectionFormScreen(
+                attendanceRecordId: record?.id ?? request.attendanceRecordId,
+                affectedDate: request.affectedDate,
+                issueSummary: request.issueSummary,
+                initialCorrectionType: request.correctionType,
+                existingRequestId: request.id,
+                initialCorrectedClockInTime: request.correctedClockInTime,
+                initialCorrectedClockOutTime: request.correctedClockOutTime,
+                initialReason: request.reason,
+                sourceRecord: record,
+              );
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+
+    if (!mounted || updated != true) {
+      return;
+    }
+
+    await _loadCorrectionOverview();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _selectedTab = _CorrectionTab.submitted;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Correction request updated.')),
+    );
+  }
+
+  void _previousPage() {
+    setState(() {
+      if (_selectedTab == _CorrectionTab.needAction) {
+        _needActionPage -= 1;
+      } else {
+        _submittedPage -= 1;
+      }
+      _clampPages();
+    });
+  }
+
+  void _nextPage() {
+    setState(() {
+      if (_selectedTab == _CorrectionTab.needAction) {
+        _needActionPage += 1;
+      } else {
+        _submittedPage += 1;
+      }
+      _clampPages();
+    });
+  }
+
+  Widget _buildCurrentTabContent() {
+    if (_isLoading) {
+      return const _CorrectionLoadingState();
+    }
+
+    if (_loadError != null) {
+      return _CorrectionErrorState(
+        message: _loadError!,
+        onRetry: _loadCorrectionOverview,
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadCorrectionOverview,
+      child: _selectedTab == _CorrectionTab.needAction
+          ? _buildNeedActionList()
+          : _buildSubmittedList(),
+    );
+  }
+
+  Widget _buildNeedActionList() {
+    final List<AttendanceRecord> records = _itemsOnPage<AttendanceRecord>(
+      _recordsNeedingAction,
+      _needActionPage,
+    );
+
+    if (_recordsNeedingAction.isEmpty) {
+      return const _ScrollableEmptyState(child: _NoNeedActionState());
+    }
+
+    return ListView.separated(
+      physics: const AlwaysScrollableScrollPhysics(),
+      itemCount: records.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (BuildContext context, int index) {
+        final AttendanceRecord record = records[index];
+        final bool isExpanded = _expandedRecordIds.contains(record.id);
+
+        return _NeedsActionRecordCard(
+          key: ValueKey<String>('needs_action_${record.id}'),
+          record: record,
+          isExpanded: isExpanded,
+          onExpansionChanged: (bool expanded) {
+            setState(() {
+              if (expanded) {
+                _expandedRecordIds.add(record.id);
+              } else {
+                _expandedRecordIds.remove(record.id);
+              }
+            });
+          },
+          onRequestCorrection: () => _openCorrectionForm(record),
+        );
+      },
+    );
+  }
+
+  Widget _buildSubmittedList() {
+    final List<CorrectionRequest> requests = _itemsOnPage<CorrectionRequest>(
+      _submittedRequests,
+      _submittedPage,
+    );
+
+    if (_submittedRequests.isEmpty) {
+      return const _ScrollableEmptyState(child: _NoSubmittedRequestState());
+    }
+
+    return ListView.separated(
+      physics: const AlwaysScrollableScrollPhysics(),
+      itemCount: requests.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (BuildContext context, int index) {
+        final CorrectionRequest request = requests[index];
+        final bool isExpanded = _expandedRequestIds.contains(request.id);
+
+        return _SubmittedCorrectionCard(
+          key: ValueKey<String>('submitted_${request.id}'),
+          request: request,
+          isExpanded: isExpanded,
+          onEditRequest: () => _openEditRequestForm(request),
+          onExpansionChanged: (bool expanded) {
+            setState(() {
+              if (expanded) {
+                _expandedRequestIds.add(request.id);
+              } else {
+                _expandedRequestIds.remove(request.id);
+              }
+            });
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final List<AttendanceRecord> currentPageRecords = _recordsOnCurrentPage();
-    final bool hasRecords = _missedPunchRecords.isNotEmpty;
-
     return Scaffold(
       backgroundColor: PulseClockColors.appBackground,
       appBar: AppBar(
@@ -233,140 +429,39 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Records Needing Correction',
-                        style: PulseClockTextStyles.headerSubtitle.copyWith(
-                          color: PulseClockColors.onBackgroundPrimary,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _openPendingCorrections,
-                      icon: const Icon(Icons.hourglass_top_rounded, size: 17),
-                      label: const Text('Pending Requests'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: PulseClockColors.actionBlue,
-                        backgroundColor: PulseClockColors.surface,
-                        side: const BorderSide(
-                          color: PulseClockColors.actionBlue,
-                          width: 1.2,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        textStyle: PulseClockTextStyles.contextAction.copyWith(
-                          fontSize: 13,
-                          color: PulseClockColors.actionBlue,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
                 Text(
-                  '$_pendingCorrectionCount pending correction request${_pendingCorrectionCount == 1 ? '' : 's'}',
-                  style: PulseClockTextStyles.cardSubtitle.copyWith(
-                    color: PulseClockColors.onBackgroundSecondary,
+                  'Attendance updates',
+                  style: PulseClockTextStyles.headerSubtitle.copyWith(
+                    color: PulseClockColors.onBackgroundPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: _isLoading
-                      ? const _CorrectionLoadingState()
-                      : _loadError != null
-                      ? _CorrectionErrorState(
-                          message: _loadError!,
-                          onRetry: _loadCorrectionOverview,
-                        )
-                      : RefreshIndicator(
-                          onRefresh: _loadCorrectionOverview,
-                          child: hasRecords
-                              ? ListView.separated(
-                                  itemCount: currentPageRecords.length,
-                                  separatorBuilder: (_, _) =>
-                                      const SizedBox(height: 10),
-                                  itemBuilder:
-                                      (BuildContext context, int index) {
-                                        final AttendanceRecord record =
-                                            currentPageRecords[index];
-                                        final bool isExpanded =
-                                            _expandedRecordIds.contains(
-                                              record.id,
-                                            );
-
-                                        return _MissedPunchCard(
-                                          key: ValueKey<String>(
-                                            'missed_${record.id}',
-                                          ),
-                                          record: record,
-                                          isExpanded: isExpanded,
-                                          onExpansionChanged: (bool expanded) {
-                                            setState(() {
-                                              if (expanded) {
-                                                _expandedRecordIds.add(
-                                                  record.id,
-                                                );
-                                              } else {
-                                                _expandedRecordIds.remove(
-                                                  record.id,
-                                                );
-                                              }
-                                            });
-                                          },
-                                          onRequestCorrection: () =>
-                                              _openCorrectionForm(record),
-                                        );
-                                      },
-                                )
-                              : const _NoMissedPunchState(),
-                        ),
+                const SizedBox(height: 10),
+                _CorrectionTabSelector(
+                  selectedTab: _selectedTab,
+                  needActionCount: _recordsNeedingAction.length,
+                  submittedCount: _submittedRequests.length,
+                  onSelected: (_CorrectionTab tab) {
+                    setState(() {
+                      _selectedTab = tab;
+                    });
+                  },
                 ),
-                if (hasRecords && _totalPages > 1) ...<Widget>[
+                const SizedBox(height: 12),
+                Expanded(child: _buildCurrentTabContent()),
+                if (!_isLoading &&
+                    _loadError == null &&
+                    _selectedTabHasItems &&
+                    _selectedTotalPages > 1) ...<Widget>[
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _currentPage > 0
-                              ? () {
-                                  setState(() {
-                                    _currentPage -= 1;
-                                  });
-                                }
-                              : null,
-                          child: const Text('Previous'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Page ${_currentPage + 1} of $_totalPages',
-                        style: PulseClockTextStyles.cardSubtitle.copyWith(
-                          color: PulseClockColors.onBackgroundPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: (_currentPage + 1) < _totalPages
-                              ? () {
-                                  setState(() {
-                                    _currentPage += 1;
-                                  });
-                                }
-                              : null,
-                          child: const Text('Next'),
-                        ),
-                      ),
-                    ],
+                  _CorrectionPaginationControls(
+                    currentPage: _selectedPage,
+                    totalPages: _selectedTotalPages,
+                    onPrevious: _selectedPage > 0 ? _previousPage : null,
+                    onNext: (_selectedPage + 1) < _selectedTotalPages
+                        ? _nextPage
+                        : null,
                   ),
                 ],
               ],
@@ -378,8 +473,126 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
   }
 }
 
-class _MissedPunchCard extends StatelessWidget {
-  const _MissedPunchCard({
+class _CorrectionTabSelector extends StatelessWidget {
+  const _CorrectionTabSelector({
+    required this.selectedTab,
+    required this.needActionCount,
+    required this.submittedCount,
+    required this.onSelected,
+  });
+
+  final _CorrectionTab selectedTab;
+  final int needActionCount;
+  final int submittedCount;
+  final ValueChanged<_CorrectionTab> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      borderRadius: 16,
+      padding: const EdgeInsets.all(5),
+      color: PulseClockColors.surface,
+      child: Row(
+        children: [
+          Expanded(
+            child: _CorrectionTabButton(
+              label: 'Need Action',
+              count: needActionCount,
+              isSelected: selectedTab == _CorrectionTab.needAction,
+              onTap: () => onSelected(_CorrectionTab.needAction),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _CorrectionTabButton(
+              label: 'Submitted',
+              count: submittedCount,
+              isSelected: selectedTab == _CorrectionTab.submitted,
+              onTap: () => onSelected(_CorrectionTab.submitted),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CorrectionTabButton extends StatelessWidget {
+  const _CorrectionTabButton({
+    required this.label,
+    required this.count,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final int count;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color foreground = isSelected
+        ? PulseClockColors.surface
+        : PulseClockColors.textPrimary;
+    final Color countBackground = isSelected
+        ? PulseClockColors.surface.withValues(alpha: 0.18)
+        : PulseClockColors.statusPendingBg;
+
+    return Material(
+      color: isSelected ? PulseClockColors.actionBlue : Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: PulseClockTextStyles.contextAction.copyWith(
+                    color: foreground,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: countBackground,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
+                  ),
+                  child: Text(
+                    count.toString(),
+                    style: PulseClockTextStyles.cardSubtitle.copyWith(
+                      color: foreground,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NeedsActionRecordCard extends StatelessWidget {
+  const _NeedsActionRecordCard({
     super.key,
     required this.record,
     required this.isExpanded,
@@ -407,30 +620,20 @@ class _MissedPunchCard extends StatelessWidget {
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              DetailInfoRow(
+              _NeedsActionSummaryRow(
                 label: 'Affected Date',
                 value: dateLabel(record.date),
               ),
               const SizedBox(height: 6),
-              DetailInfoRow(
+              _NeedsActionSummaryRow(
                 label: 'Correction Type',
                 value: _missedClockTypeLabel(record),
+                compactValue: true,
               ),
             ],
           ),
           children: [
             const Divider(color: PulseClockColors.cardBorder),
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Fill correction details in the form.',
-                textAlign: TextAlign.left,
-                style: PulseClockTextStyles.cardSubtitle.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
             const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
@@ -450,7 +653,7 @@ class _MissedPunchCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                child: const Text('Continue to Correction Form'),
+                child: const Text('Submit Correction'),
               ),
             ),
           ],
@@ -460,30 +663,358 @@ class _MissedPunchCard extends StatelessWidget {
   }
 }
 
-class _NoMissedPunchState extends StatelessWidget {
-  const _NoMissedPunchState();
+class _NeedsActionSummaryRow extends StatelessWidget {
+  const _NeedsActionSummaryRow({
+    required this.label,
+    required this.value,
+    this.compactValue = false,
+  });
+
+  final String label;
+  final String value;
+  final bool compactValue;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: SurfaceCard(
-        child: Row(
-          children: [
-            const Icon(
-              Icons.task_alt_rounded,
-              color: PulseClockColors.textSecondary,
+    return Row(
+      children: [
+        SizedBox(
+          width: 122,
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.clip,
+            softWrap: false,
+            style: PulseClockTextStyles.cardSubtitle.copyWith(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'No records currently need correction.',
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: PulseClockTextStyles.cardSubtitle.copyWith(
+              color: PulseClockColors.textPrimary,
+              fontSize: compactValue ? 13 : 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SubmittedCorrectionCard extends StatelessWidget {
+  const _SubmittedCorrectionCard({
+    super.key,
+    required this.request,
+    required this.isExpanded,
+    required this.onEditRequest,
+    required this.onExpansionChanged,
+  });
+
+  final CorrectionRequest request;
+  final bool isExpanded;
+  final VoidCallback onEditRequest;
+  final ValueChanged<bool> onExpansionChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      borderRadius: 14,
+      padding: EdgeInsets.zero,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: isExpanded,
+          onExpansionChanged: onExpansionChanged,
+          tilePadding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      dateLabel(request.affectedDate),
+                      style: PulseClockTextStyles.cardTitle.copyWith(
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _CorrectionStatusPill(label: request.status.label),
+                ],
+              ),
+              const SizedBox(height: 5),
+              Text(
+                request.correctionType.label,
                 style: PulseClockTextStyles.cardSubtitle.copyWith(
+                  color: PulseClockColors.actionBlue,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                request.issueSummary,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: PulseClockTextStyles.cardSubtitle.copyWith(
+                  color: PulseClockColors.textSecondary,
                   fontWeight: FontWeight.w600,
                 ),
+              ),
+            ],
+          ),
+          children: [
+            const Divider(color: PulseClockColors.cardBorder),
+            const SizedBox(height: 10),
+            DetailInfoRow(
+              label: 'Corrected Clock In',
+              value: _timeValue(request.correctedClockInTime),
+            ),
+            const SizedBox(height: 8),
+            DetailInfoRow(
+              label: 'Corrected Clock Out',
+              value: _timeValue(request.correctedClockOutTime),
+            ),
+            const SizedBox(height: 12),
+            _CorrectionNotePanel(
+              title: 'Issue Summary',
+              value: request.issueSummary,
+            ),
+            const SizedBox(height: 10),
+            _CorrectionNotePanel(title: 'Reason', value: request.reason),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onEditRequest,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: PulseClockColors.actionBlue,
+                  foregroundColor: PulseClockColors.surface,
+                  textStyle: PulseClockTextStyles.contextAction.copyWith(
+                    color: PulseClockColors.surface,
+                    fontSize: 15,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      PulseClockDimensions.cardRadius,
+                    ),
+                  ),
+                ),
+                child: const Text('Edit Request'),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CorrectionStatusPill extends StatelessWidget {
+  const _CorrectionStatusPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: PulseClockColors.statusPendingBg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Text(
+          label,
+          style: PulseClockTextStyles.cardSubtitle.copyWith(
+            color: PulseClockColors.statusPendingAccent,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CorrectionNotePanel extends StatelessWidget {
+  const _CorrectionNotePanel({required this.title, required this.value});
+
+  final String title;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: PulseClockColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: PulseClockColors.cardBorder),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                color: PulseClockColors.actionBlue,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              value,
+              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CorrectionPaginationControls extends StatelessWidget {
+  const _CorrectionPaginationControls({
+    required this.currentPage,
+    required this.totalPages,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final int currentPage;
+  final int totalPages;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: ElevatedButton(
+            onPressed: onPrevious,
+            style: _paginationButtonStyle(),
+            child: const Text('Previous'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          'Page ${currentPage + 1} of $totalPages',
+          style: PulseClockTextStyles.cardSubtitle.copyWith(
+            color: PulseClockColors.onBackgroundPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: onNext,
+            style: _paginationButtonStyle(),
+            child: const Text('Next'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+ButtonStyle _paginationButtonStyle() {
+  return ElevatedButton.styleFrom(
+    backgroundColor: PulseClockColors.actionBlue,
+    foregroundColor: PulseClockColors.surface,
+    disabledBackgroundColor: PulseClockColors.surface.withValues(alpha: 0.54),
+    disabledForegroundColor: PulseClockColors.textSecondary.withValues(
+      alpha: 0.72,
+    ),
+    elevation: 0,
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    textStyle: PulseClockTextStyles.contextAction.copyWith(
+      color: PulseClockColors.surface,
+      fontSize: 14,
+    ),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  );
+}
+
+class _ScrollableEmptyState extends StatelessWidget {
+  const _ScrollableEmptyState({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [const SizedBox(height: 140), child],
+    );
+  }
+}
+
+class _NoNeedActionState extends StatelessWidget {
+  const _NoNeedActionState();
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      child: Row(
+        children: [
+          const Icon(
+            Icons.task_alt_rounded,
+            color: PulseClockColors.textSecondary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'No records currently need correction.',
+              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoSubmittedRequestState extends StatelessWidget {
+  const _NoSubmittedRequestState();
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      child: Row(
+        children: [
+          const Icon(
+            Icons.hourglass_empty_rounded,
+            color: PulseClockColors.textSecondary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'No submitted correction requests.',
+              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -582,4 +1113,12 @@ String _issueSummaryFor(AttendanceRecord record) {
     return 'Missing Clock In for ${dateLabel(record.date)}';
   }
   return 'Attendance correction requested for ${dateLabel(record.date)}';
+}
+
+String _timeValue(String? value) {
+  final String trimmed = value?.trim() ?? '';
+  if (trimmed.isEmpty) {
+    return '--';
+  }
+  return trimmed;
 }

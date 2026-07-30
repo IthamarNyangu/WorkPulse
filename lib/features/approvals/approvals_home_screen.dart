@@ -1065,8 +1065,9 @@ class _ReviewedPaginationControls extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: [
-          TextButton.icon(
+          ElevatedButton.icon(
             onPressed: onPrevious,
+            style: _reviewedPaginationButtonStyle(),
             icon: const Icon(Icons.chevron_left_rounded),
             label: const Text('Previous'),
           ),
@@ -1079,8 +1080,9 @@ class _ReviewedPaginationControls extends StatelessWidget {
               ),
             ),
           ),
-          TextButton.icon(
+          ElevatedButton.icon(
             onPressed: onNext,
+            style: _reviewedPaginationButtonStyle(),
             icon: const Icon(Icons.chevron_right_rounded),
             label: const Text('Next'),
           ),
@@ -1088,6 +1090,24 @@ class _ReviewedPaginationControls extends StatelessWidget {
       ),
     );
   }
+}
+
+ButtonStyle _reviewedPaginationButtonStyle() {
+  return ElevatedButton.styleFrom(
+    backgroundColor: PulseClockColors.actionBlue,
+    foregroundColor: PulseClockColors.surface,
+    disabledBackgroundColor: PulseClockColors.surfaceMuted,
+    disabledForegroundColor: PulseClockColors.textSecondary.withValues(
+      alpha: 0.72,
+    ),
+    elevation: 0,
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    textStyle: PulseClockTextStyles.contextAction.copyWith(
+      color: PulseClockColors.surface,
+      fontSize: 12,
+    ),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  );
 }
 
 class _ReviewedApprovalDetailsScreen extends StatelessWidget {

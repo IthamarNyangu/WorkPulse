@@ -1049,13 +1049,39 @@ class _ReportPaginationControls extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          TextButton(onPressed: onPrevious, child: const Text('Previous')),
+          ElevatedButton(
+            onPressed: onPrevious,
+            style: _reportPaginationButtonStyle(),
+            child: const Text('Previous'),
+          ),
           const SizedBox(width: 6),
-          TextButton(onPressed: onNext, child: const Text('Next')),
+          ElevatedButton(
+            onPressed: onNext,
+            style: _reportPaginationButtonStyle(),
+            child: const Text('Next'),
+          ),
         ],
       ),
     );
   }
+}
+
+ButtonStyle _reportPaginationButtonStyle() {
+  return ElevatedButton.styleFrom(
+    backgroundColor: PulseClockColors.actionBlue,
+    foregroundColor: PulseClockColors.surface,
+    disabledBackgroundColor: PulseClockColors.surfaceMuted,
+    disabledForegroundColor: PulseClockColors.textSecondary.withValues(
+      alpha: 0.72,
+    ),
+    elevation: 0,
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    textStyle: PulseClockTextStyles.contextAction.copyWith(
+      color: PulseClockColors.surface,
+      fontSize: 12,
+    ),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  );
 }
 
 class _EmptyReportsCard extends StatelessWidget {

@@ -324,7 +324,7 @@ class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton(
+                        child: ElevatedButton(
                           onPressed: _currentPage > 0
                               ? () {
                                   setState(() {
@@ -332,6 +332,7 @@ class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
                                   });
                                 }
                               : null,
+                          style: _paginationButtonStyle(),
                           child: const Text('Previous'),
                         ),
                       ),
@@ -345,7 +346,7 @@ class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: OutlinedButton(
+                        child: ElevatedButton(
                           onPressed: (_currentPage + 1) < _totalPages
                               ? () {
                                   setState(() {
@@ -353,6 +354,7 @@ class _CorrectionDetailsScreenState extends State<CorrectionDetailsScreen> {
                                   });
                                 }
                               : null,
+                          style: _paginationButtonStyle(),
                           child: const Text('Next'),
                         ),
                       ),
@@ -569,4 +571,22 @@ class _CorrectionDetailsErrorState extends StatelessWidget {
       ),
     );
   }
+}
+
+ButtonStyle _paginationButtonStyle() {
+  return ElevatedButton.styleFrom(
+    backgroundColor: PulseClockColors.actionBlue,
+    foregroundColor: PulseClockColors.surface,
+    disabledBackgroundColor: PulseClockColors.surface.withValues(alpha: 0.54),
+    disabledForegroundColor: PulseClockColors.textSecondary.withValues(
+      alpha: 0.72,
+    ),
+    elevation: 0,
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    textStyle: PulseClockTextStyles.contextAction.copyWith(
+      color: PulseClockColors.surface,
+      fontSize: 14,
+    ),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  );
 }

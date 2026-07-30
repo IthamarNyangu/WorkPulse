@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:pulseclock/features/approvals/approvals_home_screen.dart';
 import 'package:pulseclock/features/approvals/data/approval_service.dart';
@@ -25,6 +27,9 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
   int? _backendPendingLeaveCount;
   int? _backendPendingApprovalCount;
   bool _canReviewRequests = false;
+  bool _isLoadingBackendRequestCounts = false;
+  bool _hasLoadedBackendRequestCounts = false;
+  bool _backendRequestCountLoadFailed = false;
 
   bool get _usesBackend => SupabaseBootstrap.isInitialized;
 
@@ -59,6 +64,13 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
       return;
     }
 
+    if (mounted) {
+      setState(() {
+        _isLoadingBackendRequestCounts = true;
+        _backendRequestCountLoadFailed = false;
+      });
+    }
+
     try {
       final CorrectionService correctionService = CorrectionService();
       final int missedPunchCount = await correctionService
@@ -83,6 +95,9 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
         _backendPendingLeaveCount = pendingLeaveCount;
         _backendPendingApprovalCount = pendingApprovalCount;
         _canReviewRequests = canReviewRequests;
+        _isLoadingBackendRequestCounts = false;
+        _hasLoadedBackendRequestCounts = true;
+        _backendRequestCountLoadFailed = false;
       });
     } catch (_) {
       if (!mounted) {
@@ -94,6 +109,9 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
         _backendPendingLeaveCount = null;
         _backendPendingApprovalCount = null;
         _canReviewRequests = false;
+        _isLoadingBackendRequestCounts = false;
+        _hasLoadedBackendRequestCounts = false;
+        _backendRequestCountLoadFailed = true;
       });
     }
   }
@@ -154,21 +172,32 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final int missedCount = _usesBackend
-        ? (_backendMissedPunchCount ?? 0)
-        : _store.missedPunchRecords.length;
-    final int pendingCorrectionCount = _usesBackend
-        ? (_backendPendingCorrectionCount ?? 0)
-        : _store.pendingCorrectionRequests.length;
-    final int pendingLeaveCount = _usesBackend
-        ? (_backendPendingLeaveCount ?? 0)
-        : _store.leaveRequests
-              .where(
-                (LeaveRequest request) =>
-                    request.status == LeaveRequestStatus.pendingApproval,
-              )
-              .length;
-    final int pendingApprovalCount = _backendPendingApprovalCount ?? 0;
+    final int mockPendingLeaveCount = _store.leaveRequests
+        .where(
+          (LeaveRequest request) =>
+              request.status == LeaveRequestStatus.pendingApproval,
+        )
+        .length;
+    final String needActionBadge = _countBadge(
+      backendCount: _backendMissedPunchCount,
+      mockCount: _store.missedPunchRecords.length,
+      label: 'need action',
+    );
+    final String submittedBadge = _countBadge(
+      backendCount: _backendPendingCorrectionCount,
+      mockCount: _store.pendingCorrectionRequests.length,
+      label: 'submitted',
+    );
+    final String pendingLeaveBadge = _countBadge(
+      backendCount: _backendPendingLeaveCount,
+      mockCount: mockPendingLeaveCount,
+      label: 'pending',
+    );
+    final String pendingApprovalBadge = _countBadge(
+      backendCount: _backendPendingApprovalCount,
+      mockCount: 0,
+      label: 'pending',
+    );
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -189,8 +218,8 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
           const SizedBox(height: 18),
           _RequestHubCard(
             title: 'Attendance Corrections',
-            subtitle:
-                '$missedCount needs correction | $pendingCorrectionCount pending requests',
+            subtitle: 'Attendance updates',
+            badges: <String>[needActionBadge, submittedBadge],
             icon: Icons.fact_check_outlined,
             backgroundColor: PulseClockColors.statusPendingBg,
             accentColor: PulseClockColors.statusPendingAccent,
@@ -199,8 +228,8 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
           const SizedBox(height: 12),
           _RequestHubCard(
             title: 'Leave Requests',
-            subtitle:
-                '$pendingLeaveCount pending leave request${pendingLeaveCount == 1 ? '' : 's'}',
+            subtitle: 'Leave management',
+            badges: <String>[pendingLeaveBadge],
             icon: Icons.event_available_outlined,
             backgroundColor: PulseClockColors.statusLeaveBg,
             accentColor: PulseClockColors.statusLeaveAccent,
@@ -210,8 +239,8 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
             const SizedBox(height: 12),
             _RequestHubCard(
               title: 'Approvals',
-              subtitle:
-                  '$pendingApprovalCount pending review${pendingApprovalCount == 1 ? '' : 's'}',
+              subtitle: 'Supervisor reviews',
+              badges: <String>[pendingApprovalBadge],
               icon: Icons.verified_user_outlined,
               backgroundColor: const Color(0xFFEFF6FF),
               accentColor: PulseClockColors.actionBlue,
@@ -221,6 +250,26 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
         ],
       ),
     );
+  }
+
+  String _countBadge({
+    required int? backendCount,
+    required int mockCount,
+    required String label,
+  }) {
+    if (!_usesBackend) {
+      return '$mockCount $label';
+    }
+
+    if (_backendRequestCountLoadFailed) {
+      return 'Count unavailable';
+    }
+
+    if (!_hasLoadedBackendRequestCounts || _isLoadingBackendRequestCounts) {
+      return 'Checking';
+    }
+
+    return '${backendCount ?? 0} $label';
   }
 }
 
@@ -232,10 +281,12 @@ class _RequestHubCard extends StatelessWidget {
     required this.backgroundColor,
     required this.accentColor,
     required this.onTap,
+    this.badges = const <String>[],
   });
 
   final String title;
   final String subtitle;
+  final List<String> badges;
   final IconData icon;
   final Color backgroundColor;
   final Color accentColor;
@@ -273,10 +324,25 @@ class _RequestHubCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: PulseClockTextStyles.cardSubtitle.copyWith(
-                      color: accentColor.withOpacity(0.82),
+                      color: accentColor.withValues(alpha: 0.82),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  if (badges.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: badges
+                          .map(
+                            (String badge) => _RequestHubBadge(
+                              label: badge,
+                              color: accentColor,
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -287,6 +353,95 @@ class _RequestHubCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _RequestHubBadge extends StatelessWidget {
+  const _RequestHubBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  bool get _isLoading => label == 'Checking';
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: PulseClockColors.surface.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        child: _isLoading
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _RotatingCountIcon(color: color),
+                  const SizedBox(width: 5),
+                  _RequestHubBadgeText(label: label, color: color),
+                ],
+              )
+            : _RequestHubBadgeText(label: label, color: color),
+      ),
+    );
+  }
+}
+
+class _RequestHubBadgeText extends StatelessWidget {
+  const _RequestHubBadgeText({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: PulseClockTextStyles.cardSubtitle.copyWith(
+        color: color,
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+}
+
+class _RotatingCountIcon extends StatefulWidget {
+  const _RotatingCountIcon({required this.color});
+
+  final Color color;
+
+  @override
+  State<_RotatingCountIcon> createState() => _RotatingCountIconState();
+}
+
+class _RotatingCountIconState extends State<_RotatingCountIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (BuildContext context, Widget? child) {
+        return Transform.rotate(
+          angle: _controller.value * 2 * math.pi,
+          child: child,
+        );
+      },
+      child: Icon(Icons.autorenew_rounded, size: 13, color: widget.color),
     );
   }
 }
