@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:pulseclock/features/supervisor/attendance/data/attendance_report_file_saver.dart';
+import 'package:pulseclock/features/supervisor/attendance/data/attendance_report_exporter.dart';
 import 'package:pulseclock/features/supervisor/attendance/data/supervisor_attendance_service.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
@@ -118,6 +120,9 @@ class _SupervisorAttendanceReportsScreenState
     extends State<SupervisorAttendanceReportsScreen> {
   static const int _pageSize = 25;
 
+  final AttendanceReportExporter _exporter = const AttendanceReportExporter();
+  final AttendanceReportFileSaver _fileSaver =
+      const AttendanceReportFileSaver();
   final SupervisorAttendanceService _service = SupervisorAttendanceService();
   final TextEditingController _searchController = TextEditingController();
 
@@ -134,6 +139,23 @@ class _SupervisorAttendanceReportsScreenState
   int _page = 0;
 
   static const String _allFilterValue = 'All';
+
+  int get _activeFilterCount {
+    int count = 0;
+    if (_selectedStatus != _ReportStatusFilter.all) {
+      count++;
+    }
+    if (_departmentFilter != _allFilterValue) {
+      count++;
+    }
+    if (_provinceFilter != _allFilterValue) {
+      count++;
+    }
+    if (_officeFilter != _allFilterValue) {
+      count++;
+    }
+    return count;
+  }
 
   List<SupervisorAttendanceEmployeeRecord> get _filteredRecords {
     final SupervisorAttendanceReport? report = _report;
@@ -312,9 +334,203 @@ class _SupervisorAttendanceReportsScreenState
     }
   }
 
+  Future<void> _showFiltersSheet() async {
+    _ReportStatusFilter draftStatus = _selectedStatus;
+    String draftDepartment = _departmentFilter;
+    String draftProvince = _provinceFilter;
+    String draftOffice = _officeFilter;
+
+    final List<String> departments = _dropdownValues(
+      _report?.records.map((SupervisorAttendanceEmployeeRecord record) {
+        return record.department;
+      }),
+    );
+    final List<String> provinces = _dropdownValues(
+      _report?.records.map((SupervisorAttendanceEmployeeRecord record) {
+        return record.officeProvince;
+      }),
+    );
+    final List<String> offices = _dropdownValues(
+      _report?.records.map((SupervisorAttendanceEmployeeRecord record) {
+        return record.officeDisplayName;
+      }),
+    );
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: PulseClockColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (BuildContext sheetContext) {
+        return StatefulBuilder(
+          builder:
+              (
+                BuildContext context,
+                void Function(void Function()) setSheetState,
+              ) {
+                return SafeArea(
+                  top: false,
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      14,
+                      20,
+                      20 + MediaQuery.viewInsetsOf(context).bottom,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 42,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: PulseClockColors.cardBorder,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Filter Reports',
+                                style: PulseClockTextStyles.cardTitle.copyWith(
+                                  fontSize: 20,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () => Navigator.of(sheetContext).pop(),
+                              icon: const Icon(Icons.close_rounded),
+                              tooltip: 'Close',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Status',
+                          style: PulseClockTextStyles.cardSubtitle.copyWith(
+                            color: PulseClockColors.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        HistoryFilterChipBar<_ReportStatusFilter>(
+                          items: _ReportStatusFilter.values,
+                          selectedValue: draftStatus,
+                          labelBuilder: (_ReportStatusFilter status) =>
+                              status.label,
+                          onSelected: (_ReportStatusFilter status) {
+                            setSheetState(() {
+                              draftStatus = status;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        _ReportDropdownFilters(
+                          departments: departments,
+                          provinces: provinces,
+                          offices: offices,
+                          selectedDepartment: draftDepartment,
+                          selectedProvince: draftProvince,
+                          selectedOffice: draftOffice,
+                          onDepartmentChanged: (String value) {
+                            setSheetState(() {
+                              draftDepartment = value;
+                            });
+                          },
+                          onProvinceChanged: (String value) {
+                            setSheetState(() {
+                              draftProvince = value;
+                            });
+                          },
+                          onOfficeChanged: (String value) {
+                            setSheetState(() {
+                              draftOffice = value;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () {
+                                  setSheetState(() {
+                                    draftStatus = _ReportStatusFilter.all;
+                                    draftDepartment = _allFilterValue;
+                                    draftProvince = _allFilterValue;
+                                    draftOffice = _allFilterValue;
+                                  });
+                                },
+                                child: const Text('Clear All'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedStatus = draftStatus;
+                                    _departmentFilter = draftDepartment;
+                                    _provinceFilter = draftProvince;
+                                    _officeFilter = draftOffice;
+                                    _resetPage();
+                                  });
+                                  Navigator.of(sheetContext).pop();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: PulseClockColors.actionBlue,
+                                  foregroundColor: PulseClockColors.surface,
+                                ),
+                                child: const Text('Apply Filters'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+        );
+      },
+    );
+  }
+
   Future<void> _showCsvExportDialog() async {
     final List<SupervisorAttendanceEmployeeRecord> records = _filteredRecords;
-    final String csv = _csvForRecords(records);
+    if (records.isEmpty) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No matching records to export. Adjust filters first.',
+            ),
+          ),
+        );
+      return;
+    }
+
+    final String dateRangeText = _dateRangeLabel(_dateRange);
+    final AttendanceReportExport export = _exporter.buildCsv(
+      records: records,
+      startDate: _dateRange.start,
+      endDate: _dateRange.end,
+      dateRangeLabel: dateRangeText,
+      statusLabel: _selectedStatus.label,
+      departmentLabel: _departmentFilter,
+      provinceLabel: _provinceFilter,
+      officeLabel: _officeFilter,
+      searchQuery: _searchQuery,
+    );
+
     await showDialog<void>(
       context: context,
       builder: (BuildContext context) {
@@ -325,13 +541,33 @@ class _SupervisorAttendanceReportsScreenState
             borderRadius: BorderRadius.circular(16),
           ),
           title: Text(
-            'Export CSV',
+            'Export Report',
             style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
           ),
-          content: Text(
-            '${records.length} filtered records are ready. Copy the CSV and paste it into Excel or Google Sheets.',
-            style: PulseClockTextStyles.cardSubtitle.copyWith(
-              color: PulseClockColors.textPrimary,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ExportInfoRow(
+                  label: 'Records',
+                  value: '${export.recordCount}',
+                ),
+                const SizedBox(height: 8),
+                _ExportInfoRow(label: 'File Name', value: export.fileName),
+                const SizedBox(height: 8),
+                _ExportInfoRow(label: 'Filters', value: export.filterSummary),
+                const SizedBox(height: 14),
+                Text(
+                  'CSV Preview',
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    color: PulseClockColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _CsvPreviewBox(text: export.preview()),
+              ],
             ),
           ),
           actions: [
@@ -339,33 +575,213 @@ class _SupervisorAttendanceReportsScreenState
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Close'),
             ),
-            ElevatedButton(
+            ElevatedButton.icon(
               onPressed: () async {
                 final NavigatorState navigator = Navigator.of(context);
                 final ScaffoldMessengerState messenger = ScaffoldMessenger.of(
                   this.context,
                 );
                 navigator.pop();
-                await Clipboard.setData(ClipboardData(text: csv));
+                await Clipboard.setData(ClipboardData(text: export.csv));
                 if (!mounted) {
                   return;
                 }
+                final String fileName = export.fileName;
                 messenger
                   ..hideCurrentSnackBar()
                   ..showSnackBar(
-                    const SnackBar(content: Text('CSV copied to clipboard.')),
+                    SnackBar(content: Text('$fileName copied to clipboard.')),
                   );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: PulseClockColors.actionBlue,
                 foregroundColor: PulseClockColors.surface,
               ),
-              child: const Text('Copy CSV'),
+              icon: const Icon(Icons.copy_rounded, size: 18),
+              label: const Text('Copy CSV'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _saveCsvExport(export);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: PulseClockColors.statusOnDutyAccent,
+                foregroundColor: PulseClockColors.surface,
+              ),
+              icon: const Icon(Icons.save_alt_rounded, size: 18),
+              label: const Text('Save CSV'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _shareCsvExport(export);
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: PulseClockColors.actionBlue,
+                side: const BorderSide(color: PulseClockColors.actionBlue),
+              ),
+              icon: const Icon(Icons.ios_share_rounded, size: 18),
+              label: const Text('Share CSV'),
             ),
           ],
         );
       },
     );
+  }
+
+  Future<void> _saveCsvExport(AttendanceReportExport export) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text('Preparing ${export.fileName}...')),
+      );
+
+    try {
+      final SavedAttendanceReport? savedReport = await _fileSaver.saveCsv(
+        fileName: export.fileName,
+        csv: export.csv,
+      );
+      if (!mounted) {
+        return;
+      }
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              savedReport == null
+                  ? 'CSV save cancelled.'
+                  : '${export.fileName} saved.',
+            ),
+          ),
+        );
+      if (savedReport != null) {
+        await _showSavedCsvActions(savedReport);
+      }
+    } on MissingPluginException {
+      if (!mounted) {
+        return;
+      }
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Save CSV is available on Android builds only.'),
+          ),
+        );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Unable to save CSV file. Use Copy CSV instead.'),
+          ),
+        );
+    }
+  }
+
+  Future<void> _showSavedCsvActions(SavedAttendanceReport report) {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Report Saved'),
+          content: Text(
+            '${report.fileName} is ready. You can open it with a spreadsheet '
+            'app or share the saved file.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await _openSavedCsv(report);
+              },
+              icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              label: const Text('Open File'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await _shareSavedCsv(report);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: PulseClockColors.actionBlue,
+                foregroundColor: PulseClockColors.surface,
+              ),
+              icon: const Icon(Icons.ios_share_rounded, size: 18),
+              label: const Text('Share File'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _openSavedCsv(SavedAttendanceReport report) async {
+    try {
+      await _fileSaver.openSavedCsv(report);
+    } on PlatformException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final String message = error.code == 'no_csv_app'
+          ? 'Install Google Sheets, Microsoft Excel, or another CSV viewer.'
+          : 'Unable to open the saved CSV file.';
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  Future<void> _shareSavedCsv(SavedAttendanceReport report) async {
+    try {
+      await _fileSaver.shareSavedCsv(report);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Unable to share the saved CSV file.')),
+        );
+    }
+  }
+
+  Future<void> _shareCsvExport(AttendanceReportExport export) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text('Preparing ${export.fileName}...')),
+      );
+
+    try {
+      await _fileSaver.shareCsv(fileName: export.fileName, csv: export.csv);
+      if (mounted) {
+        messenger.hideCurrentSnackBar();
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Unable to share CSV file. Use Copy CSV instead.'),
+          ),
+        );
+    }
   }
 
   @override
@@ -376,13 +792,6 @@ class _SupervisorAttendanceReportsScreenState
         foregroundColor: PulseClockColors.textPrimary,
         elevation: 0,
         title: const Text('Attendance Reports'),
-        actions: [
-          IconButton(
-            onPressed: _report == null ? null : _showCsvExportDialog,
-            icon: const Icon(Icons.file_download_outlined),
-            tooltip: 'Export CSV',
-          ),
-        ],
       ),
       backgroundColor: PulseClockColors.appBackgroundSolid,
       body: Container(
@@ -452,11 +861,6 @@ class _SupervisorAttendanceReportsScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Filter attendance records by date, employee, department, province, office, and status.',
-          style: PulseClockTextStyles.headerSubtitle.copyWith(fontSize: 15),
-        ),
-        const SizedBox(height: 12),
         HistoryFilterChipBar<_ReportDateRangeFilter>(
           items: _ReportDateRangeFilter.values,
           selectedValue: _selectedRange,
@@ -492,55 +896,32 @@ class _SupervisorAttendanceReportsScreenState
                 },
         ),
         const SizedBox(height: 10),
-        HistoryFilterChipBar<_ReportStatusFilter>(
-          items: _ReportStatusFilter.values,
-          selectedValue: _selectedStatus,
-          labelBuilder: (_ReportStatusFilter status) => status.label,
-          onSelected: (_ReportStatusFilter status) {
-            setState(() {
-              _selectedStatus = status;
-              _resetPage();
-            });
-          },
-        ),
-        const SizedBox(height: 10),
-        _ReportDropdownFilters(
-          departments: _dropdownValues(
-            _report?.records.map((SupervisorAttendanceEmployeeRecord record) {
-              return record.department;
-            }),
-          ),
-          provinces: _dropdownValues(
-            _report?.records.map((SupervisorAttendanceEmployeeRecord record) {
-              return record.officeProvince;
-            }),
-          ),
-          offices: _dropdownValues(
-            _report?.records.map((SupervisorAttendanceEmployeeRecord record) {
-              return record.officeDisplayName;
-            }),
-          ),
-          selectedDepartment: _departmentFilter,
-          selectedProvince: _provinceFilter,
-          selectedOffice: _officeFilter,
-          onDepartmentChanged: (String value) {
-            setState(() {
-              _departmentFilter = value;
-              _resetPage();
-            });
-          },
-          onProvinceChanged: (String value) {
-            setState(() {
-              _provinceFilter = value;
-              _resetPage();
-            });
-          },
-          onOfficeChanged: (String value) {
-            setState(() {
-              _officeFilter = value;
-              _resetPage();
-            });
-          },
+        Row(
+          children: [
+            Expanded(
+              child: _ReportFiltersButton(
+                activeCount: _activeFilterCount,
+                onTap: _showFiltersSheet,
+              ),
+            ),
+            const SizedBox(width: 10),
+            ElevatedButton.icon(
+              onPressed: _showCsvExportDialog,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: PulseClockColors.actionBlue,
+                foregroundColor: PulseClockColors.surface,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 11,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.file_download_outlined, size: 18),
+              label: const Text('Export'),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         _ReportSummaryGrid(summary: summary),
@@ -599,6 +980,72 @@ class _SupervisorAttendanceReportsScreenState
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ExportInfoRow extends StatelessWidget {
+  const _ExportInfoRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: PulseClockTextStyles.cardSubtitle.copyWith(
+            color: PulseClockColors.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: PulseClockTextStyles.cardSubtitle.copyWith(
+            color: PulseClockColors.textPrimary,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CsvPreviewBox extends StatelessWidget {
+  const _CsvPreviewBox({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 150),
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: PulseClockColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: PulseClockColors.cardBorder),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SingleChildScrollView(
+          child: SelectableText(
+            text,
+            style: PulseClockTextStyles.cardSubtitle.copyWith(
+              color: PulseClockColors.textPrimary,
+              fontSize: 11,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -667,6 +1114,72 @@ class _ReportDropdownFilters extends StatelessWidget {
   }
 }
 
+class _ReportFiltersButton extends StatelessWidget {
+  const _ReportFiltersButton({required this.activeCount, required this.onTap});
+
+  final int activeCount;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: PulseClockColors.actionBlueSoft,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: PulseClockColors.actionBlueBorder),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.tune_rounded,
+                size: 19,
+                color: PulseClockColors.actionBlue,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Filters',
+                style: PulseClockTextStyles.cardSubtitle.copyWith(
+                  color: PulseClockColors.actionBlue,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (activeCount > 0) ...[
+                const SizedBox(width: 8),
+                Container(
+                  constraints: const BoxConstraints(minWidth: 22),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: PulseClockColors.actionBlue,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$activeCount',
+                    textAlign: TextAlign.center,
+                    style: PulseClockTextStyles.cardSubtitle.copyWith(
+                      color: PulseClockColors.surface,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CompactDropdown extends StatelessWidget {
   const _CompactDropdown({
     required this.label,
@@ -683,6 +1196,7 @@ class _CompactDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
+      key: ValueKey<String>('$label-$value'),
       isExpanded: true,
       initialValue: values.contains(value)
           ? value
@@ -1223,49 +1737,6 @@ String _dateRangeLabel(DateTimeRange range) {
     return dateLabel(range.start);
   }
   return '${dateLabel(range.start)} - ${dateLabel(range.end)}';
-}
-
-String _csvForRecords(List<SupervisorAttendanceEmployeeRecord> records) {
-  final List<List<String>> rows = <List<String>>[
-    <String>[
-      'Date',
-      'Employee Name',
-      'Employee ID',
-      'Department',
-      'Status',
-      'Clock In',
-      'Clock Out',
-      'Work Hours',
-      'Office',
-      'Province',
-      'Location Exception',
-      'Clock In Coordinates',
-      'Clock Out Coordinates',
-    ],
-    for (final SupervisorAttendanceEmployeeRecord record in records)
-      <String>[
-        dateLabel(record.date),
-        record.employeeName,
-        record.employeeId,
-        record.department ?? '',
-        record.status.label,
-        record.clockInLabel,
-        record.clockOutLabel,
-        record.workHoursLabel,
-        record.officeDisplayName ?? '',
-        record.officeProvince ?? '',
-        record.hasLocationException ? 'Yes' : 'No',
-        record.clockInLocation?.coordinates ?? '',
-        record.clockOutLocation?.coordinates ?? '',
-      ],
-  ];
-
-  return rows.map((List<String> row) => row.map(_csvCell).join(',')).join('\n');
-}
-
-String _csvCell(String value) {
-  final String escaped = value.replaceAll('"', '""');
-  return '"$escaped"';
 }
 
 Color _statusColor(SupervisorAttendanceStatus status) {

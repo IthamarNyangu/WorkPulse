@@ -316,21 +316,12 @@ class _SupervisorAttendanceDashboardScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Text(
-                'Daily employee attendance overview for supervisors.',
-                style: PulseClockTextStyles.headerSubtitle.copyWith(
-                  fontSize: 15,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            _ReportsButton(onTap: _openReports),
-          ],
+        Text(
+          'Daily employee attendance overview for supervisors.',
+          style: PulseClockTextStyles.headerSubtitle.copyWith(fontSize: 15),
         ),
+        const SizedBox(height: 12),
+        _ReportsButton(onTap: _openReports),
         const SizedBox(height: 12),
         _DashboardDateSelector(
           date: _selectedDate,
@@ -702,20 +693,50 @@ class _ReportsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: const Icon(Icons.analytics_outlined, size: 17),
-      label: const Text('Reports'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: PulseClockColors.surface,
-        backgroundColor: PulseClockColors.actionBlue,
-        side: const BorderSide(color: PulseClockColors.actionBlue),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        textStyle: PulseClockTextStyles.cardSubtitle.copyWith(
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
+    return Material(
+      color: PulseClockColors.reportActionSoft,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: PulseClockColors.reportActionBorder),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: PulseClockColors.surface,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(
+                  Icons.insert_chart_outlined_rounded,
+                  size: 20,
+                  color: PulseClockColors.reportAction,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Attendance Reports',
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    color: PulseClockColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: PulseClockColors.textSecondary,
+              ),
+            ],
+          ),
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
     );
   }
