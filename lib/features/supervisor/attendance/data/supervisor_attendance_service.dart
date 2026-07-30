@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 enum SupervisorAttendanceStatus {
   noClockIn,
+  nonWorkingDay,
   onDuty,
   completed,
   missedPunch,
@@ -22,6 +23,8 @@ extension SupervisorAttendanceStatusLabels on SupervisorAttendanceStatus {
     switch (this) {
       case SupervisorAttendanceStatus.noClockIn:
         return 'No Clock In';
+      case SupervisorAttendanceStatus.nonWorkingDay:
+        return 'Non-Working Day';
       case SupervisorAttendanceStatus.onDuty:
         return 'On Duty';
       case SupervisorAttendanceStatus.completed:
@@ -548,6 +551,9 @@ class SupervisorAttendanceService {
     }
     if (leaveStatus == 'pending') {
       return SupervisorAttendanceStatus.leavePending;
+    }
+    if (!_isWorkday(date)) {
+      return SupervisorAttendanceStatus.nonWorkingDay;
     }
     final DateTime today = _dateOnly(DateTime.now());
     if (date.isBefore(today) && _isWorkday(date)) {

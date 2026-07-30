@@ -21,7 +21,7 @@ class CorrectionService {
         .from(attendanceTableName)
         .select()
         .eq('user_id', userId)
-        .eq('status', 'missed_punch')
+        .inFilter('status', const <String>['missed_punch', 'absent'])
         .order('work_date', ascending: true)
         .order('created_at', ascending: true);
 
@@ -42,7 +42,7 @@ class CorrectionService {
         .from(attendanceTableName)
         .select('id')
         .eq('user_id', userId)
-        .eq('status', 'missed_punch');
+        .inFilter('status', const <String>['missed_punch', 'absent']);
 
     return rows.length;
   }

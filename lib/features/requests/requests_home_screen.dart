@@ -190,7 +190,7 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
           _RequestHubCard(
             title: 'Attendance Corrections',
             subtitle:
-                '$missedCount missed punch | $pendingCorrectionCount pending requests',
+                '$missedCount needs correction | $pendingCorrectionCount pending requests',
             icon: Icons.fact_check_outlined,
             backgroundColor: PulseClockColors.statusPendingBg,
             accentColor: PulseClockColors.statusPendingAccent,

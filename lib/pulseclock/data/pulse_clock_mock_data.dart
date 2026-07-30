@@ -461,7 +461,8 @@ class WorkPulseMockStore extends ChangeNotifier {
     final List<AttendanceRecord> records = _attendanceRecords
         .where(
           (AttendanceRecord record) =>
-              record.status == AttendanceRecordStatus.missedPunch,
+              record.status == AttendanceRecordStatus.missedPunch ||
+              record.status == AttendanceRecordStatus.absent,
         )
         .toList();
     records.sort((AttendanceRecord a, AttendanceRecord b) {

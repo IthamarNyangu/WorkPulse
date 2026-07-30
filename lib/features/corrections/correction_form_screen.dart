@@ -63,20 +63,36 @@ class _CorrectionFormScreenState extends State<CorrectionFormScreen> {
     return value != null && value.trim().isNotEmpty && value != '--';
   }
 
+  bool get _hasClockOutRecord {
+    final String? value = _sourceRecord?.clockOutTime;
+    return value != null && value.trim().isNotEmpty && value != '--';
+  }
+
+  bool get _isMissingBoth {
+    return _sourceRecord != null && !_hasClockInRecord && !_hasClockOutRecord;
+  }
+
   bool get _isMissingClockOut {
-    return _sourceRecord?.clockOutTime == '--' && _hasClockInRecord;
+    return !_isMissingBoth &&
+        _sourceRecord?.clockOutTime == '--' &&
+        _hasClockInRecord;
   }
 
   bool get _isMissingClockIn {
     final String? clockIn = _sourceRecord?.clockInTime;
-    final String? clockOut = _sourceRecord?.clockOutTime;
-    final bool hasClockOut =
-        clockOut != null && clockOut.trim().isNotEmpty && clockOut != '--';
-    return (clockIn == null || clockIn.trim().isEmpty || clockIn == '--') &&
-        hasClockOut;
+    return !_isMissingBoth &&
+        (clockIn == null || clockIn.trim().isEmpty || clockIn == '--') &&
+        _hasClockOutRecord;
+  }
+
+  bool get _isAbsentRecord {
+    return _sourceRecord?.status == AttendanceRecordStatus.absent;
   }
 
   List<CorrectionType> get _availableCorrectionTypes {
+    if (_isAbsentRecord || _isMissingBoth) {
+      return const <CorrectionType>[CorrectionType.both];
+    }
     if (_isMissingClockOut) {
       return const <CorrectionType>[
         CorrectionType.clockOut,
@@ -110,17 +126,18 @@ class _CorrectionFormScreenState extends State<CorrectionFormScreen> {
       _reasonController.text = widget.initialReason!.trim();
     }
 
+    final bool shouldPreselectBoth = _isAbsentRecord || _isMissingBoth;
     final bool shouldPreselectClockOut = _isMissingClockOut;
     final CorrectionType initialType =
         widget.initialCorrectionType ??
-        (shouldPreselectClockOut
+        (shouldPreselectBoth
+            ? CorrectionType.both
+            : shouldPreselectClockOut
             ? CorrectionType.clockOut
             : CorrectionType.both);
     _selectedType = _availableCorrectionTypes.contains(initialType)
         ? initialType
-        : (_isMissingClockIn
-              ? CorrectionType.both
-              : _availableCorrectionTypes.first);
+        : _availableCorrectionTypes.first;
     _syncPrefilledClockIn();
   }
 

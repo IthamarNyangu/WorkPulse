@@ -84,9 +84,7 @@ class _AttendanceHistoryDetailScreenState
   }
 
   Future<void> _openCorrectionForm(AttendanceRecord record) async {
-    final CorrectionType? initialType = record.clockOutTime == '--'
-        ? CorrectionType.clockOut
-        : null;
+    final CorrectionType initialType = _suggestedCorrectionType(record);
 
     final bool? submitted = await Navigator.of(context).push<bool>(
       PageRouteBuilder<bool>(
@@ -168,7 +166,8 @@ class _AttendanceHistoryDetailScreenState
     }
 
     final bool showCorrectionAction =
-        record.status == AttendanceRecordStatus.missedPunch;
+        record.status == AttendanceRecordStatus.missedPunch ||
+        record.status == AttendanceRecordStatus.absent;
 
     return Scaffold(
       backgroundColor: PulseClockColors.appBackground,
@@ -348,8 +347,6 @@ class _AttendanceLocationBlock extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        _LocationDetailLine(label: 'Coordinates', value: snapshot.coordinates),
-        const SizedBox(height: 6),
         _LocationDetailLine(
           label: 'Accuracy',
           value:
@@ -369,13 +366,6 @@ class _AttendanceLocationBlock extends StatelessWidget {
           _LocationDetailLine(
             label: 'Distance',
             value: _metersLabel(snapshot.distanceMeters!),
-          ),
-        ],
-        if (snapshot.geofenceRadiusMeters != null) ...<Widget>[
-          const SizedBox(height: 6),
-          _LocationDetailLine(
-            label: 'Allowed Radius',
-            value: _metersLabel(snapshot.geofenceRadiusMeters!),
           ),
         ],
         const SizedBox(height: 6),
@@ -455,6 +445,12 @@ String _issueSummaryFor(AttendanceRecord record) {
   if (record.note != null && record.note!.trim().isNotEmpty) {
     return record.note!;
   }
+  if (record.status == AttendanceRecordStatus.absent) {
+    return 'Missing Clock In & Clock Out for ${dateLabel(record.date)}';
+  }
+  if (record.clockInTime == '--' && record.clockOutTime == '--') {
+    return 'Missing Clock In & Clock Out for ${dateLabel(record.date)}';
+  }
   if (record.clockOutTime == '--') {
     return 'Missing Clock Out for ${dateLabel(record.date)}';
   }
@@ -462,4 +458,20 @@ String _issueSummaryFor(AttendanceRecord record) {
     return 'Missing Clock In for ${dateLabel(record.date)}';
   }
   return 'Attendance correction requested for ${dateLabel(record.date)}';
+}
+
+CorrectionType _suggestedCorrectionType(AttendanceRecord record) {
+  final bool missingClockIn = record.clockInTime == '--';
+  final bool missingClockOut = record.clockOutTime == '--';
+  if (record.status == AttendanceRecordStatus.absent ||
+      (missingClockIn && missingClockOut)) {
+    return CorrectionType.both;
+  }
+  if (missingClockOut) {
+    return CorrectionType.clockOut;
+  }
+  if (missingClockIn) {
+    return CorrectionType.clockIn;
+  }
+  return CorrectionType.both;
 }

@@ -165,8 +165,9 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
           : 'This correction request will be rejected.',
       actionLabel: approve ? 'Approve' : 'Reject',
       isDestructive: !approve,
-      noteLabel: 'Reviewer note (optional)',
+      noteLabel: approve ? '' : 'Reviewer note (optional)',
       requireNote: false,
+      showNoteField: !approve,
     );
     if (result == null || !mounted) {
       return;
@@ -219,6 +220,7 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
     required bool isDestructive,
     required String noteLabel,
     required bool requireNote,
+    bool showNoteField = true,
   }) async {
     final TextEditingController noteController = TextEditingController();
     String? noteError;
@@ -252,56 +254,60 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
                       fontSize: 14,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: noteController,
-                    maxLines: 3,
-                    onChanged: (_) {
-                      if (noteError == null) {
-                        return;
-                      }
-                      setDialogState(() {
-                        noteError = null;
-                      });
-                    },
-                    decoration: InputDecoration(
-                      labelText: noteLabel,
-                      alignLabelWithHint: true,
-                      errorText: noteError,
-                      filled: true,
-                      fillColor: PulseClockColors.surfaceMuted,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: PulseClockColors.cardBorder,
+                  if (showNoteField) ...<Widget>[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: noteController,
+                      maxLines: 3,
+                      onChanged: (_) {
+                        if (noteError == null) {
+                          return;
+                        }
+                        setDialogState(() {
+                          noteError = null;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        labelText: noteLabel,
+                        alignLabelWithHint: true,
+                        errorText: noteError,
+                        filled: true,
+                        fillColor: PulseClockColors.surfaceMuted,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: PulseClockColors.cardBorder,
+                          ),
                         ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: PulseClockColors.cardBorder,
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: PulseClockColors.cardBorder,
+                          ),
                         ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: PulseClockColors.actionBlue,
-                          width: 1.4,
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: PulseClockColors.actionBlue,
+                            width: 1.4,
+                          ),
                         ),
-                      ),
-                      errorBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFFB42318)),
-                      ),
-                      focusedErrorBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: Color(0xFFB42318),
-                          width: 1.4,
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFB42318),
+                          ),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFB42318),
+                            width: 1.4,
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
               actions: [
@@ -311,7 +317,9 @@ class _ApprovalsHomeScreenState extends State<ApprovalsHomeScreen> {
                 ),
                 TextButton(
                   onPressed: () {
-                    final String note = noteController.text.trim();
+                    final String note = showNoteField
+                        ? noteController.text.trim()
+                        : '';
                     if (requireNote && note.isEmpty) {
                       setDialogState(() {
                         noteError = 'Enter a reason before rejecting.';
@@ -769,6 +777,60 @@ class _CorrectionApprovalCard extends StatelessWidget {
         children: [
           _ApprovalEmployeeHeader(employee: request.employee),
           const SizedBox(height: 12),
+          _CorrectionApprovalInfoPanel(request: request),
+          const SizedBox(height: 12),
+          _ApprovalTextBlock(
+            title: 'Issue Summary',
+            value: request.issueSummary,
+            accentColor: PulseClockColors.actionBlue,
+            backgroundColor: const Color(0xFFF3F7FF),
+          ),
+          const SizedBox(height: 8),
+          _ApprovalTextBlock(
+            title: 'Reason',
+            value: request.reason,
+            accentColor: PulseClockColors.actionBlue,
+            backgroundColor: PulseClockColors.surfaceMuted,
+          ),
+          const SizedBox(height: 12),
+          _ApprovalActions(
+            isBusy: isBusy,
+            onApprove: onApprove,
+            onReject: onReject,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CorrectionApprovalInfoPanel extends StatelessWidget {
+  const _CorrectionApprovalInfoPanel({required this.request});
+
+  final CorrectionApprovalItem request;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: PulseClockColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Request Details',
+            style: PulseClockTextStyles.cardSubtitle.copyWith(
+              color: PulseClockColors.actionBlue,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
           DetailInfoRow(
             label: 'Affected Date',
             value: dateLabel(request.affectedDate),
@@ -788,7 +850,7 @@ class _CorrectionApprovalCard extends StatelessWidget {
             label: 'Original Clock Out',
             value: _timeOrPlaceholder(request.originalClockOutAt),
           ),
-          const SizedBox(height: 8),
+          const Divider(height: 20, color: PulseClockColors.cardBorder),
           DetailInfoRow(
             label: 'Corrected Clock In',
             value: _timeOrPlaceholder(request.correctedClockInAt),
@@ -797,19 +859,6 @@ class _CorrectionApprovalCard extends StatelessWidget {
           DetailInfoRow(
             label: 'Corrected Clock Out',
             value: _timeOrPlaceholder(request.correctedClockOutAt),
-          ),
-          const SizedBox(height: 12),
-          _ApprovalTextBlock(
-            title: 'Issue Summary',
-            value: request.issueSummary,
-          ),
-          const SizedBox(height: 8),
-          _ApprovalTextBlock(title: 'Reason', value: request.reason),
-          const SizedBox(height: 12),
-          _ApprovalActions(
-            isBusy: isBusy,
-            onApprove: onApprove,
-            onReject: onReject,
           ),
         ],
       ),
@@ -1277,28 +1326,50 @@ class _ApprovalEmployeeHeader extends StatelessWidget {
 }
 
 class _ApprovalTextBlock extends StatelessWidget {
-  const _ApprovalTextBlock({required this.title, required this.value});
+  const _ApprovalTextBlock({
+    required this.title,
+    required this.value,
+    this.accentColor = PulseClockColors.textSecondary,
+    this.backgroundColor = PulseClockColors.surfaceMuted,
+  });
 
   final String title;
   final String value;
+  final Color accentColor;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: PulseClockTextStyles.cardSubtitle.copyWith(
-            fontWeight: FontWeight.w700,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: PulseClockColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: PulseClockTextStyles.cardSubtitle.copyWith(
+              color: accentColor,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value.trim().isEmpty ? '--' : value,
-          style: PulseClockTextStyles.cardSubtitle,
-        ),
-      ],
+          const SizedBox(height: 5),
+          Text(
+            value.trim().isEmpty ? '--' : value,
+            style: PulseClockTextStyles.cardSubtitle.copyWith(
+              color: PulseClockColors.textPrimary,
+              fontWeight: FontWeight.w600,
+              height: 1.28,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

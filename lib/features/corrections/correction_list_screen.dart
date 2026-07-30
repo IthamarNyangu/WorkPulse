@@ -160,9 +160,7 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
   }
 
   Future<void> _openCorrectionForm(AttendanceRecord record) async {
-    final CorrectionType initialType = record.clockOutTime == '--'
-        ? CorrectionType.clockOut
-        : CorrectionType.both;
+    final CorrectionType initialType = _suggestedCorrectionType(record);
 
     final bool? submitted = await Navigator.of(context).push<bool>(
       PageRouteBuilder<bool>(
@@ -239,7 +237,7 @@ class _CorrectionListScreenState extends State<CorrectionListScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Missed Punch Records',
+                        'Records Needing Correction',
                         style: PulseClockTextStyles.headerSubtitle.copyWith(
                           color: PulseClockColors.onBackgroundPrimary,
                           fontSize: 17,
@@ -478,7 +476,7 @@ class _NoMissedPunchState extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'No missed punches available.',
+                'No records currently need correction.',
                 style: PulseClockTextStyles.cardSubtitle.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -540,10 +538,16 @@ class _CorrectionErrorState extends StatelessWidget {
 }
 
 CorrectionType _suggestedCorrectionType(AttendanceRecord record) {
-  if (record.clockOutTime == '--') {
+  final bool missingClockIn = record.clockInTime == '--';
+  final bool missingClockOut = record.clockOutTime == '--';
+  if (record.status == AttendanceRecordStatus.absent ||
+      (missingClockIn && missingClockOut)) {
+    return CorrectionType.both;
+  }
+  if (missingClockOut) {
     return CorrectionType.clockOut;
   }
-  if (record.clockInTime == '--') {
+  if (missingClockIn) {
     return CorrectionType.clockIn;
   }
   return CorrectionType.both;
@@ -564,6 +568,12 @@ String _missedClockTypeLabel(AttendanceRecord record) {
 String _issueSummaryFor(AttendanceRecord record) {
   if (record.note != null && record.note!.trim().isNotEmpty) {
     return record.note!;
+  }
+  if (record.status == AttendanceRecordStatus.absent) {
+    return 'Missing Clock In & Clock Out for ${dateLabel(record.date)}';
+  }
+  if (record.clockInTime == '--' && record.clockOutTime == '--') {
+    return 'Missing Clock In & Clock Out for ${dateLabel(record.date)}';
   }
   if (record.clockOutTime == '--') {
     return 'Missing Clock Out for ${dateLabel(record.date)}';

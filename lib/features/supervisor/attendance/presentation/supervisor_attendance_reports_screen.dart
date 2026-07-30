@@ -39,6 +39,7 @@ extension _ReportDateRangeFilterLabels on _ReportDateRangeFilter {
 enum _ReportStatusFilter {
   all,
   noClockIn,
+  nonWorkingDay,
   onDuty,
   completed,
   missedPunch,
@@ -56,6 +57,8 @@ extension _ReportStatusFilterLabels on _ReportStatusFilter {
         return 'All';
       case _ReportStatusFilter.noClockIn:
         return 'No Clock In';
+      case _ReportStatusFilter.nonWorkingDay:
+        return 'Non-Working Day';
       case _ReportStatusFilter.onDuty:
         return 'On Duty';
       case _ReportStatusFilter.completed:
@@ -81,6 +84,8 @@ extension _ReportStatusFilterLabels on _ReportStatusFilter {
         return true;
       case _ReportStatusFilter.noClockIn:
         return record.status == SupervisorAttendanceStatus.noClockIn;
+      case _ReportStatusFilter.nonWorkingDay:
+        return record.status == SupervisorAttendanceStatus.nonWorkingDay;
       case _ReportStatusFilter.onDuty:
         return record.status == SupervisorAttendanceStatus.onDuty;
       case _ReportStatusFilter.completed:
@@ -624,7 +629,7 @@ class _ReportDropdownFilters extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SurfaceCard(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       borderRadius: 14,
       child: Column(
         children: [
@@ -678,6 +683,7 @@ class _CompactDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
+      isExpanded: true,
       initialValue: values.contains(value)
           ? value
           : _SupervisorAttendanceReportsScreenState._allFilterValue,
@@ -700,12 +706,10 @@ class _CompactDropdown extends StatelessWidget {
       ),
       decoration: InputDecoration(
         labelText: label,
+        isDense: true,
         filled: true,
         fillColor: PulseClockColors.surfaceMuted,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 10,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: PulseClockColors.cardBorder),
@@ -904,6 +908,8 @@ class _ReportRecordCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color statusColor = _statusColor(record.status);
+    final bool isNonWorkingDay =
+        record.status == SupervisorAttendanceStatus.nonWorkingDay;
     return SurfaceCard(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       borderRadius: 14,
@@ -953,7 +959,9 @@ class _ReportRecordCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'In ${record.clockInLabel} | Out ${record.clockOutLabel} | ${record.workHoursLabel}',
+                  isNonWorkingDay
+                      ? 'No scheduled workday'
+                      : 'In ${record.clockInLabel} | Out ${record.clockOutLabel} | ${record.workHoursLabel}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: PulseClockTextStyles.cardSubtitle.copyWith(
@@ -963,7 +971,11 @@ class _ReportRecordCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  record.officeDisplayName ?? record.department ?? 'No office',
+                  isNonWorkingDay
+                      ? 'Weekend / non-working day'
+                      : record.officeDisplayName ??
+                            record.department ??
+                            'No office',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: PulseClockTextStyles.cardSubtitle.copyWith(
@@ -1233,6 +1245,7 @@ String _csvCell(String value) {
 Color _statusColor(SupervisorAttendanceStatus status) {
   switch (status) {
     case SupervisorAttendanceStatus.noClockIn:
+    case SupervisorAttendanceStatus.nonWorkingDay:
       return PulseClockColors.statusOffDutyAccent;
     case SupervisorAttendanceStatus.onDuty:
     case SupervisorAttendanceStatus.completed:

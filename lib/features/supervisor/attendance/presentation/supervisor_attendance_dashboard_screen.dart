@@ -708,9 +708,8 @@ class _ReportsButton extends StatelessWidget {
       label: const Text('Reports'),
       style: OutlinedButton.styleFrom(
         foregroundColor: PulseClockColors.surface,
-        side: BorderSide(
-          color: PulseClockColors.surface.withValues(alpha: 0.72),
-        ),
+        backgroundColor: PulseClockColors.actionBlue,
+        side: const BorderSide(color: PulseClockColors.actionBlue),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         textStyle: PulseClockTextStyles.cardSubtitle.copyWith(
           fontSize: 13,
@@ -1081,11 +1080,6 @@ class _LocationDetailsCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             _SupervisorDetailRow(
-              label: 'Coordinates',
-              value: location.coordinates,
-            ),
-            const SizedBox(height: 10),
-            _SupervisorDetailRow(
               label: 'GPS Accuracy',
               value: _accuracyLabel(location),
             ),
@@ -1102,13 +1096,6 @@ class _LocationDetailsCard extends StatelessWidget {
               value: location.distanceMeters == null
                   ? 'Not available'
                   : _metersLabel(location.distanceMeters!),
-            ),
-            const SizedBox(height: 10),
-            _SupervisorDetailRow(
-              label: 'Allowed Radius',
-              value: location.geofenceRadiusMeters == null
-                  ? 'Not available'
-                  : _metersLabel(location.geofenceRadiusMeters!),
             ),
           ],
         ],
@@ -1288,6 +1275,7 @@ class _SupervisorStatusStyle {
 _SupervisorStatusStyle _statusStyle(SupervisorAttendanceStatus status) {
   switch (status) {
     case SupervisorAttendanceStatus.noClockIn:
+    case SupervisorAttendanceStatus.nonWorkingDay:
       return const _SupervisorStatusStyle(
         backgroundColor: PulseClockColors.statusOffDutyBg,
         foregroundColor: PulseClockColors.statusOffDutyAccent,
@@ -1340,6 +1328,8 @@ String _attendanceHint(SupervisorAttendanceEmployeeRecord record) {
   switch (record.status) {
     case SupervisorAttendanceStatus.noClockIn:
       return 'No attendance action yet';
+    case SupervisorAttendanceStatus.nonWorkingDay:
+      return 'No scheduled workday';
     case SupervisorAttendanceStatus.onDuty:
       return 'Currently clocked in';
     case SupervisorAttendanceStatus.completed:
