@@ -35,6 +35,8 @@ class ManagedEmployeeProfile {
     this.jobTitle,
     this.usualOfficeLocationId,
     this.usualOfficeName,
+    this.supervisorId,
+    this.supervisorName,
   });
 
   final String id;
@@ -48,6 +50,8 @@ class ManagedEmployeeProfile {
   final String? jobTitle;
   final String? usualOfficeLocationId;
   final String? usualOfficeName;
+  final String? supervisorId;
+  final String? supervisorName;
 
   String get roleLabel {
     switch (role) {
@@ -66,11 +70,15 @@ class ManagedEmployeeProfile {
     Map<String, dynamic> map, {
     required Map<String, String> departmentNames,
     required Map<String, String> officeNames,
+    required Map<String, String> supervisorIdsByEmployee,
+    required Map<String, String> profileNames,
   }) {
     final String? departmentId = map['department_id'] as String?;
     final String? officeId = map['usual_office_location_id'] as String?;
+    final String id = map['id'] as String;
+    final String? supervisorId = supervisorIdsByEmployee[id];
     return ManagedEmployeeProfile(
-      id: map['id'] as String,
+      id: id,
       employeeId: map['employee_id'] as String,
       fullName: map['full_name'] as String,
       email: map['email'] as String,
@@ -82,6 +90,8 @@ class ManagedEmployeeProfile {
       jobTitle: map['job_title'] as String?,
       usualOfficeLocationId: officeId,
       usualOfficeName: officeNames[officeId],
+      supervisorId: supervisorId,
+      supervisorName: profileNames[supervisorId],
     );
   }
 }
@@ -91,11 +101,13 @@ class EmployeeManagementData {
     required this.employees,
     required this.departments,
     required this.offices,
+    required this.supervisors,
   });
 
   final List<ManagedEmployeeProfile> employees;
   final List<WorkPulseDepartment> departments;
   final List<OfficeLocation> offices;
+  final List<ManagedEmployeeProfile> supervisors;
 }
 
 class EmployeeManagementService {
@@ -108,19 +120,26 @@ class EmployeeManagementService {
 
   final SupabaseClient _client;
 
-  Future<EmployeeManagementData> fetchManagementData() async {
-    final List<dynamic> departmentRows = await _client
+  Future<List<WorkPulseDepartment>> fetchDepartments() async {
+    final List<dynamic> rows = await _client
         .from('departments')
         .select('id, name, is_active')
         .order('is_active', ascending: false)
         .order('name', ascending: true);
-    final List<WorkPulseDepartment> departments = departmentRows
+    return rows
         .map(
           (dynamic row) => WorkPulseDepartment.fromMap(
             Map<String, dynamic>.from(row as Map),
           ),
         )
         .toList(growable: false);
+  }
+
+  Future<EmployeeManagementData> fetchManagementData({
+    required String currentUserId,
+    required String currentRole,
+  }) async {
+    final List<WorkPulseDepartment> departments = await fetchDepartments();
 
     final List<OfficeLocation> offices = await OfficeLocationService(
       client: _client,
@@ -139,13 +158,48 @@ class EmployeeManagementService {
         .select(_profileColumns)
         .order('is_active', ascending: false)
         .order('full_name', ascending: true);
-    final List<ManagedEmployeeProfile> employees = profileRows
+    final List<Map<String, dynamic>> profileMaps = profileRows
+        .map((dynamic row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+    final Map<String, String> profileNames = <String, String>{
+      for (final Map<String, dynamic> profile in profileMaps)
+        profile['id'] as String: profile['full_name'] as String,
+    };
+
+    final List<dynamic> assignmentRows = await _client
+        .from('employee_supervisor_assignments')
+        .select('employee_id, supervisor_id')
+        .eq('is_active', true)
+        .eq('is_primary', true);
+    final Map<String, String> supervisorIdsByEmployee = <String, String>{
+      for (final dynamic rawRow in assignmentRows)
+        (rawRow as Map)['employee_id'] as String:
+            rawRow['supervisor_id'] as String,
+    };
+
+    final List<ManagedEmployeeProfile> visibleEmployees = profileMaps
         .map(
-          (dynamic row) => ManagedEmployeeProfile.fromMap(
-            Map<String, dynamic>.from(row as Map),
+          (Map<String, dynamic> row) => ManagedEmployeeProfile.fromMap(
+            row,
             departmentNames: departmentNames,
             officeNames: officeNames,
+            supervisorIdsByEmployee: supervisorIdsByEmployee,
+            profileNames: profileNames,
           ),
+        )
+        .toList(growable: false);
+    final List<ManagedEmployeeProfile> employees = currentRole == 'supervisor'
+        ? visibleEmployees
+              .where(
+                (ManagedEmployeeProfile employee) =>
+                    employee.id != currentUserId,
+              )
+              .toList(growable: false)
+        : visibleEmployees;
+    final List<ManagedEmployeeProfile> supervisors = visibleEmployees
+        .where(
+          (ManagedEmployeeProfile employee) =>
+              employee.role == 'supervisor' && employee.isActive,
         )
         .toList(growable: false);
 
@@ -153,6 +207,7 @@ class EmployeeManagementService {
       employees: employees,
       departments: departments,
       offices: offices,
+      supervisors: supervisors,
     );
   }
 
@@ -163,6 +218,7 @@ class EmployeeManagementService {
     required String? jobTitle,
     required String? departmentId,
     required String? usualOfficeLocationId,
+    required String? supervisorId,
     required String role,
     required bool isActive,
   }) {
@@ -175,6 +231,7 @@ class EmployeeManagementService {
         'p_job_title': _blankToNull(jobTitle),
         'p_department_id': departmentId,
         'p_usual_office_location_id': usualOfficeLocationId,
+        'p_supervisor_id': supervisorId,
         'p_role': role,
         'p_is_active': isActive,
       },

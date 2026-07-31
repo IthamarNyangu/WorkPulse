@@ -10,6 +10,7 @@ class EmployeeDetailsScreen extends StatelessWidget {
     required this.employee,
     required this.departments,
     required this.offices,
+    required this.supervisors,
     required this.currentRole,
     super.key,
   });
@@ -17,16 +18,12 @@ class EmployeeDetailsScreen extends StatelessWidget {
   final ManagedEmployeeProfile employee;
   final List<WorkPulseDepartment> departments;
   final List<OfficeLocation> offices;
+  final List<ManagedEmployeeProfile> supervisors;
   final String currentRole;
 
-  bool get _canEdit {
-    if (currentRole == 'hr' || currentRole == 'admin') {
-      return true;
-    }
-    return currentRole == 'supervisor' &&
-        employee.role != 'hr' &&
-        employee.role != 'admin';
-  }
+  bool get _canEdit =>
+      (currentRole == 'hr' && employee.role != 'admin') ||
+      currentRole == 'admin';
 
   Future<void> _openEdit(BuildContext context) async {
     final bool? saved = await Navigator.of(context).push<bool>(
@@ -40,6 +37,7 @@ class EmployeeDetailsScreen extends StatelessWidget {
               employee: employee,
               departments: departments,
               offices: offices,
+              supervisors: supervisors,
               currentRole: currentRole,
             ),
         transitionDuration: Duration.zero,
@@ -139,6 +137,10 @@ class EmployeeDetailsScreen extends StatelessWidget {
                       _EmployeeDetailRow(
                         label: 'Usual Office',
                         value: _valueOrDash(employee.usualOfficeName),
+                      ),
+                      _EmployeeDetailRow(
+                        label: 'Primary Supervisor',
+                        value: _valueOrDash(employee.supervisorName),
                         isLast: true,
                       ),
                     ],
@@ -182,6 +184,7 @@ class EmployeeEditScreen extends StatefulWidget {
     required this.employee,
     required this.departments,
     required this.offices,
+    required this.supervisors,
     required this.currentRole,
     super.key,
   });
@@ -189,6 +192,7 @@ class EmployeeEditScreen extends StatefulWidget {
   final ManagedEmployeeProfile employee;
   final List<WorkPulseDepartment> departments;
   final List<OfficeLocation> offices;
+  final List<ManagedEmployeeProfile> supervisors;
   final String currentRole;
 
   @override
@@ -206,11 +210,14 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
   late final TextEditingController _jobTitleController;
   late String? _departmentId;
   late String? _usualOfficeId;
+  late String? _supervisorId;
   late String _role;
   late bool _isActive;
   bool _isSaving = false;
 
-  bool get _canManageProtectedFields =>
+  bool get _canManageRole => widget.currentRole == 'admin';
+
+  bool get _canManageAccount =>
       widget.currentRole == 'hr' || widget.currentRole == 'admin';
 
   List<WorkPulseDepartment> get _activeDepartments => widget.departments
@@ -229,6 +236,13 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
       )
       .toList(growable: false);
 
+  List<ManagedEmployeeProfile> get _availableSupervisors => widget.supervisors
+      .where(
+        (ManagedEmployeeProfile supervisor) =>
+            supervisor.id != widget.employee.id && supervisor.isActive,
+      )
+      .toList(growable: false);
+
   @override
   void initState() {
     super.initState();
@@ -241,6 +255,13 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
     );
     _departmentId = widget.employee.departmentId;
     _usualOfficeId = widget.employee.usualOfficeLocationId;
+    _supervisorId =
+        _availableSupervisors.any(
+          (ManagedEmployeeProfile supervisor) =>
+              supervisor.id == widget.employee.supervisorId,
+        )
+        ? widget.employee.supervisorId
+        : null;
     _role = widget.employee.role;
     _isActive = widget.employee.isActive;
   }
@@ -269,6 +290,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
         jobTitle: _jobTitleController.text,
         departmentId: _departmentId,
         usualOfficeLocationId: _usualOfficeId,
+        supervisorId: _supervisorId,
         role: _role,
         isActive: _isActive,
       );
@@ -433,10 +455,37 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
                           });
                         },
                       ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: _supervisorId ?? _noneValue,
+                        isExpanded: true,
+                        decoration: _inputDecoration('Primary Supervisor'),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: _noneValue,
+                            child: Text('No Supervisor Assigned'),
+                          ),
+                          ..._availableSupervisors.map(
+                            (ManagedEmployeeProfile supervisor) =>
+                                DropdownMenuItem<String>(
+                                  value: supervisor.id,
+                                  child: Text(
+                                    supervisor.fullName,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                          ),
+                        ],
+                        onChanged: (String? value) {
+                          setState(() {
+                            _supervisorId = value == _noneValue ? null : value;
+                          });
+                        },
+                      ),
                     ],
                   ),
                 ),
-                if (_canManageProtectedFields) ...[
+                if (_canManageRole || _canManageAccount) ...[
                   const SizedBox(height: 16),
                   SurfaceCard(
                     child: Column(
@@ -449,58 +498,61 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        DropdownButtonFormField<String>(
-                          initialValue: _role,
-                          decoration: _inputDecoration('Role'),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'employee',
-                              child: Text('Employee'),
+                        if (_canManageRole) ...[
+                          DropdownButtonFormField<String>(
+                            initialValue: _role,
+                            decoration: _inputDecoration('Role'),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'employee',
+                                child: Text('Employee'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'supervisor',
+                                child: Text('Supervisor'),
+                              ),
+                              DropdownMenuItem(value: 'hr', child: Text('HR')),
+                              DropdownMenuItem(
+                                value: 'admin',
+                                child: Text('Administrator'),
+                              ),
+                            ],
+                            onChanged: (String? value) {
+                              if (value != null) {
+                                setState(() {
+                                  _role = value;
+                                });
+                              }
+                            },
+                          ),
+                          if (_canManageAccount) const SizedBox(height: 10),
+                        ],
+                        if (_canManageAccount)
+                          SwitchListTile.adaptive(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              'Active Account',
+                              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                                color: PulseClockColors.textPrimary,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                            DropdownMenuItem(
-                              value: 'supervisor',
-                              child: Text('Supervisor'),
+                            subtitle: Text(
+                              _isActive
+                                  ? 'Employee can continue using WorkPulse.'
+                                  : 'Employee is marked inactive.',
+                              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                                fontSize: 12,
+                              ),
                             ),
-                            DropdownMenuItem(value: 'hr', child: Text('HR')),
-                            DropdownMenuItem(
-                              value: 'admin',
-                              child: Text('Administrator'),
-                            ),
-                          ],
-                          onChanged: (String? value) {
-                            if (value != null) {
+                            value: _isActive,
+                            activeTrackColor: PulseClockColors.actionBlue,
+                            onChanged: (bool value) {
                               setState(() {
-                                _role = value;
+                                _isActive = value;
                               });
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        SwitchListTile.adaptive(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            'Active Account',
-                            style: PulseClockTextStyles.cardSubtitle.copyWith(
-                              color: PulseClockColors.textPrimary,
-                              fontWeight: FontWeight.w800,
-                            ),
+                            },
                           ),
-                          subtitle: Text(
-                            _isActive
-                                ? 'Employee can continue using WorkPulse.'
-                                : 'Employee is marked inactive.',
-                            style: PulseClockTextStyles.cardSubtitle.copyWith(
-                              fontSize: 12,
-                            ),
-                          ),
-                          value: _isActive,
-                          activeTrackColor: PulseClockColors.actionBlue,
-                          onChanged: (bool value) {
-                            setState(() {
-                              _isActive = value;
-                            });
-                          },
-                        ),
                       ],
                     ),
                   ),

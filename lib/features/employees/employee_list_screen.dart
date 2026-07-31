@@ -136,7 +136,10 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
         return;
       }
 
-      final EmployeeManagementData data = await _service.fetchManagementData();
+      final EmployeeManagementData data = await _service.fetchManagementData(
+        currentUserId: profile.id,
+        currentRole: profile.role,
+      );
       if (!mounted) {
         return;
       }
@@ -154,8 +157,10 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       setState(() {
         _isLoading = false;
         _errorMessage =
-            message.contains('department_id') || message.contains('departments')
-            ? 'Employee management is not configured yet. Run the employee management SQL migration in Supabase.'
+            message.contains('department_id') ||
+                message.contains('departments') ||
+                message.contains('employee_supervisor_assignments')
+            ? 'Employee management is not configured yet. Run the employee and role-scope SQL migrations in Supabase.'
             : 'Unable to load employees right now.';
       });
     }
@@ -177,6 +182,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
               employee: employee,
               departments: data.departments,
               offices: data.offices,
+              supervisors: data.supervisors,
               currentRole: _currentRole,
             ),
         transitionDuration: Duration.zero,

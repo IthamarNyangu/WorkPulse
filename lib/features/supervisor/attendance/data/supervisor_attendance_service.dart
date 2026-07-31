@@ -184,6 +184,7 @@ class SupervisorAttendanceService {
 
     final List<_DashboardEmployee> employees = await _fetchEmployees(
       activeOnly: true,
+      reviewerId: reviewer.id,
     );
     final List<Map<String, dynamic>> attendanceRows =
         await _fetchAttendanceRows(selectedDateLabel);
@@ -251,7 +252,9 @@ class SupervisorAttendanceService {
     final String startLabel = _dateOnlyLabel(normalizedStartDate);
     final String endLabel = _dateOnlyLabel(normalizedEndDate);
 
-    final List<_DashboardEmployee> employees = await _fetchEmployees();
+    final List<_DashboardEmployee> employees = await _fetchEmployees(
+      reviewerId: reviewer.id,
+    );
     final List<Map<String, dynamic>> attendanceRows =
         await _fetchAttendanceRowsForRange(
           startLabel: startLabel,
@@ -340,18 +343,19 @@ class SupervisorAttendanceService {
 
   Future<List<_DashboardEmployee>> _fetchEmployees({
     bool activeOnly = false,
+    required String reviewerId,
   }) async {
     final List<dynamic> rows = activeOnly
         ? await _client
               .from(profilesTableName)
               .select('id, employee_id, full_name, email, department, role')
-              .eq('role', 'employee')
+              .neq('id', reviewerId)
               .eq('is_active', true)
               .order('full_name', ascending: true)
         : await _client
               .from(profilesTableName)
               .select('id, employee_id, full_name, email, department, role')
-              .eq('role', 'employee')
+              .neq('id', reviewerId)
               .order('full_name', ascending: true);
 
     return rows

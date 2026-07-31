@@ -29,16 +29,18 @@ class ApprovalService {
   }
 
   Future<ApprovalCounts> fetchApprovalCounts() async {
-    await _requireReviewerProfile();
+    final WorkPulseUserProfile reviewer = await _requireReviewerProfile();
 
     final List<dynamic> leaveRows = await _client
         .from(leaveTableName)
         .select('id')
-        .eq('status', 'pending');
+        .eq('status', 'pending')
+        .neq('user_id', reviewer.id);
     final List<dynamic> correctionRows = await _client
         .from(correctionTableName)
         .select('id')
-        .eq('status', 'pending');
+        .eq('status', 'pending')
+        .neq('user_id', reviewer.id);
 
     return ApprovalCounts(
       pendingLeaveCount: leaveRows.length,
@@ -47,12 +49,13 @@ class ApprovalService {
   }
 
   Future<List<LeaveApprovalItem>> fetchPendingLeaveApprovals() async {
-    await _requireReviewerProfile();
+    final WorkPulseUserProfile reviewer = await _requireReviewerProfile();
 
     final List<dynamic> rows = await _client
         .from(leaveTableName)
         .select()
         .eq('status', 'pending')
+        .neq('user_id', reviewer.id)
         .order('created_at', ascending: true);
 
     final List<Map<String, dynamic>> requests = rows
@@ -70,12 +73,13 @@ class ApprovalService {
   }
 
   Future<List<LeaveApprovalItem>> fetchReviewedLeaveApprovals() async {
-    await _requireReviewerProfile();
+    final WorkPulseUserProfile reviewer = await _requireReviewerProfile();
 
     final List<dynamic> rows = await _client
         .from(leaveTableName)
         .select()
         .neq('status', 'pending')
+        .neq('user_id', reviewer.id)
         .order('updated_at', ascending: false);
 
     final List<Map<String, dynamic>> requests = rows
@@ -93,12 +97,13 @@ class ApprovalService {
   }
 
   Future<List<CorrectionApprovalItem>> fetchPendingCorrectionApprovals() async {
-    await _requireReviewerProfile();
+    final WorkPulseUserProfile reviewer = await _requireReviewerProfile();
 
     final List<dynamic> rows = await _client
         .from(correctionTableName)
         .select()
         .eq('status', 'pending')
+        .neq('user_id', reviewer.id)
         .order('created_at', ascending: true);
 
     final List<Map<String, dynamic>> requests = rows
@@ -122,12 +127,13 @@ class ApprovalService {
 
   Future<List<CorrectionApprovalItem>>
   fetchReviewedCorrectionApprovals() async {
-    await _requireReviewerProfile();
+    final WorkPulseUserProfile reviewer = await _requireReviewerProfile();
 
     final List<dynamic> rows = await _client
         .from(correctionTableName)
         .select()
         .neq('status', 'pending')
+        .neq('user_id', reviewer.id)
         .order('updated_at', ascending: false);
 
     final List<Map<String, dynamic>> requests = rows

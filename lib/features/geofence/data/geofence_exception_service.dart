@@ -71,11 +71,7 @@ class GeofenceExceptionService {
 
   static const String attendanceTableName = 'attendance_records';
   static const String profilesTableName = 'profiles';
-  static const Set<String> reviewerRoles = <String>{
-    'supervisor',
-    'hr',
-    'admin',
-  };
+  static const Set<String> reviewerRoles = <String>{'hr', 'admin'};
 
   final SupabaseClient _client;
   final AuthService _authService;
@@ -87,7 +83,7 @@ class GeofenceExceptionService {
     final WorkPulseUserProfile profile = await _requireReviewerProfile();
     if (!reviewerRoles.contains(profile.role)) {
       throw StateError(
-        'Only supervisors, HR, and admins can review geofence exceptions.',
+        'Only HR and administrators can review geofence exceptions.',
       );
     }
 

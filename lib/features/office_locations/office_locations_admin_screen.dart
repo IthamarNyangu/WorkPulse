@@ -162,11 +162,7 @@ class OfficeLocationsAdminScreen extends StatefulWidget {
 
 class _OfficeLocationsAdminScreenState
     extends State<OfficeLocationsAdminScreen> {
-  static const Set<String> _managerRoles = <String>{
-    'supervisor',
-    'hr',
-    'admin',
-  };
+  static const Set<String> _managerRoles = <String>{'hr', 'admin'};
 
   final OfficeLocationService _officeLocationService = OfficeLocationService();
   final TextEditingController _searchController = TextEditingController();
@@ -236,7 +232,7 @@ class _OfficeLocationsAdminScreenState
         setState(() {
           _isLoading = false;
           _errorMessage =
-              'Only supervisors, HR, and admins can manage office locations.';
+              'Only HR and administrators can manage office locations.';
         });
         return;
       }

@@ -17,11 +17,8 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  static const Set<String> _officeManagerRoles = <String>{
-    'supervisor',
-    'hr',
-    'admin',
-  };
+  static const Set<String> _teamRoles = <String>{'supervisor', 'hr', 'admin'};
+  static const Set<String> _organisationManagerRoles = <String>{'hr', 'admin'};
 
   String _employeeName = 'WorkPulse User';
   String _employeeId = '--';
@@ -30,8 +27,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _employeeJobTitle;
   bool _isLoggingOut = false;
 
-  bool get _canManageOfficeLocations =>
-      _officeManagerRoles.contains(_employeeRole);
+  bool get _canViewTeamTools => _teamRoles.contains(_employeeRole);
+
+  bool get _canManageOrganisation =>
+      _organisationManagerRoles.contains(_employeeRole);
 
   @override
   void initState() {
@@ -473,8 +472,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Expanded(
             child: ListView(
               children: [
-                if (_canManageOfficeLocations) ...<Widget>[
-                  _SectionHeader(title: 'Administration'),
+                if (_canViewTeamTools) ...<Widget>[
+                  _SectionHeader(
+                    title: _canManageOrganisation ? 'Administration' : 'Team',
+                  ),
                   const SizedBox(height: 8),
                   _ProfileSectionCard(
                     items: [
@@ -488,16 +489,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         title: 'Attendance Dashboard',
                         onTap: () => _openAttendanceDashboard(context),
                       ),
-                      _ProfileActionItem(
-                        icon: Icons.business_outlined,
-                        title: 'Office Locations',
-                        onTap: () => _openOfficeLocations(context),
-                      ),
-                      _ProfileActionItem(
-                        icon: Icons.gpp_maybe_outlined,
-                        title: 'Geofence Review',
-                        onTap: () => _openGeofenceReview(context),
-                      ),
+                      if (_canManageOrganisation)
+                        _ProfileActionItem(
+                          icon: Icons.business_outlined,
+                          title: 'Office Locations',
+                          onTap: () => _openOfficeLocations(context),
+                        ),
+                      if (_canManageOrganisation)
+                        _ProfileActionItem(
+                          icon: Icons.gpp_maybe_outlined,
+                          title: 'Geofence Review',
+                          onTap: () => _openGeofenceReview(context),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 16),

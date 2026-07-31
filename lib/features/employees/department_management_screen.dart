@@ -31,12 +31,13 @@ class _DepartmentManagementScreenState
       _errorMessage = null;
     });
     try {
-      final EmployeeManagementData data = await _service.fetchManagementData();
+      final List<WorkPulseDepartment> departments = await _service
+          .fetchDepartments();
       if (!mounted) {
         return;
       }
       setState(() {
-        _departments = data.departments;
+        _departments = departments;
         _isLoading = false;
       });
     } catch (_) {
