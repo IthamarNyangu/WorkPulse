@@ -32,7 +32,10 @@ class AuthService {
 
     final Map<String, dynamic>? row = await _client
         .from(profilesTableName)
-        .select('id, employee_id, full_name, email, role, department')
+        .select(
+          'id, employee_id, full_name, email, role, department, department_id, '
+          'job_title, usual_office_location_id, is_active',
+        )
         .eq('id', user.id)
         .maybeSingle();
 
@@ -56,6 +59,10 @@ class WorkPulseUserProfile {
     required this.email,
     required this.role,
     this.department,
+    this.departmentId,
+    this.jobTitle,
+    this.usualOfficeLocationId,
+    this.isActive = true,
   });
 
   final String id;
@@ -64,6 +71,10 @@ class WorkPulseUserProfile {
   final String email;
   final String role;
   final String? department;
+  final String? departmentId;
+  final String? jobTitle;
+  final String? usualOfficeLocationId;
+  final bool isActive;
 
   String get firstName {
     final List<String> parts = fullName.trim().split(RegExp(r'\s+'));
@@ -81,6 +92,10 @@ class WorkPulseUserProfile {
       email: map['email'] as String,
       role: map['role'] as String,
       department: map['department'] as String?,
+      departmentId: map['department_id'] as String?,
+      jobTitle: map['job_title'] as String?,
+      usualOfficeLocationId: map['usual_office_location_id'] as String?,
+      isActive: map['is_active'] as bool? ?? true,
     );
   }
 }

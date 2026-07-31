@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/auth/data/auth_service.dart';
+import 'package:pulseclock/features/employees/employee_list_screen.dart';
 import 'package:pulseclock/features/geofence/presentation/geofence_exception_review_screen.dart';
 import 'package:pulseclock/features/notifications/notifications_screen.dart';
 import 'package:pulseclock/features/office_locations/office_locations_admin_screen.dart';
@@ -22,9 +23,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     'admin',
   };
 
-  String _employeeName = 'Ithamar Nyangu';
-  String _employeeId = 'IN-2048';
+  String _employeeName = 'WorkPulse User';
+  String _employeeId = '--';
   String _employeeRole = 'employee';
+  String? _employeeDepartment;
+  String? _employeeJobTitle;
   bool _isLoggingOut = false;
 
   bool get _canManageOfficeLocations =>
@@ -51,6 +54,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _employeeName = profile.fullName;
         _employeeId = profile.employeeId;
         _employeeRole = profile.role;
+        _employeeDepartment = profile.department;
+        _employeeJobTitle = profile.jobTitle;
       });
     } catch (_) {
       // Keep existing mock values if the backend profile is unavailable.
@@ -118,6 +123,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Animation<double> secondaryAnimation,
             ) {
               return const SupervisorAttendanceDashboardScreen();
+            },
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
+
+  Future<void> _openEmployees(BuildContext context) async {
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) {
+              return const EmployeeListScreen();
             },
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
@@ -347,6 +369,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFFFCFDFE),
+          surfaceTintColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 44,
+            vertical: 24,
+          ),
+          titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          contentPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          actionsPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          title: Text(
+            'Log Out',
+            style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
+          ),
+          content: Text(
+            'Are you sure you want to log out of WorkPulse?',
+            style: PulseClockTextStyles.cardSubtitle.copyWith(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                'Cancel',
+                style: PulseClockTextStyles.cardSubtitle.copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(
+                foregroundColor: PulseClockColors.actionBlue,
+                textStyle: PulseClockTextStyles.cardSubtitle.copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              child: const Text('Log Out'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || confirmed != true) {
+      return;
+    }
+
     setState(() {
       _isLoggingOut = true;
     });
@@ -389,6 +466,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _ProfileHeaderCard(
             employeeName: _employeeName,
             employeeId: _employeeId,
+            department: _employeeDepartment,
+            jobTitle: _employeeJobTitle,
           ),
           const SizedBox(height: 18),
           Expanded(
@@ -399,6 +478,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 8),
                   _ProfileSectionCard(
                     items: [
+                      _ProfileActionItem(
+                        icon: Icons.people_outline_rounded,
+                        title: 'Employees',
+                        onTap: () => _openEmployees(context),
+                      ),
                       _ProfileActionItem(
                         icon: Icons.dashboard_outlined,
                         title: 'Attendance Dashboard',
@@ -570,10 +654,14 @@ class _ProfileHeaderCard extends StatelessWidget {
   const _ProfileHeaderCard({
     required this.employeeName,
     required this.employeeId,
+    required this.department,
+    required this.jobTitle,
   });
 
   final String employeeName;
   final String employeeId;
+  final String? department;
+  final String? jobTitle;
 
   @override
   Widget build(BuildContext context) {
@@ -609,12 +697,31 @@ class _ProfileHeaderCard extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                if (_profileContextLabel != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    _profileContextLabel!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: PulseClockTextStyles.cardSubtitle.copyWith(
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  String? get _profileContextLabel {
+    final List<String> values = <String>[
+      if (jobTitle?.trim().isNotEmpty ?? false) jobTitle!.trim(),
+      if (department?.trim().isNotEmpty ?? false) department!.trim(),
+    ];
+    return values.isEmpty ? null : values.join('  |  ');
   }
 }
 
