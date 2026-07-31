@@ -154,7 +154,9 @@ const Map<String, List<String>> _zambiaDistrictsByProvince =
     };
 
 class OfficeLocationsAdminScreen extends StatefulWidget {
-  const OfficeLocationsAdminScreen({super.key});
+  const OfficeLocationsAdminScreen({super.key, this.profile});
+
+  final WorkPulseUserProfile? profile;
 
   @override
   State<OfficeLocationsAdminScreen> createState() =>
@@ -233,8 +235,11 @@ class _OfficeLocationsAdminScreenState
     }
 
     try {
-      final WorkPulseUserProfile? profile =
+      final WorkPulseUserProfile? sessionProfile =
+          widget.profile ??
           WorkPulseSessionScope.maybeProfileOf(context, listen: false);
+      final WorkPulseUserProfile? profile =
+          sessionProfile ?? await AuthService().fetchCurrentProfile();
       if (profile == null || !_managerRoles.contains(profile.role)) {
         if (!mounted) {
           return;

@@ -34,7 +34,9 @@ extension on _EmployeeStatusFilter {
 }
 
 class EmployeeListScreen extends StatefulWidget {
-  const EmployeeListScreen({super.key});
+  const EmployeeListScreen({super.key, this.profile});
+
+  final WorkPulseUserProfile? profile;
 
   @override
   State<EmployeeListScreen> createState() => _EmployeeListScreenState();
@@ -132,8 +134,11 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       _errorMessage = null;
     });
     try {
-      final WorkPulseUserProfile? profile =
+      final WorkPulseUserProfile? sessionProfile =
+          widget.profile ??
           WorkPulseSessionScope.maybeProfileOf(context, listen: false);
+      final WorkPulseUserProfile? profile =
+          sessionProfile ?? await AuthService().fetchCurrentProfile();
       if (profile == null || !_managerRoles.contains(profile.role)) {
         if (!mounted) {
           return;

@@ -26,6 +26,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _employeeRole = 'employee';
   String? _employeeDepartment;
   String? _employeeJobTitle;
+  WorkPulseUserProfile? _currentProfile;
   bool _isLoggingOut = false;
 
   bool get _canViewTeamTools => _teamRoles.contains(_employeeRole);
@@ -40,6 +41,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context,
     );
     if (profile != null) {
+      _currentProfile = profile;
       _employeeName = profile.fullName;
       _employeeId = profile.employeeId;
       _employeeRole = profile.role;
@@ -74,7 +76,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Animation<double> animation,
               Animation<double> secondaryAnimation,
             ) {
-              return const OfficeLocationsAdminScreen();
+              return OfficeLocationsAdminScreen(profile: _currentProfile);
             },
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
@@ -125,7 +127,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Animation<double> animation,
               Animation<double> secondaryAnimation,
             ) {
-              return const EmployeeListScreen();
+              return EmployeeListScreen(profile: _currentProfile);
             },
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
