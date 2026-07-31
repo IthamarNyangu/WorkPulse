@@ -58,7 +58,7 @@ class _DepartmentManagementScreenState
     bool isActive = department?.isActive ?? true;
     bool isSaving = false;
 
-    await showDialog<void>(
+    final bool? saved = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
         return StatefulBuilder(
@@ -108,7 +108,7 @@ class _DepartmentManagementScreenState
                 TextButton(
                   onPressed: isSaving
                       ? null
-                      : () => Navigator.of(dialogContext).pop(),
+                      : () => Navigator.of(dialogContext).pop(false),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
@@ -142,9 +142,8 @@ class _DepartmentManagementScreenState
                               );
                             }
                             if (dialogContext.mounted) {
-                              Navigator.of(dialogContext).pop();
+                              Navigator.of(dialogContext).pop(true);
                             }
-                            await _loadDepartments();
                           } catch (error) {
                             if (!mounted) {
                               return;
@@ -189,6 +188,9 @@ class _DepartmentManagementScreenState
       },
     );
     controller.dispose();
+    if (saved == true && mounted) {
+      await _loadDepartments();
+    }
   }
 
   @override
