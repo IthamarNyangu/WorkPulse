@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/auth/data/auth_service.dart';
+import 'package:pulseclock/features/auth/session/workpulse_session.dart';
 import 'package:pulseclock/features/employees/employee_list_screen.dart';
 import 'package:pulseclock/features/geofence/presentation/geofence_exception_review_screen.dart';
 import 'package:pulseclock/features/notifications/notifications_screen.dart';
@@ -33,31 +34,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _organisationManagerRoles.contains(_employeeRole);
 
   @override
-  void initState() {
-    super.initState();
-    _loadProfile();
-  }
-
-  Future<void> _loadProfile() async {
-    if (!SupabaseBootstrap.isInitialized) {
-      return;
-    }
-
-    try {
-      final WorkPulseUserProfile? profile = await AuthService()
-          .fetchCurrentProfile();
-      if (!mounted || profile == null) {
-        return;
-      }
-      setState(() {
-        _employeeName = profile.fullName;
-        _employeeId = profile.employeeId;
-        _employeeRole = profile.role;
-        _employeeDepartment = profile.department;
-        _employeeJobTitle = profile.jobTitle;
-      });
-    } catch (_) {
-      // Keep existing mock values if the backend profile is unavailable.
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final WorkPulseUserProfile? profile = WorkPulseSessionScope.maybeProfileOf(
+      context,
+    );
+    if (profile != null) {
+      _employeeName = profile.fullName;
+      _employeeId = profile.employeeId;
+      _employeeRole = profile.role;
+      _employeeDepartment = profile.department;
+      _employeeJobTitle = profile.jobTitle;
     }
   }
 

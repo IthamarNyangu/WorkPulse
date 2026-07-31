@@ -31,9 +31,9 @@ abstract final class PulseClockColors {
   static const Color actionBlue = Color(0xFF2563EB);
   static const Color actionBlueSoft = Color(0xFFE8F0FF);
   static const Color actionBlueBorder = Color(0xFF9DB9F5);
-  static const Color reportAction = Color(0xFF0F766E);
-  static const Color reportActionSoft = Color(0xFFE2F3F1);
-  static const Color reportActionBorder = Color(0xFF82C8C1);
+  static const Color reportAction = Color(0xFF15803D);
+  static const Color reportActionSoft = Color(0xFFE8F6EC);
+  static const Color reportActionBorder = Color(0xFF8DCF9F);
   static const Color actionRed = Color(0xFFEC1D36);
 
   static const Color navSelected = Color(0xFF2563EB);

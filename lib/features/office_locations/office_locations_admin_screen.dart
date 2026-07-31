@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/attendance/location/office_location_service.dart';
 import 'package:pulseclock/features/auth/data/auth_service.dart';
+import 'package:pulseclock/features/auth/session/workpulse_session.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
@@ -168,6 +169,7 @@ class _OfficeLocationsAdminScreenState
   final TextEditingController _searchController = TextEditingController();
 
   bool _isLoading = true;
+  bool _hasStartedLoading = false;
   String? _errorMessage;
   String _searchQuery = '';
   List<OfficeLocation> _officeLocations = const <OfficeLocation>[];
@@ -198,7 +200,15 @@ class _OfficeLocationsAdminScreenState
   @override
   void initState() {
     super.initState();
-    _loadOfficeLocations();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasStartedLoading) {
+      _hasStartedLoading = true;
+      _loadOfficeLocations();
+    }
   }
 
   @override
@@ -223,8 +233,8 @@ class _OfficeLocationsAdminScreenState
     }
 
     try {
-      final WorkPulseUserProfile? profile = await AuthService()
-          .fetchCurrentProfile();
+      final WorkPulseUserProfile? profile =
+          WorkPulseSessionScope.maybeProfileOf(context, listen: false);
       if (profile == null || !_managerRoles.contains(profile.role)) {
         if (!mounted) {
           return;

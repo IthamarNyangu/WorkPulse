@@ -694,11 +694,8 @@ class _ReportsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: PulseClockColors.reportActionSoft,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: PulseClockColors.reportActionBorder),
-      ),
+      color: PulseClockColors.reportAction,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -724,7 +721,7 @@ class _ReportsButton extends StatelessWidget {
                 child: Text(
                   'Attendance Reports',
                   style: PulseClockTextStyles.cardSubtitle.copyWith(
-                    color: PulseClockColors.textPrimary,
+                    color: PulseClockColors.surface,
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
                   ),
@@ -732,7 +729,7 @@ class _ReportsButton extends StatelessWidget {
               ),
               const Icon(
                 Icons.chevron_right_rounded,
-                color: PulseClockColors.textSecondary,
+                color: PulseClockColors.surface,
               ),
             ],
           ),

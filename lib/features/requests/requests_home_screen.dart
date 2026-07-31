@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:pulseclock/features/approvals/approvals_home_screen.dart';
 import 'package:pulseclock/features/approvals/data/approval_service.dart';
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/auth/session/workpulse_session.dart';
 import 'package:pulseclock/features/corrections/correction_list_screen.dart';
 import 'package:pulseclock/features/corrections/data/correction_service.dart';
 import 'package:pulseclock/features/leave/data/leave_service.dart';
@@ -27,6 +28,7 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
   int? _backendPendingLeaveCount;
   int? _backendPendingApprovalCount;
   bool _canReviewRequests = false;
+  bool _hasStartedBackendLoad = false;
   bool _isLoadingBackendRequestCounts = false;
   bool _hasLoadedBackendRequestCounts = false;
   bool _backendRequestCountLoadFailed = false;
@@ -37,7 +39,21 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
   void initState() {
     super.initState();
     _store.addListener(_onStoreChanged);
-    _loadBackendRequestCounts();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final String? role = WorkPulseSessionScope.maybeProfileOf(context)?.role;
+    _canReviewRequests = const <String>{
+      'supervisor',
+      'hr',
+      'admin',
+    }.contains(role);
+    if (!_hasStartedBackendLoad) {
+      _hasStartedBackendLoad = true;
+      _loadBackendRequestCounts();
+    }
   }
 
   @override
@@ -80,9 +96,8 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
       final int pendingLeaveCount = await LeaveService()
           .fetchPendingLeaveRequestCount();
       final ApprovalService approvalService = ApprovalService();
-      final bool canReviewRequests = await approvalService.canReviewRequests();
       int? pendingApprovalCount;
-      if (canReviewRequests) {
+      if (_canReviewRequests) {
         pendingApprovalCount =
             (await approvalService.fetchApprovalCounts()).totalPending;
       }
@@ -94,7 +109,6 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
         _backendPendingCorrectionCount = pendingCorrectionCount;
         _backendPendingLeaveCount = pendingLeaveCount;
         _backendPendingApprovalCount = pendingApprovalCount;
-        _canReviewRequests = canReviewRequests;
         _isLoadingBackendRequestCounts = false;
         _hasLoadedBackendRequestCounts = true;
         _backendRequestCountLoadFailed = false;
@@ -108,7 +122,6 @@ class _RequestsHomeScreenState extends State<RequestsHomeScreen> {
         _backendPendingCorrectionCount = null;
         _backendPendingLeaveCount = null;
         _backendPendingApprovalCount = null;
-        _canReviewRequests = false;
         _isLoadingBackendRequestCounts = false;
         _hasLoadedBackendRequestCounts = false;
         _backendRequestCountLoadFailed = true;

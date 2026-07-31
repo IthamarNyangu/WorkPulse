@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pulseclock/features/auth/data/auth_service.dart';
+import 'package:pulseclock/features/auth/session/workpulse_session.dart';
 import 'package:pulseclock/features/employees/data/employee_management_service.dart';
 import 'package:pulseclock/features/employees/department_management_screen.dart';
 import 'package:pulseclock/features/employees/employee_details_screen.dart';
@@ -51,6 +52,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   bool _isLoading = true;
+  bool _hasStartedLoading = false;
   String? _errorMessage;
   String _currentRole = 'employee';
   String _searchQuery = '';
@@ -107,7 +109,15 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   @override
   void initState() {
     super.initState();
-    _loadEmployees();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasStartedLoading) {
+      _hasStartedLoading = true;
+      _loadEmployees();
+    }
   }
 
   @override
@@ -122,8 +132,8 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       _errorMessage = null;
     });
     try {
-      final WorkPulseUserProfile? profile = await AuthService()
-          .fetchCurrentProfile();
+      final WorkPulseUserProfile? profile =
+          WorkPulseSessionScope.maybeProfileOf(context, listen: false);
       if (profile == null || !_managerRoles.contains(profile.role)) {
         if (!mounted) {
           return;

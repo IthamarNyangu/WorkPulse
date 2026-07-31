@@ -5,7 +5,7 @@ import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/attendance/clock/clock_confirmation_screen.dart';
 import 'package:pulseclock/features/attendance/data/attendance_service.dart';
 import 'package:pulseclock/features/attendance/history/attendance_history_screen.dart';
-import 'package:pulseclock/features/auth/data/auth_service.dart';
+import 'package:pulseclock/features/auth/session/workpulse_session.dart';
 import 'package:pulseclock/features/notifications/notifications_screen.dart';
 import 'package:pulseclock/features/profile/profile_screen.dart';
 import 'package:pulseclock/features/requests/requests_home_screen.dart';
@@ -38,7 +38,6 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
     super.initState();
     _now = DateTime.now();
     _syncStateFromStore();
-    _loadEmployeeProfile();
     _loadAttendanceFromBackend();
     _store.addListener(_onStoreChanged);
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -78,22 +77,14 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
     _lastWorkedDuration = _store.liveWorkedDuration;
   }
 
-  Future<void> _loadEmployeeProfile() async {
-    if (!SupabaseBootstrap.isInitialized) {
-      return;
-    }
-
-    try {
-      final WorkPulseUserProfile? profile = await AuthService()
-          .fetchCurrentProfile();
-      if (!mounted || profile == null || profile.firstName.isEmpty) {
-        return;
-      }
-      setState(() {
-        _employeeName = profile.firstName;
-      });
-    } catch (_) {
-      // Preserve existing home experience if profile fetch fails.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final String? firstName = WorkPulseSessionScope.maybeProfileOf(
+      context,
+    )?.firstName;
+    if (firstName != null && firstName.isNotEmpty) {
+      _employeeName = firstName;
     }
   }
 
@@ -373,7 +364,11 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
             _selectedNavIndex = index;
           });
           if (index == 0 && SupabaseBootstrap.isInitialized) {
-            _loadEmployeeProfile();
+            final WorkPulseSessionController? session =
+                WorkPulseSessionScope.maybeControllerOf(context, listen: false);
+            if (session != null) {
+              unawaited(session.refreshProfile());
+            }
             _loadAttendanceFromBackend();
           }
         },
