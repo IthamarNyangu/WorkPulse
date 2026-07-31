@@ -80,11 +80,13 @@ class SupervisorAttendanceDashboardScreen extends StatefulWidget {
 }
 
 class _SupervisorAttendanceDashboardScreenState
-    extends State<SupervisorAttendanceDashboardScreen> {
+    extends State<SupervisorAttendanceDashboardScreen>
+    with WidgetsBindingObserver {
   static const int _pageSize = 20;
 
   final SupervisorAttendanceService _service = SupervisorAttendanceService();
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   final GlobalKey _searchFieldKey = GlobalKey();
   final GlobalKey _employeeResultsKey = GlobalKey();
 
@@ -146,13 +148,25 @@ class _SupervisorAttendanceDashboardScreenState
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadAttendance();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _searchFocusNode.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    if (_searchFocusNode.hasFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _ensureSearchFieldVisible();
+      });
+    }
   }
 
   Future<void> _loadAttendance({bool showLoading = true}) async {
@@ -252,21 +266,26 @@ class _SupervisorAttendanceDashboardScreenState
   }
 
   void _revealSearchField() {
-    Future<void>.delayed(const Duration(milliseconds: 300), () {
-      if (!mounted) {
-        return;
-      }
-      final BuildContext? searchContext = _searchFieldKey.currentContext;
-      if (searchContext == null || !searchContext.mounted) {
-        return;
-      }
-      Scrollable.ensureVisible(
-        searchContext,
-        alignment: 0.08,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-      );
-    });
+    Future<void>.delayed(
+      const Duration(milliseconds: 420),
+      _ensureSearchFieldVisible,
+    );
+  }
+
+  void _ensureSearchFieldVisible() {
+    if (!mounted || !_searchFocusNode.hasFocus) {
+      return;
+    }
+    final BuildContext? searchContext = _searchFieldKey.currentContext;
+    if (searchContext == null || !searchContext.mounted) {
+      return;
+    }
+    Scrollable.ensureVisible(
+      searchContext,
+      alignment: 0.30,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
   }
 
   void _changePage(int page) {
@@ -407,6 +426,7 @@ class _SupervisorAttendanceDashboardScreenState
           _SupervisorSearchField(
             key: _searchFieldKey,
             controller: _searchController,
+            focusNode: _searchFocusNode,
             onTap: _revealSearchField,
             onChanged: (String value) {
               setState(() {
@@ -1111,12 +1131,14 @@ class _SupervisorSearchField extends StatelessWidget {
   const _SupervisorSearchField({
     super.key,
     required this.controller,
+    required this.focusNode,
     required this.onChanged,
     required this.onClear,
     required this.onTap,
   });
 
   final TextEditingController controller;
+  final FocusNode focusNode;
   final ValueChanged<String> onChanged;
   final VoidCallback? onClear;
   final VoidCallback onTap;
@@ -1125,6 +1147,7 @@ class _SupervisorSearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      focusNode: focusNode,
       onChanged: onChanged,
       onTap: onTap,
       textInputAction: TextInputAction.search,
