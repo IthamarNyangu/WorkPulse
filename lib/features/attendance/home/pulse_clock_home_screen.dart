@@ -6,7 +6,10 @@ import 'package:pulseclock/features/attendance/clock/clock_confirmation_screen.d
 import 'package:pulseclock/features/attendance/data/attendance_service.dart';
 import 'package:pulseclock/features/attendance/history/attendance_history_screen.dart';
 import 'package:pulseclock/features/auth/session/workpulse_session.dart';
+import 'package:pulseclock/features/auth/data/auth_service.dart';
+import 'package:pulseclock/features/notifications/data/local_notification_service.dart';
 import 'package:pulseclock/features/notifications/notifications_screen.dart';
+import 'package:pulseclock/features/notifications/workpulse_reminder_controller.dart';
 import 'package:pulseclock/features/profile/profile_screen.dart';
 import 'package:pulseclock/features/requests/requests_home_screen.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
@@ -22,8 +25,11 @@ class PulseClockHomeScreen extends StatefulWidget {
   State<PulseClockHomeScreen> createState() => _PulseClockHomeScreenState();
 }
 
-class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
+class _PulseClockHomeScreenState extends State<PulseClockHomeScreen>
+    with WidgetsBindingObserver {
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
+  final WorkPulseReminderController _reminders =
+      WorkPulseReminderController.instance;
   AttendanceStatus _status = AttendanceStatus.offDuty;
   int _selectedNavIndex = 0;
   String _employeeName = 'Ithamar';
@@ -32,6 +38,8 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
   DateTime? _punchInAt;
   DateTime? _punchOutAt;
   Duration? _lastWorkedDuration;
+  WorkPulseUserProfile? _profile;
+  StreamSubscription<String>? _notificationTapSubscription;
 
   @override
   void initState() {
@@ -40,6 +48,12 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
     _syncStateFromStore();
     _loadAttendanceFromBackend();
     _store.addListener(_onStoreChanged);
+    _reminders.addListener(_onRemindersChanged);
+    WidgetsBinding.instance.addObserver(this);
+    _notificationTapSubscription = WorkPulseLocalNotificationService
+        .instance
+        .taps
+        .listen((_) => _openNotifications());
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) {
         return;
@@ -54,7 +68,28 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
   void dispose() {
     _clockTimer?.cancel();
     _store.removeListener(_onStoreChanged);
+    _reminders.removeListener(_onRemindersChanged);
+    _notificationTapSubscription?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _reminders.stop();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _profile != null) {
+      _reminders.start(_profile!);
+      _loadAttendanceFromBackend();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _reminders.stop();
+    }
+  }
+
+  void _onRemindersChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _onStoreChanged() {
@@ -80,11 +115,25 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final String? firstName = WorkPulseSessionScope.maybeProfileOf(
+    final WorkPulseUserProfile? profile = WorkPulseSessionScope.maybeProfileOf(
       context,
-    )?.firstName;
+    );
+    _profile = profile;
+    final String? firstName = profile?.firstName;
     if (firstName != null && firstName.isNotEmpty) {
       _employeeName = firstName;
+    }
+    if (profile != null) {
+      _reminders.start(profile);
+      final String? initialPayload = WorkPulseLocalNotificationService.instance
+          .takeInitialPayload();
+      if (initialPayload != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _openNotifications();
+          }
+        });
+      }
     }
   }
 
@@ -170,10 +219,17 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
     _store.applyClockConfirmationResult(result);
     if (SupabaseBootstrap.isInitialized) {
       await _loadAttendanceFromBackend();
+      await _reminders.onAttendanceChanged();
     }
   }
 
   Future<void> _openNotifications() async {
+    if (SupabaseBootstrap.isInitialized) {
+      await _reminders.refresh();
+    }
+    if (!mounted) {
+      return;
+    }
     await Navigator.of(context).push<void>(
       PageRouteBuilder<void>(
         pageBuilder:
@@ -188,6 +244,10 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
         reverseTransitionDuration: Duration.zero,
       ),
     );
+    if (SupabaseBootstrap.isInitialized) {
+      await _loadAttendanceFromBackend();
+      await _reminders.onAttendanceChanged();
+    }
   }
 
   Widget _buildTabContent() {
@@ -201,7 +261,9 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
           summary: _summaryForHome(),
           onPrimaryActionPressed: _onPrimaryActionPressed,
           onNotificationsPressed: _openNotifications,
-          unreadNotifications: _store.unreadNotificationCount,
+          unreadNotifications: SupabaseBootstrap.isInitialized
+              ? _reminders.unreadCount
+              : _store.unreadNotificationCount,
         );
       case 1:
         return const AttendanceHistoryScreen();
@@ -218,7 +280,9 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen> {
           summary: _summaryForHome(),
           onPrimaryActionPressed: _onPrimaryActionPressed,
           onNotificationsPressed: _openNotifications,
-          unreadNotifications: _store.unreadNotificationCount,
+          unreadNotifications: SupabaseBootstrap.isInitialized
+              ? _reminders.unreadCount
+              : _store.unreadNotificationCount,
         );
     }
   }

@@ -380,6 +380,7 @@ class WorkPulseNotification {
     this.attendanceRecordId,
     this.correctionRequestId,
     this.leaveRequestId,
+    this.eventKey,
   });
 
   final String id;
@@ -393,6 +394,7 @@ class WorkPulseNotification {
   final String? attendanceRecordId;
   final String? correctionRequestId;
   final String? leaveRequestId;
+  final String? eventKey;
 
   WorkPulseNotification copyWith({
     String? id,
@@ -406,6 +408,7 @@ class WorkPulseNotification {
     String? attendanceRecordId,
     String? correctionRequestId,
     String? leaveRequestId,
+    String? eventKey,
   }) {
     return WorkPulseNotification(
       id: id ?? this.id,
@@ -419,6 +422,7 @@ class WorkPulseNotification {
       attendanceRecordId: attendanceRecordId ?? this.attendanceRecordId,
       correctionRequestId: correctionRequestId ?? this.correctionRequestId,
       leaveRequestId: leaveRequestId ?? this.leaveRequestId,
+      eventKey: eventKey ?? this.eventKey,
     );
   }
 }

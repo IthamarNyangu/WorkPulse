@@ -4,6 +4,8 @@ import 'package:pulseclock/features/corrections/correction_details_screen.dart';
 import 'package:pulseclock/features/corrections/correction_list_screen.dart';
 import 'package:pulseclock/features/leave/leave_details_screen.dart';
 import 'package:pulseclock/features/leave/leave_list_screen.dart';
+import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/notifications/workpulse_reminder_controller.dart';
 import 'package:pulseclock/pulseclock/data/pulse_clock_mock_data.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
@@ -19,16 +21,25 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
+  final WorkPulseReminderController _reminders =
+      WorkPulseReminderController.instance;
+
+  bool get _usesBackend => SupabaseBootstrap.isInitialized;
 
   @override
   void initState() {
     super.initState();
     _store.addListener(_onStoreChanged);
+    _reminders.addListener(_onStoreChanged);
+    if (_usesBackend) {
+      _reminders.refresh();
+    }
   }
 
   @override
   void dispose() {
     _store.removeListener(_onStoreChanged);
+    _reminders.removeListener(_onStoreChanged);
     super.dispose();
   }
 
@@ -40,7 +51,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _openFromNotification(WorkPulseNotification notification) async {
-    _store.markNotificationAsRead(notification.id);
+    if (_usesBackend) {
+      await _reminders.markRead(notification.id);
+    } else {
+      _store.markNotificationAsRead(notification.id);
+    }
     await _navigateToNotificationTarget(notification);
   }
 
@@ -135,7 +150,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   Animation<double> animation,
                   Animation<double> secondaryAnimation,
                 ) {
-                  return LeaveDetailsScreen(requestId: notification.leaveRequestId!);
+                  return LeaveDetailsScreen(
+                    requestId: notification.leaveRequestId!,
+                  );
                 },
             transitionDuration: Duration.zero,
             reverseTransitionDuration: Duration.zero,
@@ -158,11 +175,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       return;
     }
     _store.applyClockConfirmationResult(result);
+    if (_usesBackend) {
+      await _reminders.onAttendanceChanged();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<WorkPulseNotification> notifications = _store.notifications;
+    final List<WorkPulseNotification> notifications = _usesBackend
+        ? _reminders.notifications
+        : _store.notifications;
     final List<_NotificationDateGroup> groupedNotifications =
         _groupNotificationsByDate(notifications);
 
@@ -180,7 +202,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               padding: const EdgeInsets.only(right: 12),
               child: Center(
                 child: TextButton(
-                  onPressed: _store.clearAllNotifications,
+                  onPressed: () {
+                    if (_usesBackend) {
+                      _reminders.clearAll();
+                    } else {
+                      _store.clearAllNotifications();
+                    }
+                  },
                   style: TextButton.styleFrom(
                     foregroundColor: PulseClockColors.actionBlue,
                     backgroundColor: const Color(0x142563EB),
@@ -236,21 +264,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        for (int index = 0; index < group.notifications.length; index++)
+                        for (
+                          int index = 0;
+                          index < group.notifications.length;
+                          index++
+                        )
                           Padding(
                             padding: EdgeInsets.only(
-                              bottom: index == group.notifications.length - 1 ? 18 : 8,
+                              bottom: index == group.notifications.length - 1
+                                  ? 18
+                                  : 8,
                             ),
                             child: _NotificationCard(
                               notification: group.notifications[index],
                               onTap: () => _openFromNotification(
                                 group.notifications[index],
                               ),
-                              onAction: group.notifications[index].actionLabel == null
+                              onAction:
+                                  group.notifications[index].actionLabel == null
                                   ? null
                                   : () => _openFromNotification(
-                                        group.notifications[index],
-                                      ),
+                                      group.notifications[index],
+                                    ),
                             ),
                           ),
                       ],
@@ -292,11 +327,7 @@ class _NotificationCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 5,
-                height: 96,
-                color: style.indicatorColor,
-              ),
+              Container(width: 5, height: 96, color: style.indicatorColor),
               Expanded(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(minHeight: 96),
@@ -313,11 +344,12 @@ class _NotificationCard extends StatelessWidget {
                                 notification.title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: PulseClockTextStyles.cardSubtitle.copyWith(
-                                  color: PulseClockColors.textPrimary,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                ),
+                                style: PulseClockTextStyles.cardSubtitle
+                                    .copyWith(
+                                      color: PulseClockColors.textPrimary,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15,
+                                    ),
                               ),
                             ),
                             if (!notification.isRead)
@@ -340,7 +372,9 @@ class _NotificationCard extends StatelessWidget {
                             fontSize: 13,
                             height: 1.25,
                             color: notification.isRead
-                                ? PulseClockColors.textSecondary.withOpacity(0.86)
+                                ? PulseClockColors.textSecondary.withOpacity(
+                                    0.86,
+                                  )
                                 : PulseClockColors.textSecondary,
                           ),
                         ),
@@ -351,7 +385,8 @@ class _NotificationCard extends StatelessWidget {
                               timeLabel(notification.timestamp),
                               style: PulseClockTextStyles.cardSubtitle.copyWith(
                                 fontSize: 11,
-                                color: PulseClockColors.textSecondary.withOpacity(0.78),
+                                color: PulseClockColors.textSecondary
+                                    .withOpacity(0.78),
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -367,11 +402,13 @@ class _NotificationCard extends StatelessWidget {
                                     horizontal: 10,
                                     vertical: 6,
                                   ),
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  textStyle: PulseClockTextStyles.cardSubtitle.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12,
-                                  ),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  textStyle: PulseClockTextStyles.cardSubtitle
+                                      .copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                      ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(999),
                                   ),
