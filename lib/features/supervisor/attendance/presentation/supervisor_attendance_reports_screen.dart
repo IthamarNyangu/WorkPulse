@@ -278,6 +278,11 @@ class _SupervisorAttendanceReportsScreenState
         initialDateRange: _dateRange,
         firstDate: now.subtract(const Duration(days: 365)),
         lastDate: now,
+        helpText: 'Select start and end dates',
+        cancelText: 'Cancel',
+        confirmText: 'Apply Range',
+        fieldStartLabelText: 'Start Date',
+        fieldEndLabelText: 'End Date',
       );
       if (picked == null || !mounted) {
         return;
@@ -868,14 +873,20 @@ class _SupervisorAttendanceReportsScreenState
           onSelected: _selectDateRange,
         ),
         const SizedBox(height: 10),
-        Text(
-          _dateRangeLabel(_dateRange),
-          style: PulseClockTextStyles.cardSubtitle.copyWith(
-            color: PulseClockColors.onBackgroundSecondary,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
+        if (_selectedRange == _ReportDateRangeFilter.custom)
+          _CustomDateRangeCard(
+            range: _dateRange,
+            onTap: () => _selectDateRange(_ReportDateRangeFilter.custom),
+          )
+        else
+          Text(
+            _dateRangeLabel(_dateRange),
+            style: PulseClockTextStyles.cardSubtitle.copyWith(
+              color: PulseClockColors.onBackgroundSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
         const SizedBox(height: 12),
         _ReportsSearchField(
           controller: _searchController,
@@ -1109,6 +1120,73 @@ class _ReportDropdownFilters extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CustomDateRangeCard extends StatelessWidget {
+  const _CustomDateRangeCard({required this.range, required this.onTap});
+
+  final DateTimeRange range;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: PulseClockColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: <Widget>[
+              const Icon(
+                Icons.date_range_outlined,
+                color: PulseClockColors.actionBlue,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Custom Date Range',
+                      style: PulseClockTextStyles.cardSubtitle.copyWith(
+                        color: PulseClockColors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Start: ${dateLabel(range.start)}',
+                      style: PulseClockTextStyles.cardSubtitle.copyWith(
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      'End: ${dateLabel(range.end)}',
+                      style: PulseClockTextStyles.cardSubtitle.copyWith(
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                'Change',
+                style: PulseClockTextStyles.cardSubtitle.copyWith(
+                  color: PulseClockColors.actionBlue,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

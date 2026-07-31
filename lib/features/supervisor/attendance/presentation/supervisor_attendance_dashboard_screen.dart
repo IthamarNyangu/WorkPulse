@@ -83,6 +83,7 @@ class _SupervisorAttendanceDashboardScreenState
     extends State<SupervisorAttendanceDashboardScreen> {
   final SupervisorAttendanceService _service = SupervisorAttendanceService();
   final TextEditingController _searchController = TextEditingController();
+  final GlobalKey _searchFieldKey = GlobalKey();
 
   DateTime _selectedDate = DateTime.now();
   SupervisorAttendanceDay? _day;
@@ -230,6 +231,24 @@ class _SupervisorAttendanceDashboardScreenState
     );
   }
 
+  void _revealSearchField() {
+    Future<void>.delayed(const Duration(milliseconds: 300), () {
+      if (!mounted) {
+        return;
+      }
+      final BuildContext? searchContext = _searchFieldKey.currentContext;
+      if (searchContext == null || !searchContext.mounted) {
+        return;
+      }
+      Scrollable.ensureVisible(
+        searchContext,
+        alignment: 0.08,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -313,98 +332,96 @@ class _SupervisorAttendanceDashboardScreenState
     final List<SupervisorAttendanceEmployeeRecord> filteredRecords =
         _filteredRecords;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Daily employee attendance overview for supervisors.',
-          style: PulseClockTextStyles.headerSubtitle.copyWith(fontSize: 15),
-        ),
-        const SizedBox(height: 12),
-        _ReportsButton(onTap: _openReports),
-        const SizedBox(height: 12),
-        _DashboardDateSelector(
-          date: _selectedDate,
-          onPrevious: () => _changeDateBy(-1),
-          onNext: () => _changeDateBy(1),
-          onPickDate: _pickDate,
-        ),
-        const SizedBox(height: 10),
-        _DashboardQuickDateChips(
-          selectedDate: _selectedDate,
-          onToday: () => _setDate(DateTime.now()),
-          onYesterday: () =>
-              _setDate(DateTime.now().subtract(const Duration(days: 1))),
-          onPickDate: _pickDate,
-        ),
-        const SizedBox(height: 12),
-        _SummaryGrid(summary: day.summary),
-        const SizedBox(height: 12),
-        _SupervisorSearchField(
-          controller: _searchController,
-          onChanged: (String value) {
-            setState(() {
-              _searchQuery = value;
-            });
-          },
-          onClear: _searchQuery.isEmpty
-              ? null
-              : () {
-                  _searchController.clear();
-                  setState(() {
-                    _searchQuery = '';
-                  });
-                },
-        ),
-        const SizedBox(height: 12),
-        HistoryFilterChipBar<_SupervisorAttendanceFilter>(
-          items: _SupervisorAttendanceFilter.values,
-          selectedValue: _selectedFilter,
-          labelBuilder: (_SupervisorAttendanceFilter filter) => filter.label,
-          onSelected: (_SupervisorAttendanceFilter filter) {
-            setState(() {
-              _selectedFilter = filter;
-            });
-          },
-        ),
-        const SizedBox(height: 10),
-        Text(
-          '${filteredRecords.length} of ${day.summary.totalEmployees} employees',
-          style: PulseClockTextStyles.cardSubtitle.copyWith(
-            color: PulseClockColors.onBackgroundSecondary,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
+    return RefreshIndicator(
+      onRefresh: () => _loadAttendance(showLoading: false),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
+        children: <Widget>[
+          Text(
+            'Daily employee attendance overview for supervisors.',
+            style: PulseClockTextStyles.headerSubtitle.copyWith(fontSize: 15),
           ),
-        ),
-        const SizedBox(height: 10),
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: () => _loadAttendance(showLoading: false),
-            child: filteredRecords.isEmpty
-                ? ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    children: const <Widget>[
-                      SizedBox(height: 110),
-                      _EmptyAttendanceDashboardCard(),
-                    ],
-                  )
-                : ListView.separated(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    itemBuilder: (BuildContext context, int index) {
-                      final SupervisorAttendanceEmployeeRecord record =
-                          filteredRecords[index];
-                      return _SupervisorAttendanceRecordCard(
-                        record: record,
-                        onTap: () => _openDetails(record),
-                      );
-                    },
-                    separatorBuilder: (BuildContext context, int index) =>
-                        const SizedBox(height: 8),
-                    itemCount: filteredRecords.length,
-                  ),
+          const SizedBox(height: 12),
+          _ReportsButton(onTap: _openReports),
+          const SizedBox(height: 12),
+          _DashboardDateSelector(
+            date: _selectedDate,
+            onPrevious: () => _changeDateBy(-1),
+            onNext: () => _changeDateBy(1),
+            onPickDate: _pickDate,
           ),
-        ),
-      ],
+          const SizedBox(height: 10),
+          _DashboardQuickDateChips(
+            selectedDate: _selectedDate,
+            onToday: () => _setDate(DateTime.now()),
+            onYesterday: () =>
+                _setDate(DateTime.now().subtract(const Duration(days: 1))),
+            onPickDate: _pickDate,
+          ),
+          const SizedBox(height: 12),
+          _SummaryGrid(summary: day.summary),
+          const SizedBox(height: 12),
+          _SupervisorSearchField(
+            key: _searchFieldKey,
+            controller: _searchController,
+            onTap: _revealSearchField,
+            onChanged: (String value) {
+              setState(() {
+                _searchQuery = value;
+              });
+            },
+            onClear: _searchQuery.isEmpty
+                ? null
+                : () {
+                    _searchController.clear();
+                    setState(() {
+                      _searchQuery = '';
+                    });
+                  },
+          ),
+          const SizedBox(height: 12),
+          HistoryFilterChipBar<_SupervisorAttendanceFilter>(
+            items: _SupervisorAttendanceFilter.values,
+            selectedValue: _selectedFilter,
+            labelBuilder: (_SupervisorAttendanceFilter filter) => filter.label,
+            onSelected: (_SupervisorAttendanceFilter filter) {
+              setState(() {
+                _selectedFilter = filter;
+              });
+            },
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${filteredRecords.length} of ${day.summary.totalEmployees} employees',
+            style: PulseClockTextStyles.cardSubtitle.copyWith(
+              color: PulseClockColors.onBackgroundSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (filteredRecords.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 40),
+              child: _EmptyAttendanceDashboardCard(),
+            )
+          else
+            for (
+              int index = 0;
+              index < filteredRecords.length;
+              index++
+            ) ...<Widget>[
+              _SupervisorAttendanceRecordCard(
+                record: filteredRecords[index],
+                onTap: () => _openDetails(filteredRecords[index]),
+              ),
+              if (index != filteredRecords.length - 1)
+                const SizedBox(height: 8),
+            ],
+          const SizedBox(height: 8),
+        ],
+      ),
     );
   }
 }
@@ -979,21 +996,26 @@ class _SupervisorAttendanceRecordCard extends StatelessWidget {
 
 class _SupervisorSearchField extends StatelessWidget {
   const _SupervisorSearchField({
+    super.key,
     required this.controller,
     required this.onChanged,
     required this.onClear,
+    required this.onTap,
   });
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final VoidCallback? onClear;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
       onChanged: onChanged,
+      onTap: onTap,
       textInputAction: TextInputAction.search,
+      scrollPadding: const EdgeInsets.only(bottom: 120),
       style: PulseClockTextStyles.cardSubtitle.copyWith(
         color: PulseClockColors.textPrimary,
         fontWeight: FontWeight.w700,
