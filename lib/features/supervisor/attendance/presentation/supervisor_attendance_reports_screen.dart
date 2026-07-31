@@ -118,7 +118,7 @@ class SupervisorAttendanceReportsScreen extends StatefulWidget {
 
 class _SupervisorAttendanceReportsScreenState
     extends State<SupervisorAttendanceReportsScreen> {
-  static const int _pageSize = 25;
+  static const int _pageSize = 20;
 
   final AttendanceReportExporter _exporter = const AttendanceReportExporter();
   final AttendanceReportFileSaver _fileSaver =

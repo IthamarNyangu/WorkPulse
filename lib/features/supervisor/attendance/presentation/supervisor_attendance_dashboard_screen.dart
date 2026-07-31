@@ -81,9 +81,12 @@ class SupervisorAttendanceDashboardScreen extends StatefulWidget {
 
 class _SupervisorAttendanceDashboardScreenState
     extends State<SupervisorAttendanceDashboardScreen> {
+  static const int _pageSize = 20;
+
   final SupervisorAttendanceService _service = SupervisorAttendanceService();
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey _searchFieldKey = GlobalKey();
+  final GlobalKey _employeeResultsKey = GlobalKey();
 
   DateTime _selectedDate = DateTime.now();
   SupervisorAttendanceDay? _day;
@@ -91,6 +94,7 @@ class _SupervisorAttendanceDashboardScreenState
   String? _errorMessage;
   String _searchQuery = '';
   _SupervisorAttendanceFilter _selectedFilter = _SupervisorAttendanceFilter.all;
+  int _page = 0;
 
   List<SupervisorAttendanceEmployeeRecord> get _filteredRecords {
     final SupervisorAttendanceDay? day = _day;
@@ -124,6 +128,21 @@ class _SupervisorAttendanceDashboardScreenState
         .toList(growable: false);
   }
 
+  int get _pageCount {
+    final int count = _filteredRecords.length;
+    return count == 0 ? 1 : ((count - 1) ~/ _pageSize) + 1;
+  }
+
+  List<SupervisorAttendanceEmployeeRecord> get _pagedRecords {
+    final List<SupervisorAttendanceEmployeeRecord> records = _filteredRecords;
+    final int safePage = _page.clamp(0, _pageCount - 1);
+    final int start = safePage * _pageSize;
+    if (start >= records.length) {
+      return const <SupervisorAttendanceEmployeeRecord>[];
+    }
+    return records.sublist(start, (start + _pageSize).clamp(0, records.length));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -153,6 +172,7 @@ class _SupervisorAttendanceDashboardScreenState
       }
       setState(() {
         _day = day;
+        _page = 0;
         _isLoading = false;
         _errorMessage = null;
       });
@@ -249,6 +269,27 @@ class _SupervisorAttendanceDashboardScreenState
     });
   }
 
+  void _changePage(int page) {
+    setState(() {
+      _page = page.clamp(0, _pageCount - 1);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final BuildContext? resultsContext = _employeeResultsKey.currentContext;
+      if (resultsContext == null || !resultsContext.mounted) {
+        return;
+      }
+      Scrollable.ensureVisible(
+        resultsContext,
+        alignment: 0.08,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -331,6 +372,7 @@ class _SupervisorAttendanceDashboardScreenState
     final SupervisorAttendanceDay day = _day!;
     final List<SupervisorAttendanceEmployeeRecord> filteredRecords =
         _filteredRecords;
+    final List<SupervisorAttendanceEmployeeRecord> pagedRecords = _pagedRecords;
 
     return RefreshIndicator(
       onRefresh: () => _loadAttendance(showLoading: false),
@@ -369,6 +411,7 @@ class _SupervisorAttendanceDashboardScreenState
             onChanged: (String value) {
               setState(() {
                 _searchQuery = value;
+                _page = 0;
               });
             },
             onClear: _searchQuery.isEmpty
@@ -377,6 +420,7 @@ class _SupervisorAttendanceDashboardScreenState
                     _searchController.clear();
                     setState(() {
                       _searchQuery = '';
+                      _page = 0;
                     });
                   },
           ),
@@ -388,11 +432,13 @@ class _SupervisorAttendanceDashboardScreenState
             onSelected: (_SupervisorAttendanceFilter filter) {
               setState(() {
                 _selectedFilter = filter;
+                _page = 0;
               });
             },
           ),
           const SizedBox(height: 10),
           Text(
+            key: _employeeResultsKey,
             '${filteredRecords.length} of ${day.summary.totalEmployees} employees',
             style: PulseClockTextStyles.cardSubtitle.copyWith(
               color: PulseClockColors.onBackgroundSecondary,
@@ -409,16 +455,26 @@ class _SupervisorAttendanceDashboardScreenState
           else
             for (
               int index = 0;
-              index < filteredRecords.length;
+              index < pagedRecords.length;
               index++
             ) ...<Widget>[
               _SupervisorAttendanceRecordCard(
-                record: filteredRecords[index],
-                onTap: () => _openDetails(filteredRecords[index]),
+                record: pagedRecords[index],
+                onTap: () => _openDetails(pagedRecords[index]),
               ),
-              if (index != filteredRecords.length - 1)
-                const SizedBox(height: 8),
+              if (index != pagedRecords.length - 1) const SizedBox(height: 8),
             ],
+          if (_pageCount > 1) ...<Widget>[
+            const SizedBox(height: 12),
+            _DashboardPaginationControls(
+              page: _page,
+              pageCount: _pageCount,
+              onPrevious: _page == 0 ? null : () => _changePage(_page - 1),
+              onNext: _page >= _pageCount - 1
+                  ? null
+                  : () => _changePage(_page + 1),
+            ),
+          ],
           const SizedBox(height: 8),
         ],
       ),
@@ -992,6 +1048,63 @@ class _SupervisorAttendanceRecordCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DashboardPaginationControls extends StatelessWidget {
+  const _DashboardPaginationControls({
+    required this.page,
+    required this.pageCount,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final int page;
+  final int pageCount;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: ElevatedButton(
+            onPressed: onPrevious,
+            style: _dashboardPaginationButtonStyle(),
+            child: const Text('Previous'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          'Page ${page + 1} of $pageCount',
+          style: PulseClockTextStyles.cardSubtitle.copyWith(
+            color: PulseClockColors.onBackgroundPrimary,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: onNext,
+            style: _dashboardPaginationButtonStyle(),
+            child: const Text('Next'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+ButtonStyle _dashboardPaginationButtonStyle() {
+  return ElevatedButton.styleFrom(
+    backgroundColor: PulseClockColors.actionBlue,
+    foregroundColor: PulseClockColors.surface,
+    disabledBackgroundColor: PulseClockColors.surfaceMuted,
+    disabledForegroundColor: PulseClockColors.textSecondary,
+    padding: const EdgeInsets.symmetric(vertical: 11),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  );
 }
 
 class _SupervisorSearchField extends StatelessWidget {
