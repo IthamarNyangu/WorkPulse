@@ -204,6 +204,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
       mode: widget.mode,
       timestamp: DateTime.now(),
       comment: comment.isEmpty ? null : comment,
+      locationSnapshot: _locationResult?.snapshot,
     );
 
     await showDialog<void>(

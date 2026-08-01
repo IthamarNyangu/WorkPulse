@@ -176,7 +176,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
     _store.applyClockConfirmationResult(result);
     if (_usesBackend) {
-      await _reminders.onAttendanceChanged();
+      await _reminders.onAttendanceChanged(
+        actionLocation: result.locationSnapshot,
+      );
     }
   }
 

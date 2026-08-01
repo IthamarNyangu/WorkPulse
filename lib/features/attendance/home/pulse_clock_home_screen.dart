@@ -233,7 +233,9 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen>
     _store.applyClockConfirmationResult(result);
     if (SupabaseBootstrap.isInitialized) {
       await _loadAttendanceFromBackend();
-      await _reminders.onAttendanceChanged();
+      await _reminders.onAttendanceChanged(
+        actionLocation: result.locationSnapshot,
+      );
     }
   }
 

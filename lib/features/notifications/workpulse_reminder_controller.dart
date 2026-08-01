@@ -143,8 +143,25 @@ class WorkPulseReminderController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> onAttendanceChanged() async {
+  Future<void> onAttendanceChanged({
+    ClockLocationSnapshot? actionLocation,
+  }) async {
     await _refreshAttendance(force: true);
+    if (_isClockedIn &&
+        actionLocation?.status == ClockLocationStatus.insideOffice) {
+      final String? officeId =
+          actionLocation?.verifiedOfficeLocationId ??
+          actionLocation?.nearestOfficeLocationId;
+      if (officeId != null) {
+        _insideOfficeId = officeId;
+        _insideOfficeName =
+            actionLocation?.verifiedOfficeName ??
+            actionLocation?.nearestOfficeName;
+        _candidateOfficeId = officeId;
+        _candidateInsideSamples = 2;
+        _outsideSamples = 0;
+      }
+    }
     if (_todayAttendance?.clockInAt != null) {
       await _notificationService!.resolveWhere(
         types: const <WorkPulseNotificationType>[
@@ -206,6 +223,25 @@ class WorkPulseReminderController extends ChangeNotifier {
     }
     _todayAttendance = await _attendanceService!.fetchTodaysAttendance();
     _lastAttendanceRefresh = now;
+    _restoreClockInOfficeFromAttendance();
+  }
+
+  void _restoreClockInOfficeFromAttendance() {
+    final SupabaseAttendanceRecord? attendance = _todayAttendance;
+    if (!_isClockedIn ||
+        _insideOfficeId != null ||
+        _exitReminderAt != null ||
+        attendance?.clockInLocationStatus !=
+            ClockLocationStatus.insideOffice.dbValue ||
+        attendance?.clockInVerifiedOfficeLocationId == null) {
+      return;
+    }
+
+    final String officeId = attendance!.clockInVerifiedOfficeLocationId!;
+    _insideOfficeId = officeId;
+    _candidateOfficeId = officeId;
+    _candidateInsideSamples = 2;
+    _outsideSamples = 0;
   }
 
   Future<void> _evaluateLocation(WorkPulseLocationResult result) async {
@@ -218,6 +254,10 @@ class WorkPulseReminderController extends ChangeNotifier {
     }
 
     final String? nearestId = snapshot.nearestOfficeLocationId;
+    if (_insideOfficeName == null && nearestId == _insideOfficeId) {
+      _insideOfficeName =
+          snapshot.verifiedOfficeName ?? snapshot.nearestOfficeName;
+    }
     final bool withinExitBuffer =
         _insideOfficeId != null &&
         nearestId == _insideOfficeId &&

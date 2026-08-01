@@ -306,11 +306,13 @@ class ClockConfirmationResult {
     required this.mode,
     required this.timestamp,
     this.comment,
+    this.locationSnapshot,
   });
 
   final ClockActionMode mode;
   final DateTime timestamp;
   final String? comment;
+  final ClockLocationSnapshot? locationSnapshot;
 }
 
 class ClockLocationSnapshot {
