@@ -1,4 +1,4 @@
-package com.example.pulseclock
+package com.workpulsezm.workpulse
 
 import android.app.Activity
 import android.content.ClipData

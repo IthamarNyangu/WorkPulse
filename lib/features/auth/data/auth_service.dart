@@ -1,4 +1,5 @@
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/notifications/data/workpulse_push_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
@@ -46,8 +47,9 @@ class AuthService {
     return WorkPulseUserProfile.fromMap(row);
   }
 
-  Future<void> logout() {
-    return _client.auth.signOut();
+  Future<void> logout() async {
+    await WorkPulsePushService.instance.deactivate();
+    await _client.auth.signOut();
   }
 }
 

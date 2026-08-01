@@ -8,6 +8,7 @@ import 'package:pulseclock/features/attendance/history/attendance_history_screen
 import 'package:pulseclock/features/auth/session/workpulse_session.dart';
 import 'package:pulseclock/features/auth/data/auth_service.dart';
 import 'package:pulseclock/features/notifications/data/local_notification_service.dart';
+import 'package:pulseclock/features/notifications/data/workpulse_push_service.dart';
 import 'package:pulseclock/features/notifications/notifications_screen.dart';
 import 'package:pulseclock/features/notifications/workpulse_reminder_controller.dart';
 import 'package:pulseclock/features/profile/profile_screen.dart';
@@ -40,6 +41,8 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen>
   Duration? _lastWorkedDuration;
   WorkPulseUserProfile? _profile;
   StreamSubscription<String>? _notificationTapSubscription;
+  StreamSubscription<String>? _pushTapSubscription;
+  StreamSubscription<void>? _pushUpdateSubscription;
 
   @override
   void initState() {
@@ -54,6 +57,12 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen>
         .instance
         .taps
         .listen((_) => _openNotifications());
+    _pushTapSubscription = WorkPulsePushService.instance.taps.listen(
+      (_) => _openNotifications(),
+    );
+    _pushUpdateSubscription = WorkPulsePushService.instance.updates.listen(
+      (_) => _reminders.refresh(),
+    );
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) {
         return;
@@ -70,6 +79,8 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen>
     _store.removeListener(_onStoreChanged);
     _reminders.removeListener(_onRemindersChanged);
     _notificationTapSubscription?.cancel();
+    _pushTapSubscription?.cancel();
+    _pushUpdateSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _reminders.stop();
     super.dispose();
@@ -125,9 +136,12 @@ class _PulseClockHomeScreenState extends State<PulseClockHomeScreen>
     }
     if (profile != null) {
       _reminders.start(profile);
+      WorkPulsePushService.instance.activateForUser(profile.id);
       final String? initialPayload = WorkPulseLocalNotificationService.instance
           .takeInitialPayload();
-      if (initialPayload != null) {
+      final String? initialPushId = WorkPulsePushService.instance
+          .takeInitialNotificationId();
+      if (initialPayload != null || initialPushId != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             _openNotifications();

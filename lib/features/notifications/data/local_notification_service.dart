@@ -36,6 +36,18 @@ class WorkPulseLocalNotificationService {
     );
     final NotificationAppLaunchDetails? launchDetails = await _plugin
         .getNotificationAppLaunchDetails();
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(
+          const AndroidNotificationChannel(
+            'workpulse_reminders',
+            'WorkPulse reminders',
+            description: 'Attendance and leave reminders',
+            importance: Importance.high,
+          ),
+        );
     _initialPayload = launchDetails?.notificationResponse?.payload;
     _initialized = true;
   }
@@ -74,6 +86,30 @@ class WorkPulseLocalNotificationService {
       body: notification.message,
       notificationDetails: const NotificationDetails(android: android),
       payload: notification.id,
+    );
+  }
+
+  Future<void> showRemote({
+    required String notificationId,
+    required String title,
+    required String message,
+  }) async {
+    if (!_initialized || kIsWeb) {
+      return;
+    }
+    const AndroidNotificationDetails android = AndroidNotificationDetails(
+      'workpulse_reminders',
+      'WorkPulse reminders',
+      channelDescription: 'Attendance and leave reminders',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+    await _plugin.show(
+      id: notificationId.hashCode & 0x7fffffff,
+      title: title,
+      body: message,
+      notificationDetails: const NotificationDetails(android: android),
+      payload: notificationId,
     );
   }
 }
