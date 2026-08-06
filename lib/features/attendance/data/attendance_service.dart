@@ -1,5 +1,6 @@
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/auth/data/auth_service.dart';
+import 'package:pulseclock/features/attendance/data/work_calendar_service.dart';
 import 'package:pulseclock/features/attendance/location/office_location_service.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
@@ -8,7 +9,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class AttendanceService {
   AttendanceService({SupabaseClient? client})
     : _client = client ?? SupabaseBootstrap.client,
-      _authService = AuthService(client: client ?? SupabaseBootstrap.client);
+      _authService = AuthService(client: client ?? SupabaseBootstrap.client),
+      _workCalendarService = WorkCalendarService(
+        client: client ?? SupabaseBootstrap.client,
+      );
 
   static const String tableName = 'attendance_records';
   static const String leaveTableName = 'leave_requests';
@@ -17,6 +21,7 @@ class AttendanceService {
 
   final SupabaseClient _client;
   final AuthService _authService;
+  final WorkCalendarService _workCalendarService;
 
   Future<SupabaseAttendanceRecord> insertClockIn({
     String? comment,
@@ -256,6 +261,13 @@ class AttendanceService {
       }
     }
 
+    final DateTime startDate = _classificationStartDate(
+      earliestActivityDate: earliestActivityDate,
+      today: today,
+    );
+    final Set<String> publicHolidayDates = await _workCalendarService
+        .fetchPublicHolidayDates(startDate: startDate, endDate: today);
+
     for (final Map<String, dynamic> row in attendance) {
       final DateTime workDate = _dateOnly(
         DateTime.parse(row['work_date'] as String),
@@ -264,6 +276,10 @@ class AttendanceService {
         row: row,
         workDate: workDate,
         today: today,
+        isWorkday: WorkCalendarService.isWorkingDay(
+          workDate,
+          publicHolidayDates,
+        ),
         leaveStatus: _leaveStatusForDate(leaveRequests, workDate),
         hasPendingCorrection: pendingCorrectionAttendanceIds.contains(
           row['id'] as String,
@@ -288,10 +304,6 @@ class AttendanceService {
       }
     }
 
-    final DateTime startDate = _classificationStartDate(
-      earliestActivityDate: earliestActivityDate,
-      today: today,
-    );
     DateTime cursor = startDate;
     while (!cursor.isAfter(today)) {
       final String dateKey = _dateOnlyLabel(cursor);
@@ -300,6 +312,10 @@ class AttendanceService {
           leaveStatus: _leaveStatusForDate(leaveRequests, cursor),
           date: cursor,
           today: today,
+          isWorkday: WorkCalendarService.isWorkingDay(
+            cursor,
+            publicHolidayDates,
+          ),
         );
         if (status != null) {
           await _client.from(tableName).insert(<String, dynamic>{
@@ -455,6 +471,7 @@ class AttendanceService {
     required Map<String, dynamic> row,
     required DateTime workDate,
     required DateTime today,
+    required bool isWorkday,
     required String? leaveStatus,
     required bool hasPendingCorrection,
   }) {
@@ -469,6 +486,10 @@ class AttendanceService {
       return 'completed';
     }
 
+    if (!hasClockIn && !hasClockOut && !isWorkday) {
+      return null;
+    }
+
     if (leaveStatus == 'approved') {
       return 'on_leave';
     }
@@ -480,7 +501,7 @@ class AttendanceService {
       return workDate.isBefore(today) ? 'missed_punch' : 'on_duty';
     }
 
-    if (workDate.isBefore(today) && _isWorkday(workDate)) {
+    if (workDate.isBefore(today) && isWorkday) {
       return 'absent';
     }
 
@@ -491,14 +512,18 @@ class AttendanceService {
     required String? leaveStatus,
     required DateTime date,
     required DateTime today,
+    required bool isWorkday,
   }) {
+    if (!isWorkday) {
+      return null;
+    }
     if (leaveStatus == 'approved') {
       return 'on_leave';
     }
     if (leaveStatus == 'pending') {
       return 'leave_pending';
     }
-    if (date.isBefore(today) && _isWorkday(date)) {
+    if (date.isBefore(today) && isWorkday) {
       return 'absent';
     }
     return null;
@@ -564,10 +589,6 @@ class AttendanceService {
       return candidate;
     }
     return current;
-  }
-
-  bool _isWorkday(DateTime date) {
-    return date.weekday >= DateTime.monday && date.weekday <= DateTime.friday;
   }
 
   DateTime _dateOnly(DateTime dateTime) {

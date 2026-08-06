@@ -341,16 +341,16 @@ class LeaveRequestListCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool singleDay = _isSameDay(request.startDate, request.endDate);
     final String dateText = _leaveDateRangeLabel(
       request.startDate,
       request.endDate,
     );
-    final int durationDays = _leaveDurationDays(
-      request.startDate,
-      request.endDate,
-    );
-    final String durationText = singleDay ? 'Single Day' : '$durationDays Days';
+    final int durationDays =
+        request.durationDays ??
+        _leaveDurationDays(request.startDate, request.endDate);
+    final String durationText = durationDays == 1
+        ? '1 Working Day'
+        : '$durationDays Working Days';
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -549,9 +549,18 @@ int _leaveDurationDays(DateTime startDate, DateTime endDate) {
   );
   final DateTime end = DateTime(endDate.year, endDate.month, endDate.day);
   if (end.isBefore(start)) {
-    return 1;
+    return 0;
   }
-  return end.difference(start).inDays + 1;
+  int count = 0;
+  DateTime cursor = start;
+  while (!cursor.isAfter(end)) {
+    if (cursor.weekday >= DateTime.monday &&
+        cursor.weekday <= DateTime.friday) {
+      count += 1;
+    }
+    cursor = cursor.add(const Duration(days: 1));
+  }
+  return count;
 }
 
 String _leaveDateRangeLabel(DateTime startDate, DateTime endDate) {

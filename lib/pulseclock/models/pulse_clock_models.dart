@@ -551,6 +551,7 @@ class LeaveRequest {
     required this.reason,
     required this.status,
     required this.submittedAt,
+    this.durationDays,
     this.reviewerNote,
   });
 
@@ -561,6 +562,7 @@ class LeaveRequest {
   final String reason;
   final LeaveRequestStatus status;
   final DateTime submittedAt;
+  final int? durationDays;
   final String? reviewerNote;
 
   LeaveRequest copyWith({
@@ -571,6 +573,7 @@ class LeaveRequest {
     String? reason,
     LeaveRequestStatus? status,
     DateTime? submittedAt,
+    int? durationDays,
     String? reviewerNote,
   }) {
     return LeaveRequest(
@@ -581,6 +584,7 @@ class LeaveRequest {
       reason: reason ?? this.reason,
       status: status ?? this.status,
       submittedAt: submittedAt ?? this.submittedAt,
+      durationDays: durationDays ?? this.durationDays,
       reviewerNote: reviewerNote ?? this.reviewerNote,
     );
   }

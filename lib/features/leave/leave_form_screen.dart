@@ -32,27 +32,26 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
   );
   bool _isLoadingRequest = false;
   bool _isLoadingBalance = false;
+  bool _isLoadingDuration = false;
   bool _isSubmitting = false;
+  int _durationDays = 1;
+  int _durationLoadVersion = 0;
   String? _submitErrorMessage;
 
   bool get _isEditing => _editingRequest != null;
   bool get _usesBackend => SupabaseBootstrap.isInitialized;
 
-  int get _durationDays {
-    final DateTime start = DateTime(
-      _startDate.year,
-      _startDate.month,
-      _startDate.day,
-    );
-    final DateTime end = DateTime(_endDate.year, _endDate.month, _endDate.day);
-    return end.difference(start).inDays + 1;
-  }
-
   String get _durationLabel {
-    if (_durationDays <= 1) {
-      return 'Single Day';
+    if (_isLoadingDuration) {
+      return 'Calculating...';
     }
-    return '$_durationDays Days';
+    if (_durationDays == 0) {
+      return 'No Working Days';
+    }
+    if (_durationDays == 1) {
+      return '1 Working Day';
+    }
+    return '$_durationDays Working Days';
   }
 
   @override
@@ -63,6 +62,7 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
     _startDate = DateTime(today.year, today.month, today.day);
     _endDate = DateTime(today.year, today.month, today.day);
     _loadAnnualLeaveBalance();
+    _loadLeaveDuration();
 
     if (widget.initialRequestId != null && _usesBackend) {
       _loadEditingRequest();
@@ -75,6 +75,7 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
       );
       if (request != null) {
         _applyEditingRequest(request);
+        _loadLeaveDuration();
       }
     }
   }
@@ -102,6 +103,7 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
           _applyEditingRequest(request);
           _isLoadingRequest = false;
         });
+        _loadLeaveDuration();
         return;
       }
       setState(() {
@@ -141,6 +143,44 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
     _startDate = request.startDate;
     _endDate = request.endDate;
     _reasonController.text = request.reason;
+  }
+
+  Future<int> _calculateLeaveDuration() async {
+    if (_usesBackend) {
+      return LeaveService().countLeaveWorkingDays(
+        startDate: _startDate,
+        endDate: _endDate,
+      );
+    }
+    return _weekdayDurationDays(_startDate, _endDate);
+  }
+
+  Future<void> _loadLeaveDuration() async {
+    final int loadVersion = ++_durationLoadVersion;
+    if (mounted) {
+      setState(() {
+        _isLoadingDuration = true;
+      });
+    }
+
+    try {
+      final int durationDays = await _calculateLeaveDuration();
+      if (!mounted || loadVersion != _durationLoadVersion) {
+        return;
+      }
+      setState(() {
+        _durationDays = durationDays;
+        _isLoadingDuration = false;
+      });
+    } catch (_) {
+      if (!mounted || loadVersion != _durationLoadVersion) {
+        return;
+      }
+      setState(() {
+        _durationDays = _weekdayDurationDays(_startDate, _endDate);
+        _isLoadingDuration = false;
+      });
+    }
   }
 
   Future<void> _loadAnnualLeaveBalance() async {
@@ -185,10 +225,9 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
       if (request.type != LeaveType.annualLeave) {
         continue;
       }
-      final int durationDays = _leaveDurationDays(
-        request.startDate,
-        request.endDate,
-      );
+      final int durationDays =
+          request.durationDays ??
+          _weekdayDurationDays(request.startDate, request.endDate);
       switch (request.status) {
         case LeaveRequestStatus.approved:
           usedDays += durationDays;
@@ -235,6 +274,7 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
       }
       _submitErrorMessage = null;
     });
+    _loadLeaveDuration();
   }
 
   Future<void> _pickEndDate() async {
@@ -264,6 +304,7 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
       }
       _submitErrorMessage = null;
     });
+    _loadLeaveDuration();
   }
 
   Future<void> _submit() async {
@@ -295,7 +336,27 @@ class _LeaveFormScreenState extends State<LeaveFormScreen> {
       return;
     }
 
+    final int durationDays = await _calculateLeaveDuration();
+    if (!mounted) {
+      return;
+    }
+    if (durationDays < 1) {
+      const String message =
+          'The selected range contains no working days. Weekends and public holidays do not require leave.';
+      setState(() {
+        _durationDays = 0;
+        _isLoadingDuration = false;
+        _submitErrorMessage = message;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(message)));
+      return;
+    }
+
     setState(() {
+      _durationDays = durationDays;
+      _isLoadingDuration = false;
       _isSubmitting = true;
       _submitErrorMessage = null;
     });
@@ -721,6 +782,11 @@ String _friendlyLeaveSubmitError(Object error) {
     return 'Leave cannot be requested for a date that already has attendance activity. Choose a date with no Clock In or Clock Out record.';
   }
 
+  if (message.contains('no scheduled working days') ||
+      message.contains('public holiday')) {
+    return 'The selected range contains no working days. Weekends and public holidays do not require leave.';
+  }
+
   if (message.contains('row-level security') ||
       message.contains('permission')) {
     return 'WorkPulse could not save this leave request because your account does not have permission for that action.';
@@ -729,7 +795,7 @@ String _friendlyLeaveSubmitError(Object error) {
   return 'Unable to submit leave request. Please check the dates and try again.';
 }
 
-int _leaveDurationDays(DateTime startDate, DateTime endDate) {
+int _weekdayDurationDays(DateTime startDate, DateTime endDate) {
   final DateTime start = DateTime(
     startDate.year,
     startDate.month,
@@ -737,9 +803,18 @@ int _leaveDurationDays(DateTime startDate, DateTime endDate) {
   );
   final DateTime end = DateTime(endDate.year, endDate.month, endDate.day);
   if (end.isBefore(start)) {
-    return 1;
+    return 0;
   }
-  return end.difference(start).inDays + 1;
+  int count = 0;
+  DateTime cursor = start;
+  while (!cursor.isAfter(end)) {
+    if (cursor.weekday >= DateTime.monday &&
+        cursor.weekday <= DateTime.friday) {
+      count += 1;
+    }
+    cursor = cursor.add(const Duration(days: 1));
+  }
+  return count;
 }
 
 class _DateField extends StatelessWidget {

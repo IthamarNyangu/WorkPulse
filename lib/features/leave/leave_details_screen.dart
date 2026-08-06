@@ -285,6 +285,15 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
                             ? dateLabel(request.startDate)
                             : '${dateLabel(request.startDate)} - ${dateLabel(request.endDate)}',
                       ),
+                      if (request.durationDays != null) ...<Widget>[
+                        const SizedBox(height: 10),
+                        DetailInfoRow(
+                          label: 'Leave Duration',
+                          value: request.durationDays == 1
+                              ? '1 Working Day'
+                              : '${request.durationDays} Working Days',
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       DetailInfoRow(
                         label: 'Status',

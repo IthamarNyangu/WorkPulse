@@ -1,17 +1,49 @@
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
+import 'package:pulseclock/features/attendance/data/work_calendar_service.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LeaveService {
   LeaveService({SupabaseClient? client})
-    : _client = client ?? SupabaseBootstrap.client;
+    : _client = client ?? SupabaseBootstrap.client,
+      _workCalendarService = WorkCalendarService(
+        client: client ?? SupabaseBootstrap.client,
+      );
 
   static const String tableName = 'leave_requests';
   static const String attendanceTableName = 'attendance_records';
   static const int defaultAnnualLeaveEntitlementDays = 30;
 
   final SupabaseClient _client;
+  final WorkCalendarService _workCalendarService;
+
+  Future<int> countLeaveWorkingDays({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    try {
+      final dynamic result = await _client.rpc(
+        'count_my_leave_working_days',
+        params: <String, dynamic>{
+          'p_start_date': _dateOnlyLabel(startDate),
+          'p_end_date': _dateOnlyLabel(endDate),
+        },
+      );
+      return (result as num).toInt();
+    } on PostgrestException catch (error) {
+      if (error.code != 'PGRST202' &&
+          !error.message.toLowerCase().contains(
+            'count_my_leave_working_days',
+          )) {
+        rethrow;
+      }
+      return _workCalendarService.countWorkingDays(
+        startDate: startDate,
+        endDate: endDate,
+      );
+    }
+  }
 
   Future<List<LeaveRequest>> fetchLeaveRequests() async {
     final String userId = _requireCurrentUserId();
@@ -127,6 +159,10 @@ class LeaveService {
     final String userId = _requireCurrentUserId();
     final DateTime safeStartDate = _dateOnly(startDate);
     final DateTime safeEndDate = _dateOnly(endDate);
+    final int durationDays = await _validatedWorkingDayDuration(
+      startDate: safeStartDate,
+      endDate: safeEndDate,
+    );
     await _throwIfAttendanceExistsForRange(
       userId: userId,
       startDate: safeStartDate,
@@ -140,7 +176,7 @@ class LeaveService {
           'leave_type': _leaveTypeValue(type),
           'start_date': _dateOnlyLabel(safeStartDate),
           'end_date': _dateOnlyLabel(safeEndDate),
-          'duration_days': _durationDays(safeStartDate, safeEndDate),
+          'duration_days': durationDays,
           'reason': reason,
           'status': 'pending',
         })
@@ -160,6 +196,10 @@ class LeaveService {
     final String userId = _requireCurrentUserId();
     final DateTime safeStartDate = _dateOnly(startDate);
     final DateTime safeEndDate = _dateOnly(endDate);
+    final int durationDays = await _validatedWorkingDayDuration(
+      startDate: safeStartDate,
+      endDate: safeEndDate,
+    );
     await _throwIfAttendanceExistsForRange(
       userId: userId,
       startDate: safeStartDate,
@@ -172,7 +212,7 @@ class LeaveService {
           'leave_type': _leaveTypeValue(type),
           'start_date': _dateOnlyLabel(safeStartDate),
           'end_date': _dateOnlyLabel(safeEndDate),
-          'duration_days': _durationDays(safeStartDate, safeEndDate),
+          'duration_days': durationDays,
           'reason': reason,
         })
         .eq('id', requestId)
@@ -201,6 +241,22 @@ class LeaveService {
       throw StateError('No signed-in user found.');
     }
     return userId;
+  }
+
+  Future<int> _validatedWorkingDayDuration({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final int durationDays = await countLeaveWorkingDays(
+      startDate: startDate,
+      endDate: endDate,
+    );
+    if (durationDays < 1) {
+      throw StateError(
+        'The selected range contains no working days. Weekends and public holidays do not require leave.',
+      );
+    }
+    return durationDays;
   }
 
   Future<void> _throwIfAttendanceExistsForRange({
@@ -290,6 +346,7 @@ LeaveRequest _leaveRequestFromMap(Map<String, dynamic> map) {
     type: _leaveTypeFromValue(map['leave_type'] as String),
     startDate: _dateOnly(DateTime.parse(map['start_date'] as String)),
     endDate: _dateOnly(DateTime.parse(map['end_date'] as String)),
+    durationDays: (map['duration_days'] as num?)?.toInt(),
     reason: (map['reason'] as String?) ?? '',
     status: _leaveStatusFromValue(map['status'] as String),
     submittedAt: DateTime.parse(map['created_at'] as String).toLocal(),
@@ -344,11 +401,4 @@ String _dateOnlyLabel(DateTime dateTime) {
   final String month = localDate.month.toString().padLeft(2, '0');
   final String day = localDate.day.toString().padLeft(2, '0');
   return '$year-$month-$day';
-}
-
-int _durationDays(DateTime startDate, DateTime endDate) {
-  if (endDate.isBefore(startDate)) {
-    return 1;
-  }
-  return endDate.difference(startDate).inDays + 1;
 }

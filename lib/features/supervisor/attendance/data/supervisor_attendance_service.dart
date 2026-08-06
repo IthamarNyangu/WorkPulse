@@ -1,5 +1,6 @@
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/attendance/data/attendance_service.dart';
+import 'package:pulseclock/features/attendance/data/work_calendar_service.dart';
 import 'package:pulseclock/features/attendance/location/office_location_service.dart';
 import 'package:pulseclock/features/auth/data/auth_service.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
@@ -156,6 +157,9 @@ class SupervisorAttendanceService {
       _authService = AuthService(client: client ?? SupabaseBootstrap.client),
       _officeLocationService = OfficeLocationService(
         client: client ?? SupabaseBootstrap.client,
+      ),
+      _workCalendarService = WorkCalendarService(
+        client: client ?? SupabaseBootstrap.client,
       );
 
   static const String profilesTableName = 'profiles';
@@ -170,6 +174,7 @@ class SupervisorAttendanceService {
   final SupabaseClient _client;
   final AuthService _authService;
   final OfficeLocationService _officeLocationService;
+  final WorkCalendarService _workCalendarService;
 
   Future<SupervisorAttendanceDay> fetchAttendanceDay(DateTime date) async {
     final WorkPulseUserProfile reviewer = await _requireReviewerProfile();
@@ -181,6 +186,15 @@ class SupervisorAttendanceService {
 
     final DateTime selectedDate = _dateOnly(date);
     final String selectedDateLabel = _dateOnlyLabel(selectedDate);
+    final Set<String> publicHolidayDates = await _workCalendarService
+        .fetchPublicHolidayDates(
+          startDate: selectedDate,
+          endDate: selectedDate,
+        );
+    final bool isWorkday = WorkCalendarService.isWorkingDay(
+      selectedDate,
+      publicHolidayDates,
+    );
 
     final List<_DashboardEmployee> employees = await _fetchEmployees(
       activeOnly: true,
@@ -209,6 +223,7 @@ class SupervisorAttendanceService {
               (_DashboardEmployee employee) => _recordForEmployee(
                 employee: employee,
                 date: selectedDate,
+                isWorkday: isWorkday,
                 attendance: attendanceByUserId[employee.id],
                 leaveStatus: leaveStatusByUserId[employee.id],
                 officesById: officesById,
@@ -265,6 +280,11 @@ class SupervisorAttendanceService {
       endLabel: endLabel,
     );
     final Map<String, _OfficeLookup> officesById = await _officesById();
+    final Set<String> publicHolidayDates = await _workCalendarService
+        .fetchPublicHolidayDates(
+          startDate: normalizedStartDate,
+          endDate: normalizedEndDate,
+        );
 
     final Map<String, SupabaseAttendanceRecord> attendanceByKey =
         <String, SupabaseAttendanceRecord>{
@@ -282,6 +302,10 @@ class SupervisorAttendanceService {
     DateTime cursor = normalizedStartDate;
     while (!cursor.isAfter(normalizedEndDate)) {
       final String dateKey = _dateOnlyLabel(cursor);
+      final bool isWorkday = WorkCalendarService.isWorkingDay(
+        cursor,
+        publicHolidayDates,
+      );
       for (final _DashboardEmployee employee in employees) {
         final SupabaseAttendanceRecord? attendance =
             attendanceByKey[_attendanceKey(
@@ -297,7 +321,7 @@ class SupervisorAttendanceService {
         if (attendance == null &&
             leaveStatus == null &&
             !cursor.isBefore(_dateOnly(DateTime.now())) &&
-            !_isWorkday(cursor)) {
+            !isWorkday) {
           continue;
         }
 
@@ -305,6 +329,7 @@ class SupervisorAttendanceService {
           _recordForEmployee(
             employee: employee,
             date: cursor,
+            isWorkday: isWorkday,
             attendance: attendance,
             leaveStatus: leaveStatus,
             officesById: officesById,
@@ -487,6 +512,7 @@ class SupervisorAttendanceService {
   SupervisorAttendanceEmployeeRecord _recordForEmployee({
     required _DashboardEmployee employee,
     required DateTime date,
+    required bool isWorkday,
     required SupabaseAttendanceRecord? attendance,
     required String? leaveStatus,
     required Map<String, _OfficeLookup> officesById,
@@ -498,7 +524,11 @@ class SupervisorAttendanceService {
         email: employee.email,
         department: employee.department,
         date: date,
-        status: _statusWithoutAttendance(date: date, leaveStatus: leaveStatus),
+        status: _statusWithoutAttendance(
+          date: date,
+          leaveStatus: leaveStatus,
+          isWorkday: isWorkday,
+        ),
       );
     }
 
@@ -509,7 +539,12 @@ class SupervisorAttendanceService {
       department: employee.department,
       date: date,
       attendanceRecordId: attendance.id,
-      status: _statusFromAttendance(attendance.status),
+      status:
+          !isWorkday &&
+              attendance.clockInAt == null &&
+              attendance.clockOutAt == null
+          ? SupervisorAttendanceStatus.nonWorkingDay
+          : _statusFromAttendance(attendance.status),
       clockInAt: attendance.clockInAt,
       clockOutAt: attendance.clockOutAt,
       workedDuration: _workedDuration(attendance),
@@ -560,18 +595,19 @@ class SupervisorAttendanceService {
   SupervisorAttendanceStatus _statusWithoutAttendance({
     required DateTime date,
     required String? leaveStatus,
+    required bool isWorkday,
   }) {
+    if (!isWorkday) {
+      return SupervisorAttendanceStatus.nonWorkingDay;
+    }
     if (leaveStatus == 'approved') {
       return SupervisorAttendanceStatus.onLeave;
     }
     if (leaveStatus == 'pending') {
       return SupervisorAttendanceStatus.leavePending;
     }
-    if (!_isWorkday(date)) {
-      return SupervisorAttendanceStatus.nonWorkingDay;
-    }
     final DateTime today = _dateOnly(DateTime.now());
-    if (date.isBefore(today) && _isWorkday(date)) {
+    if (date.isBefore(today) && isWorkday) {
       return SupervisorAttendanceStatus.absent;
     }
     return SupervisorAttendanceStatus.noClockIn;
@@ -661,10 +697,6 @@ class SupervisorAttendanceService {
           )
           .length,
     );
-  }
-
-  bool _isWorkday(DateTime date) {
-    return date.weekday >= DateTime.monday && date.weekday <= DateTime.friday;
   }
 
   DateTime _dateOnly(DateTime dateTime) {
