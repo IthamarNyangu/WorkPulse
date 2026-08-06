@@ -153,15 +153,27 @@ class WorkPulsePushService {
   }
 
   Future<void> _handleForegroundMessage(RemoteMessage remote) async {
-    final String id = _notificationIdFor(remote) ??
-        remote.messageId ??
-        DateTime.now().microsecondsSinceEpoch.toString();
+    final String? notificationId = _notificationIdFor(remote);
+    if (notificationId == null) {
+      developer.log(
+        'Ignoring a push message without a WorkPulse notification ID',
+        name: 'workpulse.push',
+      );
+      return;
+    }
     final String title =
         remote.notification?.title ?? remote.data['title'] ?? 'WorkPulse';
     final String message =
         remote.notification?.body ?? remote.data['message'] ?? '';
+    if (title.trim().isEmpty || message.trim().isEmpty) {
+      developer.log(
+        'Ignoring an incomplete WorkPulse push notification',
+        name: 'workpulse.push',
+      );
+      return;
+    }
     await WorkPulseLocalNotificationService.instance.showRemote(
-      notificationId: id,
+      notificationId: notificationId,
       title: title,
       message: message,
     );

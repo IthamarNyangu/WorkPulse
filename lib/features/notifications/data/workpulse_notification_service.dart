@@ -123,6 +123,19 @@ class WorkPulseNotificationService {
         .eq('status', 'active');
   }
 
+  Future<void> recordLocationPresence({
+    required bool isInsideOffice,
+    String? officeLocationId,
+  }) async {
+    await _client.rpc(
+      'record_my_location_presence',
+      params: <String, dynamic>{
+        'p_state': isInsideOffice ? 'inside_office' : 'outside_offices',
+        'p_office_location_id': officeLocationId,
+      },
+    );
+  }
+
   WorkPulseNotification _fromMap(Map<String, dynamic> map) {
     return WorkPulseNotification(
       id: map['id'] as String,

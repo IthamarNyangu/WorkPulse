@@ -73,6 +73,11 @@ class WorkPulseLocalNotificationService {
     if (!_initialized || kIsWeb) {
       return;
     }
+    final String title = notification.title.trim();
+    final String message = notification.message.trim();
+    if (title.isEmpty || message.isEmpty) {
+      return;
+    }
     const AndroidNotificationDetails android = AndroidNotificationDetails(
       'workpulse_reminders',
       'WorkPulse reminders',
@@ -82,8 +87,8 @@ class WorkPulseLocalNotificationService {
     );
     await _plugin.show(
       id: notification.id.hashCode & 0x7fffffff,
-      title: notification.title,
-      body: notification.message,
+      title: title,
+      body: message,
       notificationDetails: const NotificationDetails(android: android),
       payload: notification.id,
     );
@@ -97,6 +102,11 @@ class WorkPulseLocalNotificationService {
     if (!_initialized || kIsWeb) {
       return;
     }
+    final String safeTitle = title.trim();
+    final String safeMessage = message.trim();
+    if (safeTitle.isEmpty || safeMessage.isEmpty) {
+      return;
+    }
     const AndroidNotificationDetails android = AndroidNotificationDetails(
       'workpulse_reminders',
       'WorkPulse reminders',
@@ -106,8 +116,8 @@ class WorkPulseLocalNotificationService {
     );
     await _plugin.show(
       id: notificationId.hashCode & 0x7fffffff,
-      title: title,
-      body: message,
+      title: safeTitle,
+      body: safeMessage,
       notificationDetails: const NotificationDetails(android: android),
       payload: notificationId,
     );
