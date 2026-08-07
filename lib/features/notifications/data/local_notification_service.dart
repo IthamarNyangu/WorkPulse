@@ -23,7 +23,7 @@ class WorkPulseLocalNotificationService {
       return;
     }
     const InitializationSettings settings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      android: AndroidInitializationSettings('ic_stat_workpulse'),
     );
     await _plugin.initialize(
       settings: settings,
