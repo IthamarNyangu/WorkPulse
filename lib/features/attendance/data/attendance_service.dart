@@ -863,6 +863,8 @@ ClockLocationSnapshot? _locationSnapshot({
         '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
     accuracyMeters: accuracyMeters ?? 0,
     status: status,
+    latitude: latitude,
+    longitude: longitude,
     verifiedOfficeLocationId: verifiedOfficeLocationId,
     verifiedOfficeName: verifiedOfficeName,
     nearestOfficeLocationId: nearestOfficeLocationId,
@@ -873,6 +875,10 @@ ClockLocationSnapshot? _locationSnapshot({
 }
 
 (double?, double?) _coordinatesFromSnapshot(ClockLocationSnapshot snapshot) {
+  if (snapshot.latitude != null && snapshot.longitude != null) {
+    return (snapshot.latitude, snapshot.longitude);
+  }
+
   final List<String> parts = snapshot.coordinates.split(',');
   if (parts.length != 2) {
     return (null, null);

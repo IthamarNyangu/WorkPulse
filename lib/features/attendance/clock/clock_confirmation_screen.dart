@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:postgrest/postgrest.dart';
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/attendance/data/attendance_service.dart';
@@ -636,7 +638,7 @@ class ClockMapPlaceholderCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _MapPreview(
-            hasLocation: hasLocation,
+            snapshot: snapshot,
             isLoading: isLoading,
             statusColor: statusColor,
           ),
@@ -668,52 +670,101 @@ class ClockMapPlaceholderCard extends StatelessWidget {
 
 class _MapPreview extends StatelessWidget {
   const _MapPreview({
-    required this.hasLocation,
+    required this.snapshot,
     required this.isLoading,
     required this.statusColor,
   });
 
-  final bool hasLocation;
+  final ClockLocationSnapshot? snapshot;
   final bool isLoading;
   final Color statusColor;
 
   @override
   Widget build(BuildContext context) {
+    final double? latitude = snapshot?.latitude;
+    final double? longitude = snapshot?.longitude;
+    final LatLng? point = latitude == null || longitude == null
+        ? null
+        : LatLng(latitude, longitude);
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(7),
       child: Container(
         height: 154,
-        decoration: const BoxDecoration(color: Color(0xFF596C52)),
+        color: PulseClockColors.surfaceMuted,
         child: Stack(
           children: [
-            Positioned.fill(child: CustomPaint(painter: _MapPreviewPainter())),
-            Center(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                child: isLoading
-                    ? const SizedBox(
-                        key: ValueKey<String>('loading'),
-                        width: 28,
-                        height: 28,
-                        child: CircularProgressIndicator(strokeWidth: 2.6),
-                      )
-                    : Column(
-                        key: ValueKey<bool>(hasLocation),
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            hasLocation
-                                ? Icons.location_pin
-                                : Icons.location_searching_rounded,
-                            size: 46,
-                            color: hasLocation
-                                ? statusColor
-                                : PulseClockColors.textSecondary,
+            if (point != null)
+              Positioned.fill(
+                child: FlutterMap(
+                  key: ValueKey<String>(
+                    '${point.latitude.toStringAsFixed(6)},${point.longitude.toStringAsFixed(6)}',
+                  ),
+                  options: MapOptions(
+                    initialCenter: point,
+                    initialZoom: 17,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.none,
+                    ),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.workpulsezm.workpulse',
+                    ),
+                    CircleLayer(
+                      circles: [
+                        CircleMarker(
+                          point: point,
+                          radius: snapshot!.accuracyMeters
+                              .clamp(8.0, 100.0)
+                              .toDouble(),
+                          useRadiusInMeter: true,
+                          color: PulseClockColors.actionBlue.withOpacity(0.12),
+                          borderColor: PulseClockColors.actionBlue.withOpacity(
+                            0.42,
                           ),
-                        ],
-                      ),
+                          borderStrokeWidth: 1.2,
+                        ),
+                      ],
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: point,
+                          width: 46,
+                          height: 46,
+                          alignment: Alignment.topCenter,
+                          child: Icon(
+                            Icons.location_pin,
+                            size: 46,
+                            color: statusColor,
+                            shadows: const [
+                              Shadow(color: Colors.black38, blurRadius: 5),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              )
+            else
+              const Positioned.fill(child: _MapUnavailableBackground()),
+            if (isLoading)
+              Positioned.fill(
+                child: ColoredBox(
+                  color: PulseClockColors.surface.withOpacity(0.62),
+                  child: const Center(
+                    child: SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(strokeWidth: 2.6),
+                    ),
+                  ),
+                ),
               ),
-            ),
             Positioned(
               left: 10,
               bottom: 8,
@@ -733,6 +784,26 @@ class _MapPreview extends StatelessWidget {
                 ),
               ),
             ),
+            if (point != null)
+              Positioned(
+                right: 8,
+                bottom: 6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 3,
+                  ),
+                  color: PulseClockColors.surface.withOpacity(0.82),
+                  child: Text(
+                    '(c) OpenStreetMap contributors',
+                    style: PulseClockTextStyles.cardSubtitle.copyWith(
+                      color: PulseClockColors.textSecondary,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -740,133 +811,22 @@ class _MapPreview extends StatelessWidget {
   }
 }
 
-class _MapPreviewPainter extends CustomPainter {
+class _MapUnavailableBackground extends StatelessWidget {
+  const _MapUnavailableBackground();
+
   @override
-  void paint(Canvas canvas, Size size) {
-    final Paint basePaint = Paint()..color = const Color(0xFF5F714F);
-    final Paint fieldPaint = Paint()..color = const Color(0xFF6F805A);
-    final Paint darkFieldPaint = Paint()..color = const Color(0xFF455C3D);
-    final Paint earthPaint = Paint()..color = const Color(0xFF9B8A63);
-    final Paint roofPaint = Paint()..color = const Color(0xFFB9B1A3);
-    final Paint roadPaint = Paint()
-      ..color = const Color(0xFFDDD8C9).withOpacity(0.94)
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 10;
-    final Paint minorRoadPaint = Paint()
-      ..color = const Color(0xFFC8C3B6).withOpacity(0.82)
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 5;
-    final Paint boundaryPaint = Paint()
-      ..color = Colors.black.withOpacity(0.08)
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 1.4;
-
-    canvas.drawRect(Offset.zero & size, basePaint);
-
-    void drawParcel(List<Offset> points, Paint paint) {
-      final Path path = Path()..moveTo(points.first.dx, points.first.dy);
-      for (final Offset point in points.skip(1)) {
-        path.lineTo(point.dx, point.dy);
-      }
-      path.close();
-      canvas.drawPath(path, paint);
-      canvas.drawPath(
-        path,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1
-          ..color = Colors.black.withOpacity(0.05),
-      );
-    }
-
-    drawParcel(<Offset>[
-      const Offset(-10, 0),
-      Offset(size.width * 0.35, 0),
-      Offset(size.width * 0.26, size.height * 0.42),
-      Offset(0, size.height * 0.36),
-    ], fieldPaint);
-    drawParcel(<Offset>[
-      Offset(size.width * 0.35, 0),
-      Offset(size.width, 0),
-      Offset(size.width * 0.9, size.height * 0.35),
-      Offset(size.width * 0.26, size.height * 0.42),
-    ], darkFieldPaint);
-    drawParcel(<Offset>[
-      Offset(0, size.height * 0.36),
-      Offset(size.width * 0.26, size.height * 0.42),
-      Offset(size.width * 0.18, size.height),
-      const Offset(-12, 140),
-    ], earthPaint);
-    drawParcel(<Offset>[
-      Offset(size.width * 0.26, size.height * 0.42),
-      Offset(size.width * 0.9, size.height * 0.35),
-      Offset(size.width, size.height),
-      Offset(size.width * 0.18, size.height),
-    ], fieldPaint);
-
-    canvas.drawLine(
-      Offset(-18, size.height * 0.2),
-      Offset(size.width + 18, size.height * 0.1),
-      roadPaint,
-    );
-    canvas.drawLine(
-      Offset(size.width * 0.2, -12),
-      Offset(size.width * 0.76, size.height + 16),
-      roadPaint,
-    );
-    canvas.drawLine(
-      Offset(-14, size.height * 0.72),
-      Offset(size.width + 14, size.height * 0.56),
-      minorRoadPaint,
-    );
-    canvas.drawLine(
-      Offset(size.width * 0.08, size.height + 12),
-      Offset(size.width * 0.44, -14),
-      minorRoadPaint,
-    );
-    canvas.drawLine(
-      Offset(size.width * 0.64, -10),
-      Offset(size.width * 0.92, size.height + 10),
-      minorRoadPaint,
-    );
-
-    for (double y = 18; y < size.height; y += 32) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y + 13), boundaryPaint);
-    }
-    for (double x = 24; x < size.width; x += 42) {
-      canvas.drawLine(Offset(x, 0), Offset(x - 24, size.height), boundaryPaint);
-    }
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.13, size.height * 0.48, 36, 18),
-        const Radius.circular(3),
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: PulseClockColors.surfaceMuted,
+      child: Center(
+        child: Icon(
+          Icons.location_searching_rounded,
+          size: 42,
+          color: PulseClockColors.textSecondary,
+        ),
       ),
-      roofPaint,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.73, size.height * 0.22, 42, 22),
-        const Radius.circular(4),
-      ),
-      roofPaint,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.58, size.height * 0.72, 54, 20),
-        const Radius.circular(4),
-      ),
-      Paint()..color = roofPaint.color.withOpacity(0.9),
-    );
-
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()..color = const Color(0xFF1C2740).withOpacity(0.1),
     );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 Color _locationStatusColor(ClockLocationStatus status) {

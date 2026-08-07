@@ -115,6 +115,8 @@ class WorkPulseLocationService {
           '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}',
       accuracyMeters: position.accuracy,
       status: status,
+      latitude: position.latitude,
+      longitude: position.longitude,
       verifiedOfficeLocationId: verifiedOffice?.id,
       verifiedOfficeName: verifiedOffice?.officeName,
       nearestOfficeLocationId: nearestOffice?.id,

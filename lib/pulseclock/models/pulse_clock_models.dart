@@ -320,6 +320,8 @@ class ClockLocationSnapshot {
     required this.coordinates,
     required this.accuracyMeters,
     required this.status,
+    this.latitude,
+    this.longitude,
     this.verifiedOfficeLocationId,
     this.verifiedOfficeName,
     this.nearestOfficeLocationId,
@@ -331,6 +333,8 @@ class ClockLocationSnapshot {
   final String coordinates;
   final double accuracyMeters;
   final ClockLocationStatus status;
+  final double? latitude;
+  final double? longitude;
   final String? verifiedOfficeLocationId;
   final String? verifiedOfficeName;
   final String? nearestOfficeLocationId;
