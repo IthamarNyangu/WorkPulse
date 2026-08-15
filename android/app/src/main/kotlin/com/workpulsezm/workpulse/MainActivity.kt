@@ -21,6 +21,8 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        WorkPulseGeofenceBridge.configure(this, flutterEngine.dartExecutor.binaryMessenger)
+
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             fileSaverChannelName

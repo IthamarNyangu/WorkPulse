@@ -1,5 +1,6 @@
 import 'package:pulseclock/core/supabase/supabase_bootstrap.dart';
 import 'package:pulseclock/features/notifications/data/workpulse_push_service.dart';
+import 'package:pulseclock/features/notifications/data/background_geofence_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
@@ -49,6 +50,7 @@ class AuthService {
 
   Future<void> logout() async {
     await WorkPulsePushService.instance.deactivate();
+    await BackgroundGeofenceService().clear();
     await _client.auth.signOut();
   }
 }

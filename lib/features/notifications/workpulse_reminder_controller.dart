@@ -7,6 +7,7 @@ import 'package:pulseclock/features/attendance/data/attendance_service.dart';
 import 'package:pulseclock/features/attendance/location/workpulse_location_service.dart';
 import 'package:pulseclock/features/auth/data/auth_service.dart';
 import 'package:pulseclock/features/notifications/data/local_notification_service.dart';
+import 'package:pulseclock/features/notifications/data/background_geofence_service.dart';
 import 'package:pulseclock/features/notifications/data/workpulse_notification_service.dart';
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 
@@ -25,6 +26,7 @@ class WorkPulseReminderController extends ChangeNotifier {
   WorkPulseNotificationService? _notificationService;
   final WorkPulseLocalNotificationService _localNotifications =
       WorkPulseLocalNotificationService.instance;
+  BackgroundGeofenceService? _backgroundGeofences;
 
   List<WorkPulseNotification> _notifications = const <WorkPulseNotification>[];
   Timer? _monitorTimer;
@@ -40,12 +42,19 @@ class WorkPulseReminderController extends ChangeNotifier {
   int _candidateInsideSamples = 0;
   int _outsideSamples = 0;
   bool _presenceSynced = false;
+  bool _backgroundLocationReady = false;
+  bool _backgroundLocationPermissionRequired = false;
+  int _registeredBackgroundOffices = 0;
 
   List<WorkPulseNotification> get notifications =>
       List<WorkPulseNotification>.unmodifiable(_notifications);
   int get unreadCount =>
       _notifications.where((WorkPulseNotification item) => !item.isRead).length;
   bool get isStarted => _started;
+  bool get backgroundLocationReady => _backgroundLocationReady;
+  bool get backgroundLocationPermissionRequired =>
+      _backgroundLocationPermissionRequired;
+  int get registeredBackgroundOffices => _registeredBackgroundOffices;
 
   Future<void> start(WorkPulseUserProfile profile) async {
     if (!SupabaseBootstrap.isInitialized) {
@@ -59,10 +68,12 @@ class WorkPulseReminderController extends ChangeNotifier {
     _started = true;
     _attendanceService ??= AttendanceService();
     _notificationService ??= WorkPulseNotificationService();
+    _backgroundGeofences ??= BackgroundGeofenceService();
     await _localNotifications.initialize();
     await _localNotifications.requestPermission();
     await refresh();
     await _refreshAttendance(force: true);
+    await _configureBackgroundGeofences(profile);
     await _runTick();
     _monitorTimer = Timer.periodic(_monitorInterval, (_) => _runTick());
   }
@@ -82,6 +93,9 @@ class WorkPulseReminderController extends ChangeNotifier {
     _candidateInsideSamples = 0;
     _outsideSamples = 0;
     _presenceSynced = false;
+    _backgroundLocationReady = false;
+    _backgroundLocationPermissionRequired = false;
+    _registeredBackgroundOffices = 0;
   }
 
   Future<void> refresh() async {
@@ -159,6 +173,51 @@ class WorkPulseReminderController extends ChangeNotifier {
       );
     }
     await refresh();
+    final WorkPulseUserProfile? profile = await AuthService()
+        .fetchCurrentProfile();
+    if (profile != null) {
+      await _configureBackgroundGeofences(profile);
+    }
+  }
+
+  Future<void> openBackgroundLocationSettings() async {
+    await _backgroundGeofences?.openLocationSettings();
+  }
+
+  Future<void> refreshBackgroundGeofences() async {
+    final WorkPulseUserProfile? profile = await AuthService()
+        .fetchCurrentProfile();
+    if (profile != null) {
+      await _refreshAttendance(force: true);
+      await _configureBackgroundGeofences(profile);
+    }
+  }
+
+  Future<void> _configureBackgroundGeofences(
+    WorkPulseUserProfile profile,
+  ) async {
+    try {
+      final BackgroundGeofenceConfiguration configuration =
+          await _backgroundGeofences!.configure(
+            profile: profile,
+            todayAttendance: _todayAttendance,
+          );
+      await _backgroundGeofences!.synchronizePendingEvents();
+      final BackgroundGeofencePermission permission =
+          await _backgroundGeofences!.permissionState();
+      _backgroundLocationReady = permission.isReady;
+      _backgroundLocationPermissionRequired =
+          configuration.permissionRequired || !permission.isReady;
+      _registeredBackgroundOffices = configuration.registeredOffices;
+      await refresh();
+      notifyListeners();
+    } catch (error) {
+      developer.log(
+        'Unable to configure background office reminders',
+        name: 'workpulse.geofencing',
+        error: error,
+      );
+    }
   }
 
   Future<void> _runTick() async {

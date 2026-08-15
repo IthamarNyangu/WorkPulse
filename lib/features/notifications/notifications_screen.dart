@@ -19,7 +19,8 @@ class NotificationsScreen extends StatefulWidget {
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen> {
+class _NotificationsScreenState extends State<NotificationsScreen>
+    with WidgetsBindingObserver {
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
   final WorkPulseReminderController _reminders =
       WorkPulseReminderController.instance;
@@ -29,6 +30,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _store.addListener(_onStoreChanged);
     _reminders.addListener(_onStoreChanged);
     if (_usesBackend) {
@@ -38,9 +40,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _store.removeListener(_onStoreChanged);
     _reminders.removeListener(_onStoreChanged);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _usesBackend) {
+      _reminders.refreshBackgroundGeofences();
+    }
   }
 
   void _onStoreChanged() {
@@ -48,6 +58,40 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       return;
     }
     setState(() {});
+  }
+
+  Future<void> _explainBackgroundLocation() async {
+    final bool? continueToSettings = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: PulseClockColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text('Enable Smart Location Reminders'),
+          content: const Text(
+            'Choose Location permission and allow WorkPulse to access your '
+            'location all the time. This lets Android remind you after you '
+            'remain at an approved office for 3 minutes, even when the app is '
+            'not open. WorkPulse does not save a continuous location trail.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Not Now'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Open Settings'),
+            ),
+          ],
+        );
+      },
+    );
+    if (continueToSettings == true) {
+      await _reminders.openBackgroundLocationSettings();
+    }
   }
 
   Future<void> _openFromNotification(WorkPulseNotification notification) async {
@@ -252,9 +296,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               24,
             ),
             child: notifications.isEmpty
-                ? const _NoNotificationState()
+                ? ListView(
+                    children: <Widget>[
+                      if (_usesBackend &&
+                          _reminders.backgroundLocationPermissionRequired) ...<Widget>[
+                        _BackgroundLocationCard(
+                          onEnable: _explainBackgroundLocation,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      const _NoNotificationState(),
+                    ],
+                  )
                 : ListView(
                     children: [
+                      if (_usesBackend &&
+                          _reminders.backgroundLocationPermissionRequired) ...<Widget>[
+                        _BackgroundLocationCard(
+                          onEnable: _explainBackgroundLocation,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       for (final _NotificationDateGroup group
                           in groupedNotifications) ...<Widget>[
                         Text(
@@ -295,6 +357,63 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BackgroundLocationCard extends StatelessWidget {
+  const _BackgroundLocationCard({required this.onEnable});
+
+  final VoidCallback onEnable;
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      borderRadius: 14,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const Icon(
+                Icons.location_on_outlined,
+                color: PulseClockColors.actionBlue,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Smart Location Reminders',
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    color: PulseClockColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Enable background location to receive a Clock In reminder after '
+            'staying at an approved office for 3 minutes.',
+            style: PulseClockTextStyles.cardSubtitle.copyWith(
+              fontSize: 13,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: onEnable,
+              style: FilledButton.styleFrom(
+                backgroundColor: PulseClockColors.actionBlue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Enable'),
+            ),
+          ),
+        ],
       ),
     );
   }

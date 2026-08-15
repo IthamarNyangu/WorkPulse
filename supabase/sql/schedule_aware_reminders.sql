@@ -134,6 +134,7 @@ declare
   august_first date := make_date(p_year, 8, 1);
   heroes_day date;
   farmers_day date;
+  general_election_day date;
 begin
   if p_year < 1964 or p_year > 2200 then
     raise exception 'Holiday year is outside the supported range';
@@ -141,6 +142,9 @@ begin
 
   heroes_day := july_first + ((8 - extract(isodow from july_first)::integer) % 7);
   farmers_day := august_first + ((8 - extract(isodow from august_first)::integer) % 7);
+  general_election_day := august_first
+    + ((4 - extract(isodow from august_first)::integer + 7) % 7)
+    + 7;
 
   -- Regenerate only calculated rows. Manually gazetted one-off holidays remain intact.
   delete from public.public_holidays
@@ -167,6 +171,21 @@ begin
     (make_date(p_year, 10, 18), 'National Day of Prayer, Fasting, Repentance and Reconciliation', 'fixed_date', true, 'Annual public holiday'),
     (make_date(p_year, 10, 24), 'Independence Day', 'fixed_date', true, 'Public Holidays Act'),
     (make_date(p_year, 12, 25), 'Christmas Day', 'fixed_date', true, 'Public Holidays Act');
+
+  -- Article 56 schedules Zambia's general election every five years on the
+  -- second Thursday of August and declares election day a public holiday.
+  if p_year >= 2016 and mod(p_year - 2016, 5) = 0 then
+    insert into public.public_holidays (
+      holiday_date, holiday_name, holiday_type, is_generated, source_reference
+    )
+    values (
+      general_election_day,
+      'General Election Day',
+      'recurring_weekday',
+      true,
+      'Constitution of Zambia, Article 56'
+    );
+  end if;
 
   -- Current Zambian law observes the following Monday when a scheduled
   -- public holiday falls on Sunday. Easter Monday already covers Easter Sunday.

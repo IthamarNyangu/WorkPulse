@@ -2,7 +2,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <application
         android:label="WorkPulse"
         android:name="${applicationName}"
@@ -50,6 +52,17 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/workpulse_file_paths" />
         </provider>
+        <receiver
+            android:name=".WorkPulseGeofenceReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".WorkPulseBootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
