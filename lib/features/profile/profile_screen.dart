@@ -4,7 +4,7 @@ import 'package:pulseclock/features/auth/data/auth_service.dart';
 import 'package:pulseclock/features/auth/session/workpulse_session.dart';
 import 'package:pulseclock/features/employees/employee_list_screen.dart';
 import 'package:pulseclock/features/geofence/presentation/geofence_exception_review_screen.dart';
-import 'package:pulseclock/features/notifications/notifications_screen.dart';
+import 'package:pulseclock/features/notifications/notification_preferences_screen.dart';
 import 'package:pulseclock/features/office_locations/office_locations_admin_screen.dart';
 import 'package:pulseclock/features/supervisor/attendance/presentation/supervisor_attendance_dashboard_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
@@ -50,7 +50,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _openNotifications(BuildContext context) async {
+  Future<void> _openNotificationPreferences(BuildContext context) async {
     await Navigator.of(context).push<void>(
       PageRouteBuilder<void>(
         pageBuilder:
@@ -59,7 +59,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Animation<double> animation,
               Animation<double> secondaryAnimation,
             ) {
-              return const NotificationsScreen();
+              return const NotificationPreferencesScreen();
             },
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
@@ -511,7 +511,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _ProfileActionItem(
                       icon: Icons.notifications_active_outlined,
                       title: 'Manage Notifications',
-                      onTap: () => _openNotifications(context),
+                      onTap: () => _openNotificationPreferences(context),
                     ),
                   ],
                 ),

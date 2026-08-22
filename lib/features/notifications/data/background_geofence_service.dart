@@ -67,8 +67,17 @@ class BackgroundGeofenceService {
   Future<BackgroundGeofenceConfiguration> configure({
     required WorkPulseUserProfile profile,
     required SupabaseAttendanceRecord? todayAttendance,
+    required bool enabled,
   }) async {
     if (!isSupported) {
+      return const BackgroundGeofenceConfiguration(
+        registeredOffices: 0,
+        permissionRequired: false,
+      );
+    }
+
+    if (!enabled) {
+      await clear();
       return const BackgroundGeofenceConfiguration(
         registeredOffices: 0,
         permissionRequired: false,
@@ -102,7 +111,7 @@ class BackgroundGeofenceService {
           'eligibleWindows': eligibleWindows,
           'clockedInDate': clockedInDate,
           'userId': profile.id,
-          'enabled': true,
+          'enabled': enabled,
         });
     return BackgroundGeofenceConfiguration(
       registeredOffices: (result?['registered'] as num?)?.toInt() ?? 0,

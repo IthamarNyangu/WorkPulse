@@ -63,6 +63,18 @@ class WorkPulseLocalNotificationService {
         ?.requestNotificationsPermission();
   }
 
+  Future<bool> notificationsEnabled() async {
+    if (!_initialized || kIsWeb) {
+      return true;
+    }
+    return await _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >()
+            ?.areNotificationsEnabled() ??
+        false;
+  }
+
   String? takeInitialPayload() {
     final String? payload = _initialPayload;
     _initialPayload = null;
