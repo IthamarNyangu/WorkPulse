@@ -45,13 +45,38 @@ class AuthService {
       return null;
     }
 
-    return WorkPulseUserProfile.fromMap(row);
+    final List<String> roles = await _fetchCurrentProfileRoles(user.id, row);
+
+    return WorkPulseUserProfile.fromMap(row, roles: roles);
   }
 
   Future<void> logout() async {
     await WorkPulsePushService.instance.deactivate();
     await BackgroundGeofenceService().clear();
     await _client.auth.signOut();
+  }
+
+  Future<List<String>> _fetchCurrentProfileRoles(
+    String profileId,
+    Map<String, dynamic> profileRow,
+  ) async {
+    try {
+      final List<dynamic> rows = await _client
+          .from('profile_roles')
+          .select('role')
+          .eq('profile_id', profileId);
+      final Set<String> roles = rows
+          .map((dynamic row) => (row as Map)['role'] as String?)
+          .whereType<String>()
+          .toSet();
+      roles.add('employee');
+      return _sortRoles(roles);
+    } catch (_) {
+      return _sortRoles(<String>{
+        'employee',
+        profileRow['role'] as String? ?? 'employee',
+      });
+    }
   }
 }
 
@@ -62,6 +87,7 @@ class WorkPulseUserProfile {
     required this.fullName,
     required this.email,
     required this.role,
+    required this.roles,
     this.department,
     this.departmentId,
     this.jobTitle,
@@ -74,6 +100,7 @@ class WorkPulseUserProfile {
   final String fullName;
   final String email;
   final String role;
+  final List<String> roles;
   final String? department;
   final String? departmentId;
   final String? jobTitle;
@@ -88,13 +115,38 @@ class WorkPulseUserProfile {
     return parts.first;
   }
 
-  factory WorkPulseUserProfile.fromMap(Map<String, dynamic> map) {
+  bool hasRole(String role) => roles.contains(role);
+
+  bool hasAnyRole(Set<String> roleSet) => roles.any(roleSet.contains);
+
+  String get effectiveRole {
+    if (roles.contains('admin')) {
+      return 'admin';
+    }
+    if (roles.contains('hr')) {
+      return 'hr';
+    }
+    if (roles.contains('supervisor')) {
+      return 'supervisor';
+    }
+    return 'employee';
+  }
+
+  factory WorkPulseUserProfile.fromMap(
+    Map<String, dynamic> map, {
+    List<String>? roles,
+  }) {
+    final List<String> resolvedRoles = roles ?? _sortRoles(<String>{
+      'employee',
+      map['role'] as String? ?? 'employee',
+    });
     return WorkPulseUserProfile(
       id: map['id'] as String,
       employeeId: map['employee_id'] as String,
       fullName: map['full_name'] as String,
       email: map['email'] as String,
       role: map['role'] as String,
+      roles: resolvedRoles,
       department: map['department'] as String?,
       departmentId: map['department_id'] as String?,
       jobTitle: map['job_title'] as String?,
@@ -102,4 +154,15 @@ class WorkPulseUserProfile {
       isActive: map['is_active'] as bool? ?? true,
     );
   }
+}
+
+List<String> _sortRoles(Iterable<String> roles) {
+  const List<String> order = <String>['employee', 'supervisor', 'hr', 'admin'];
+  final Set<String> normalized = roles
+      .where((String role) => order.contains(role))
+      .toSet();
+  if (normalized.isEmpty) {
+    normalized.add('employee');
+  }
+  return order.where(normalized.contains).toList(growable: false);
 }

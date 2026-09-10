@@ -139,7 +139,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
           WorkPulseSessionScope.maybeProfileOf(context, listen: false);
       final WorkPulseUserProfile? profile =
           sessionProfile ?? await AuthService().fetchCurrentProfile();
-      if (profile == null || !_managerRoles.contains(profile.role)) {
+      if (profile == null || !profile.hasAnyRole(_managerRoles)) {
         if (!mounted) {
           return;
         }
@@ -153,13 +153,13 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
 
       final EmployeeManagementData data = await _service.fetchManagementData(
         currentUserId: profile.id,
-        currentRole: profile.role,
+        currentRoles: profile.roles,
       );
       if (!mounted) {
         return;
       }
       setState(() {
-        _currentRole = profile.role;
+        _currentRole = profile.effectiveRole;
         _data = data;
         _page = 0;
         _isLoading = false;

@@ -29,6 +29,7 @@ class ManagedEmployeeProfile {
     required this.fullName,
     required this.email,
     required this.role,
+    required this.roles,
     required this.isActive,
     this.departmentId,
     this.departmentName,
@@ -44,6 +45,7 @@ class ManagedEmployeeProfile {
   final String fullName;
   final String email;
   final String role;
+  final List<String> roles;
   final bool isActive;
   final String? departmentId;
   final String? departmentName;
@@ -54,6 +56,15 @@ class ManagedEmployeeProfile {
   final String? supervisorName;
 
   String get roleLabel {
+    if (roles.length > 1) {
+      return roles.map(_roleLabel).join(', ');
+    }
+    return _roleLabel(role);
+  }
+
+  bool hasRole(String role) => roles.contains(role);
+
+  static String _roleLabel(String role) {
     switch (role) {
       case 'supervisor':
         return 'Supervisor';
@@ -72,17 +83,23 @@ class ManagedEmployeeProfile {
     required Map<String, String> officeNames,
     required Map<String, String> supervisorIdsByEmployee,
     required Map<String, String> profileNames,
+    required Map<String, List<String>> rolesByProfile,
   }) {
     final String? departmentId = map['department_id'] as String?;
     final String? officeId = map['usual_office_location_id'] as String?;
     final String id = map['id'] as String;
+    final String primaryRole = map['role'] as String? ?? 'employee';
     final String? supervisorId = supervisorIdsByEmployee[id];
     return ManagedEmployeeProfile(
       id: id,
       employeeId: map['employee_id'] as String,
       fullName: map['full_name'] as String,
       email: map['email'] as String,
-      role: map['role'] as String? ?? 'employee',
+      role: primaryRole,
+      roles: rolesByProfile[id] ?? _sortedRoles(<String>{
+        'employee',
+        primaryRole,
+      }),
       isActive: map['is_active'] as bool? ?? true,
       departmentId: departmentId,
       departmentName:
@@ -137,7 +154,7 @@ class EmployeeManagementService {
 
   Future<EmployeeManagementData> fetchManagementData({
     required String currentUserId,
-    required String currentRole,
+    required List<String> currentRoles,
   }) async {
     final List<WorkPulseDepartment> departments = await fetchDepartments();
 
@@ -165,6 +182,9 @@ class EmployeeManagementService {
       for (final Map<String, dynamic> profile in profileMaps)
         profile['id'] as String: profile['full_name'] as String,
     };
+    final Map<String, List<String>> rolesByProfile = await _fetchRolesByProfile(
+      profileMaps,
+    );
 
     final List<dynamic> assignmentRows = await _client
         .from('employee_supervisor_assignments')
@@ -185,10 +205,15 @@ class EmployeeManagementService {
             officeNames: officeNames,
             supervisorIdsByEmployee: supervisorIdsByEmployee,
             profileNames: profileNames,
+            rolesByProfile: rolesByProfile,
           ),
         )
         .toList(growable: false);
-    final List<ManagedEmployeeProfile> employees = currentRole == 'supervisor'
+    final bool isOrganisationManager =
+        currentRoles.contains('hr') || currentRoles.contains('admin');
+    final bool isSupervisorOnly =
+        currentRoles.contains('supervisor') && !isOrganisationManager;
+    final List<ManagedEmployeeProfile> employees = isSupervisorOnly
         ? visibleEmployees
               .where(
                 (ManagedEmployeeProfile employee) =>
@@ -199,7 +224,7 @@ class EmployeeManagementService {
     final List<ManagedEmployeeProfile> supervisors = visibleEmployees
         .where(
           (ManagedEmployeeProfile employee) =>
-              employee.role == 'supervisor' && employee.isActive,
+              employee.hasRole('supervisor') && employee.isActive,
         )
         .toList(growable: false);
 
@@ -219,7 +244,7 @@ class EmployeeManagementService {
     required String? departmentId,
     required String? usualOfficeLocationId,
     required String? supervisorId,
-    required String role,
+    required List<String> roles,
     required bool isActive,
   }) {
     return _client.rpc<void>(
@@ -232,10 +257,44 @@ class EmployeeManagementService {
         'p_department_id': departmentId,
         'p_usual_office_location_id': usualOfficeLocationId,
         'p_supervisor_id': supervisorId,
-        'p_role': role,
+        'p_roles': _sortedRoles(<String>{'employee', ...roles}),
         'p_is_active': isActive,
       },
     );
+  }
+
+  Future<Map<String, List<String>>> _fetchRolesByProfile(
+    List<Map<String, dynamic>> profileMaps,
+  ) async {
+    try {
+      final List<dynamic> rows = await _client
+          .from('profile_roles')
+          .select('profile_id, role');
+      final Map<String, Set<String>> grouped = <String, Set<String>>{};
+      for (final dynamic rawRow in rows) {
+        final Map<String, dynamic> row = Map<String, dynamic>.from(
+          rawRow as Map,
+        );
+        final String? profileId = row['profile_id'] as String?;
+        final String? role = row['role'] as String?;
+        if (profileId == null || role == null) {
+          continue;
+        }
+        grouped.putIfAbsent(profileId, () => <String>{'employee'}).add(role);
+      }
+      return <String, List<String>>{
+        for (final MapEntry<String, Set<String>> entry in grouped.entries)
+          entry.key: _sortedRoles(entry.value),
+      };
+    } catch (_) {
+      return <String, List<String>>{
+        for (final Map<String, dynamic> profile in profileMaps)
+          profile['id'] as String: _sortedRoles(<String>{
+            'employee',
+            profile['role'] as String? ?? 'employee',
+          }),
+      };
+    }
   }
 
   Future<WorkPulseDepartment> createDepartment(String name) async {
@@ -271,4 +330,15 @@ class EmployeeManagementService {
     }
     return trimmed;
   }
+}
+
+List<String> _sortedRoles(Iterable<String> roles) {
+  const List<String> order = <String>['employee', 'supervisor', 'hr', 'admin'];
+  final Set<String> normalized = roles
+      .where((String role) => order.contains(role))
+      .toSet();
+  if (normalized.isEmpty) {
+    normalized.add('employee');
+  }
+  return order.where(normalized.contains).toList(growable: false);
 }

@@ -240,7 +240,7 @@ class _OfficeLocationsAdminScreenState
           WorkPulseSessionScope.maybeProfileOf(context, listen: false);
       final WorkPulseUserProfile? profile =
           sessionProfile ?? await AuthService().fetchCurrentProfile();
-      if (profile == null || !_managerRoles.contains(profile.role)) {
+      if (profile == null || !profile.hasAnyRole(_managerRoles)) {
         if (!mounted) {
           return;
         }

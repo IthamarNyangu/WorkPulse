@@ -23,16 +23,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _employeeName = 'WorkPulse User';
   String _employeeId = '--';
-  String _employeeRole = 'employee';
+  List<String> _employeeRoles = const <String>['employee'];
   String? _employeeDepartment;
   String? _employeeJobTitle;
   WorkPulseUserProfile? _currentProfile;
   bool _isLoggingOut = false;
 
-  bool get _canViewTeamTools => _teamRoles.contains(_employeeRole);
+  bool get _canViewTeamTools => _employeeRoles.any(_teamRoles.contains);
 
   bool get _canManageOrganisation =>
-      _organisationManagerRoles.contains(_employeeRole);
+      _employeeRoles.any(_organisationManagerRoles.contains);
 
   @override
   void didChangeDependencies() {
@@ -44,7 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _currentProfile = profile;
       _employeeName = profile.fullName;
       _employeeId = profile.employeeId;
-      _employeeRole = profile.role;
+      _employeeRoles = profile.roles;
       _employeeDepartment = profile.department;
       _employeeJobTitle = profile.jobTitle;
     }

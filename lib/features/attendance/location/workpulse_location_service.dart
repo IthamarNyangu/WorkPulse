@@ -56,8 +56,7 @@ class WorkPulseLocationService {
         ),
       );
 
-      final List<OfficeLocation> offices = await _officeLocationService
-          .fetchActiveOffices();
+      final List<OfficeLocation> offices = await _fetchActiveOfficesSafely();
       final _NearestOfficeResult? nearest = _nearestOffice(
         position: position,
         offices: offices,
@@ -132,6 +131,14 @@ class WorkPulseLocationService {
       message: message,
       activeOfficeCount: 0,
     );
+  }
+
+  Future<List<OfficeLocation>> _fetchActiveOfficesSafely() async {
+    try {
+      return _officeLocationService.fetchActiveOffices();
+    } catch (_) {
+      return const <OfficeLocation>[];
+    }
   }
 
   _NearestOfficeResult? _nearestOffice({

@@ -39,6 +39,11 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
   bool _isLoadingLocation = true;
   Timer? _loadingTimer;
 
+  bool get _hasRequiredLocation => _locationResult?.snapshot != null;
+
+  bool get _canConfirm =>
+      !_isSubmitting && !_isLoadingLocation && _hasRequiredLocation;
+
   @override
   void initState() {
     super.initState();
@@ -129,6 +134,18 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
 
   Future<void> _confirm() async {
     if (_isSubmitting) {
+      return;
+    }
+    if (!_hasRequiredLocation) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              'Turn on location services to ${widget.mode.confirmLabel.toLowerCase()}.',
+            ),
+          ),
+        );
       return;
     }
 
@@ -370,6 +387,10 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
                           isLoading: _isLoadingLocation,
                           onRetry: _isSubmitting ? null : _refreshLocation,
                         ),
+                        if (!_isLoadingLocation && !_hasRequiredLocation) ...[
+                          const SizedBox(height: 8),
+                          _LocationRequiredNotice(mode: widget.mode),
+                        ],
                         const SizedBox(height: 10),
                         SurfaceCard(
                           key: _commentCardKey,
@@ -430,12 +451,15 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: _isSubmitting ? null : _confirm,
+                            onPressed: _canConfirm ? _confirm : null,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: widget.mode.color,
                               foregroundColor: PulseClockColors.surface,
-                              disabledBackgroundColor: widget.mode.color
-                                  .withOpacity(0.65),
+                              disabledBackgroundColor: _hasRequiredLocation
+                                  ? widget.mode.color.withOpacity(0.65)
+                                  : PulseClockColors.textSecondary.withOpacity(
+                                      0.35,
+                                    ),
                               disabledForegroundColor: PulseClockColors.surface,
                               textStyle: PulseClockTextStyles.primaryAction
                                   .copyWith(fontSize: 18),
@@ -505,6 +529,32 @@ String _friendlyPostgrestError(PostgrestException error) {
     return 'Attendance could not be saved to Supabase right now.';
   }
   return 'Attendance could not be saved: $details';
+}
+
+class _LocationRequiredNotice extends StatelessWidget {
+  const _LocationRequiredNotice({required this.mode});
+
+  final ClockActionMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: PulseClockColors.statusMissedBg.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        'Location is required before you can ${mode.confirmLabel.toLowerCase()}. Turn on phone location, then tap Retry.',
+        style: PulseClockTextStyles.cardSubtitle.copyWith(
+          color: PulseClockColors.statusMissedAccent,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
 }
 
 class _ConfirmButtonContent extends StatelessWidget {

@@ -25,7 +25,7 @@ class ApprovalService {
   Future<bool> canReviewRequests() async {
     final WorkPulseUserProfile? profile = await _authService
         .fetchCurrentProfile();
-    return profile != null && reviewerRoles.contains(profile.role);
+    return profile != null && profile.hasAnyRole(reviewerRoles);
   }
 
   Future<ApprovalCounts> fetchApprovalCounts() async {
@@ -219,7 +219,7 @@ class ApprovalService {
     if (profile == null) {
       throw StateError('No signed-in reviewer profile found.');
     }
-    if (!reviewerRoles.contains(profile.role)) {
+    if (!profile.hasAnyRole(reviewerRoles)) {
       throw StateError('This account is not allowed to review requests.');
     }
     return profile;

@@ -178,7 +178,7 @@ class SupervisorAttendanceService {
 
   Future<SupervisorAttendanceDay> fetchAttendanceDay(DateTime date) async {
     final WorkPulseUserProfile reviewer = await _requireReviewerProfile();
-    if (!reviewerRoles.contains(reviewer.role)) {
+    if (!reviewer.hasAnyRole(reviewerRoles)) {
       throw StateError(
         'Only supervisors, HR, and admins can view the attendance dashboard.',
       );
@@ -249,7 +249,7 @@ class SupervisorAttendanceService {
     required DateTime endDate,
   }) async {
     final WorkPulseUserProfile reviewer = await _requireReviewerProfile();
-    if (!reviewerRoles.contains(reviewer.role)) {
+    if (!reviewer.hasAnyRole(reviewerRoles)) {
       throw StateError(
         'Only supervisors, HR, and admins can view attendance reports.',
       );

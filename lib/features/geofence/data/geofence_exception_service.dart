@@ -81,7 +81,7 @@ class GeofenceExceptionService {
     int lookbackDays = 90,
   }) async {
     final WorkPulseUserProfile profile = await _requireReviewerProfile();
-    if (!reviewerRoles.contains(profile.role)) {
+    if (!profile.hasAnyRole(reviewerRoles)) {
       throw StateError(
         'Only HR and administrators can review geofence exceptions.',
       );

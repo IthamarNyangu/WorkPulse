@@ -22,7 +22,7 @@ class EmployeeDetailsScreen extends StatelessWidget {
   final String currentRole;
 
   bool get _canEdit =>
-      (currentRole == 'hr' && employee.role != 'admin') ||
+      (currentRole == 'hr' && !employee.hasRole('admin')) ||
       currentRole == 'admin';
 
   Future<void> _openEdit(BuildContext context) async {
@@ -211,7 +211,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
   late String? _departmentId;
   late String? _usualOfficeId;
   late String? _supervisorId;
-  late String _role;
+  late Set<String> _roles;
   late bool _isActive;
   bool _isSaving = false;
 
@@ -262,7 +262,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
         )
         ? widget.employee.supervisorId
         : null;
-    _role = widget.employee.role;
+    _roles = widget.employee.roles.toSet()..add('employee');
     _isActive = widget.employee.isActive;
   }
 
@@ -278,6 +278,12 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
     if (_isSaving || !_formKey.currentState!.validate()) {
       return;
     }
+
+    final bool? confirmed = await _confirmSave();
+    if (confirmed != true) {
+      return;
+    }
+
     setState(() {
       _isSaving = true;
     });
@@ -291,7 +297,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
         departmentId: _departmentId,
         usualOfficeLocationId: _usualOfficeId,
         supervisorId: _supervisorId,
-        role: _role,
+        roles: _roles.toList(growable: false),
         isActive: _isActive,
       );
       if (!mounted) {
@@ -314,6 +320,69 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
         });
       }
     }
+  }
+
+  Future<bool?> _confirmSave() {
+    final bool rolesChanged = !_setEquals(
+      widget.employee.roles.toSet()..add('employee'),
+      _roles,
+    );
+    final String message = rolesChanged
+        ? 'Save these employee details and update access roles?'
+        : 'Save these employee details?';
+
+    return showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFFFCFDFE),
+          surfaceTintColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 42,
+            vertical: 24,
+          ),
+          titlePadding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+          contentPadding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+          actionsPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          title: Text(
+            'Confirm Changes',
+            style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
+          ),
+          content: Text(
+            message,
+            style: PulseClockTextStyles.cardSubtitle.copyWith(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _setRole(String role, bool selected) {
+    setState(() {
+      if (selected) {
+        _roles.add(role);
+      } else {
+        _roles.remove(role);
+      }
+      _roles.add('employee');
+    });
+  }
+
+  bool _setEquals(Set<String> left, Set<String> right) {
+    return left.length == right.length && left.containsAll(right);
   }
 
   @override
@@ -499,31 +568,40 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
                         ),
                         const SizedBox(height: 16),
                         if (_canManageRole) ...[
-                          DropdownButtonFormField<String>(
-                            initialValue: _role,
-                            decoration: _inputDecoration('Role'),
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'employee',
-                                child: Text('Employee'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'supervisor',
-                                child: Text('Supervisor'),
-                              ),
-                              DropdownMenuItem(value: 'hr', child: Text('HR')),
-                              DropdownMenuItem(
-                                value: 'admin',
-                                child: Text('Administrator'),
-                              ),
-                            ],
-                            onChanged: (String? value) {
-                              if (value != null) {
-                                setState(() {
-                                  _role = value;
-                                });
-                              }
-                            },
+                          Text(
+                            'Access Roles',
+                            style: PulseClockTextStyles.cardSubtitle.copyWith(
+                              color: PulseClockColors.textPrimary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _RoleCheckboxTile(
+                            label: 'Employee',
+                            description: 'Standard attendance access.',
+                            value: true,
+                            enabled: false,
+                            onChanged: (_) {},
+                          ),
+                          _RoleCheckboxTile(
+                            label: 'Supervisor',
+                            description: 'Can review assigned team requests.',
+                            value: _roles.contains('supervisor'),
+                            onChanged: (bool value) =>
+                                _setRole('supervisor', value),
+                          ),
+                          _RoleCheckboxTile(
+                            label: 'HR',
+                            description:
+                                'Can manage employees and organisation data.',
+                            value: _roles.contains('hr'),
+                            onChanged: (bool value) => _setRole('hr', value),
+                          ),
+                          _RoleCheckboxTile(
+                            label: 'Administrator',
+                            description: 'Can manage system access roles.',
+                            value: _roles.contains('admin'),
+                            onChanged: (bool value) => _setRole('admin', value),
                           ),
                           if (_canManageAccount) const SizedBox(height: 10),
                         ],
@@ -610,6 +688,47 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
           color: PulseClockColors.actionBlue,
           width: 1.4,
         ),
+      ),
+    );
+  }
+}
+
+class _RoleCheckboxTile extends StatelessWidget {
+  const _RoleCheckboxTile({
+    required this.label,
+    required this.description,
+    required this.value,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
+  final String label;
+  final String description;
+  final bool value;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return CheckboxListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      controlAffinity: ListTileControlAffinity.leading,
+      value: value,
+      onChanged: enabled
+          ? (bool? selected) => onChanged(selected ?? false)
+          : null,
+      activeColor: PulseClockColors.actionBlue,
+      title: Text(
+        label,
+        style: PulseClockTextStyles.cardSubtitle.copyWith(
+          color: PulseClockColors.textPrimary,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      subtitle: Text(
+        description,
+        style: PulseClockTextStyles.cardSubtitle.copyWith(fontSize: 12),
       ),
     );
   }
