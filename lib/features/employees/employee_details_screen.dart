@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:postgrest/postgrest.dart';
 import 'package:pulseclock/features/attendance/location/office_location_service.dart';
 import 'package:pulseclock/features/employees/data/employee_management_service.dart';
+import 'package:pulseclock/features/employees/widgets/office_picker.dart';
+import 'package:pulseclock/features/employees/widgets/job_title_picker.dart';
+import 'package:pulseclock/features/employees/widgets/supervisor_picker.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
@@ -10,6 +13,7 @@ class EmployeeDetailsScreen extends StatelessWidget {
   const EmployeeDetailsScreen({
     required this.employee,
     required this.departments,
+    required this.jobTitles,
     required this.offices,
     required this.supervisors,
     required this.currentRole,
@@ -18,6 +22,7 @@ class EmployeeDetailsScreen extends StatelessWidget {
 
   final ManagedEmployeeProfile employee;
   final List<WorkPulseDepartment> departments;
+  final List<WorkPulseJobTitle> jobTitles;
   final List<OfficeLocation> offices;
   final List<ManagedEmployeeProfile> supervisors;
   final String currentRole;
@@ -37,6 +42,7 @@ class EmployeeDetailsScreen extends StatelessWidget {
             ) => EmployeeEditScreen(
               employee: employee,
               departments: departments,
+              jobTitles: jobTitles,
               offices: offices,
               supervisors: supervisors,
               currentRole: currentRole,
@@ -184,6 +190,7 @@ class EmployeeEditScreen extends StatefulWidget {
   const EmployeeEditScreen({
     required this.employee,
     required this.departments,
+    required this.jobTitles,
     required this.offices,
     required this.supervisors,
     required this.currentRole,
@@ -192,6 +199,7 @@ class EmployeeEditScreen extends StatefulWidget {
 
   final ManagedEmployeeProfile employee;
   final List<WorkPulseDepartment> departments;
+  final List<WorkPulseJobTitle> jobTitles;
   final List<OfficeLocation> offices;
   final List<ManagedEmployeeProfile> supervisors;
   final String currentRole;
@@ -208,7 +216,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
 
   late final TextEditingController _fullNameController;
   late final TextEditingController _employeeIdController;
-  late final TextEditingController _jobTitleController;
+  late String? _jobTitle;
   late String? _departmentId;
   late String? _usualOfficeId;
   late String? _supervisorId;
@@ -237,12 +245,26 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
       )
       .toList(growable: false);
 
+  List<WorkPulseJobTitle> get _availableJobTitles => widget.jobTitles
+      .where(
+        (WorkPulseJobTitle title) =>
+            title.isActive || title.name == widget.employee.jobTitle,
+      )
+      .toList(growable: false);
+
   List<ManagedEmployeeProfile> get _availableSupervisors => widget.supervisors
       .where(
         (ManagedEmployeeProfile supervisor) =>
             supervisor.id != widget.employee.id && supervisor.isActive,
       )
       .toList(growable: false);
+
+  OfficeLocation? get _selectedOffice {
+    for (final OfficeLocation office in _activeOffices) {
+      if (office.id == _usualOfficeId) return office;
+    }
+    return null;
+  }
 
   @override
   void initState() {
@@ -251,9 +273,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
     _employeeIdController = TextEditingController(
       text: widget.employee.employeeId,
     );
-    _jobTitleController = TextEditingController(
-      text: widget.employee.jobTitle ?? '',
-    );
+    _jobTitle = widget.employee.jobTitle;
     _departmentId = widget.employee.departmentId;
     _usualOfficeId = widget.employee.usualOfficeLocationId;
     _supervisorId =
@@ -271,7 +291,6 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
   void dispose() {
     _fullNameController.dispose();
     _employeeIdController.dispose();
-    _jobTitleController.dispose();
     super.dispose();
   }
 
@@ -294,7 +313,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
         employee: widget.employee,
         employeeId: _employeeIdController.text,
         fullName: _fullNameController.text,
-        jobTitle: _jobTitleController.text,
+        jobTitle: _jobTitle,
         departmentId: _departmentId,
         usualOfficeLocationId: _usualOfficeId,
         supervisorId: _supervisorId,
@@ -329,9 +348,25 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
       widget.employee.roles.toSet()..add('employee'),
       _roles,
     );
-    final String message = rolesChanged
-        ? 'Save these employee details and update access roles?'
-        : 'Save these employee details?';
+    final bool statusChanged = widget.employee.isActive != _isActive;
+    final String title;
+    final String message;
+    if (statusChanged && !_isActive) {
+      title = 'Deactivate Employee?';
+      message =
+          '${widget.employee.fullName} will no longer be able to use '
+          'WorkPulse. Existing attendance and request records will be kept.';
+    } else if (statusChanged) {
+      title = 'Reactivate Employee?';
+      message =
+          '${widget.employee.fullName} will regain access to WorkPulse using '
+          'their existing login credentials.';
+    } else {
+      title = 'Confirm Changes';
+      message = rolesChanged
+          ? 'Save these employee details and update access roles?'
+          : 'Save these employee details?';
+    }
 
     return showDialog<bool>(
       context: context,
@@ -350,7 +385,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
             borderRadius: BorderRadius.circular(14),
           ),
           title: Text(
-            'Confirm Changes',
+            title,
             style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 20),
           ),
           content: Text(
@@ -362,9 +397,15 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
               onPressed: () => Navigator.of(context).pop(false),
               child: const Text('Cancel'),
             ),
-            TextButton(
+            ElevatedButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Save'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: statusChanged && !_isActive
+                    ? PulseClockColors.statusMissedAccent
+                    : PulseClockColors.actionBlue,
+                foregroundColor: PulseClockColors.surface,
+              ),
+              child: Text(statusChanged && !_isActive ? 'Deactivate' : 'Save'),
             ),
           ],
         );
@@ -392,7 +433,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
       builder: (BuildContext context) {
-        return _SupervisorPicker(
+        return SupervisorPicker(
           supervisors: _availableSupervisors,
           selectedId: _supervisorId,
         );
@@ -404,6 +445,39 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
     setState(() {
       _supervisorId = selectedId == _noneValue ? null : selectedId;
     });
+  }
+
+  Future<void> _selectOffice() async {
+    final String? selectedId = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: PulseClockColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (BuildContext context) =>
+          OfficePicker(offices: _activeOffices, selectedId: _usualOfficeId),
+    );
+    if (selectedId == null || !mounted) return;
+    setState(() => _usualOfficeId = selectedId.isEmpty ? null : selectedId);
+  }
+
+  Future<void> _selectJobTitle() async {
+    final String? selectedName = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: PulseClockColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (BuildContext context) => JobTitlePicker(
+        jobTitles: _availableJobTitles,
+        selectedName: _jobTitle,
+        allowEmpty: true,
+      ),
+    );
+    if (!mounted || selectedName == null) return;
+    setState(() => _jobTitle = selectedName.isEmpty ? null : selectedName);
   }
 
   ManagedEmployeeProfile? get _selectedSupervisor {
@@ -492,18 +566,23 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
                         },
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _jobTitleController,
-                        textCapitalization: TextCapitalization.words,
-                        maxLength: 120,
-                        decoration: _inputDecoration('Job Title (Optional)'),
-                        validator: (String? value) {
-                          final String text = value?.trim() ?? '';
-                          if (text.isNotEmpty && text.length < 2) {
-                            return 'Job title must contain at least 2 characters.';
-                          }
-                          return null;
-                        },
+                      InkWell(
+                        onTap: _selectJobTitle,
+                        borderRadius: BorderRadius.circular(12),
+                        child: InputDecorator(
+                          decoration: _inputDecoration('Job Title'),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _jobTitle ?? 'No Job Title',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const Icon(Icons.arrow_drop_down_rounded),
+                            ],
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
@@ -533,30 +612,24 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
                         },
                       ),
                       const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        initialValue: _usualOfficeId ?? _noneValue,
-                        isExpanded: true,
-                        decoration: _inputDecoration('Usual Office'),
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: _noneValue,
-                            child: Text('No Usual Office'),
-                          ),
-                          ..._activeOffices.map(
-                            (OfficeLocation office) => DropdownMenuItem<String>(
-                              value: office.id,
-                              child: Text(
-                                office.officeName,
-                                overflow: TextOverflow.ellipsis,
+                      InkWell(
+                        onTap: _selectOffice,
+                        borderRadius: BorderRadius.circular(12),
+                        child: InputDecorator(
+                          decoration: _inputDecoration('Usual Work Site'),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _selectedOffice?.officeName ??
+                                      'No Usual Work Site',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                            ),
+                              const Icon(Icons.search_rounded),
+                            ],
                           ),
-                        ],
-                        onChanged: (String? value) {
-                          setState(() {
-                            _usualOfficeId = value == _noneValue ? null : value;
-                          });
-                        },
+                        ),
                       ),
                       const SizedBox(height: 12),
                       InkWell(
@@ -719,182 +792,6 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
         borderSide: const BorderSide(
           color: PulseClockColors.actionBlue,
           width: 1.4,
-        ),
-      ),
-    );
-  }
-}
-
-class _SupervisorPicker extends StatefulWidget {
-  const _SupervisorPicker({
-    required this.supervisors,
-    required this.selectedId,
-  });
-
-  final List<ManagedEmployeeProfile> supervisors;
-  final String? selectedId;
-
-  @override
-  State<_SupervisorPicker> createState() => _SupervisorPickerState();
-}
-
-class _SupervisorPickerState extends State<_SupervisorPicker> {
-  final TextEditingController _searchController = TextEditingController();
-  String _query = '';
-
-  List<ManagedEmployeeProfile> get _filteredSupervisors {
-    final String query = _query.trim().toLowerCase();
-    if (query.isEmpty) {
-      return widget.supervisors;
-    }
-    return widget.supervisors.where((ManagedEmployeeProfile supervisor) {
-      final String searchable = <String>[
-        supervisor.fullName,
-        supervisor.employeeId,
-        supervisor.email,
-        supervisor.departmentName ?? '',
-        supervisor.jobTitle ?? '',
-      ].join(' ').toLowerCase();
-      return searchable.contains(query);
-    }).toList(growable: false);
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final List<ManagedEmployeeProfile> supervisors = _filteredSupervisors;
-    final double keyboardHeight = MediaQuery.viewInsetsOf(context).bottom;
-    final double availableHeight =
-        MediaQuery.sizeOf(context).height - keyboardHeight;
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          18,
-          14,
-          18,
-          keyboardHeight + 14,
-        ),
-        child: SizedBox(
-          height: availableHeight * 0.68,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: PulseClockColors.cardBorder,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'Select Primary Supervisor',
-                style: PulseClockTextStyles.cardTitle.copyWith(fontSize: 19),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _searchController,
-                autofocus: true,
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: 'Search name, ID, department, or email',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: _query.isEmpty
-                      ? null
-                      : IconButton(
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _query = '');
-                          },
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                  filled: true,
-                  fillColor: PulseClockColors.surfaceMuted,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: PulseClockColors.cardBorder,
-                    ),
-                  ),
-                ),
-                onChanged: (String value) => setState(() => _query = value),
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: ListView(
-                  children: [
-                    ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                      leading: const Icon(Icons.person_off_outlined),
-                      title: const Text('No Supervisor Assigned'),
-                      trailing: widget.selectedId == null
-                          ? const Icon(
-                              Icons.check_circle_rounded,
-                              color: PulseClockColors.actionBlue,
-                            )
-                          : null,
-                      onTap: () => Navigator.of(context).pop(''),
-                    ),
-                    const Divider(height: 1),
-                    if (supervisors.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 28),
-                        child: Text(
-                          'No supervisors match your search.',
-                          textAlign: TextAlign.center,
-                          style: PulseClockTextStyles.cardSubtitle,
-                        ),
-                      )
-                    else
-                      ...supervisors.map(
-                        (ManagedEmployeeProfile supervisor) => ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 3,
-                          ),
-                          title: Text(
-                            supervisor.fullName,
-                            style: PulseClockTextStyles.cardSubtitle.copyWith(
-                              color: PulseClockColors.textPrimary,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          subtitle: Text(
-                            <String>[
-                              supervisor.employeeId,
-                              if (supervisor.departmentName != null)
-                                supervisor.departmentName!,
-                              supervisor.email,
-                            ].join(' | '),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: PulseClockTextStyles.cardSubtitle.copyWith(
-                              fontSize: 12,
-                            ),
-                          ),
-                          trailing: widget.selectedId == supervisor.id
-                              ? const Icon(
-                                  Icons.check_circle_rounded,
-                                  color: PulseClockColors.actionBlue,
-                                )
-                              : null,
-                          onTap: () =>
-                              Navigator.of(context).pop(supervisor.id),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

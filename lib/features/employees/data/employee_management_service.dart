@@ -22,6 +22,26 @@ class WorkPulseDepartment {
   }
 }
 
+class WorkPulseJobTitle {
+  const WorkPulseJobTitle({
+    required this.id,
+    required this.name,
+    required this.isActive,
+  });
+
+  final String id;
+  final String name;
+  final bool isActive;
+
+  factory WorkPulseJobTitle.fromMap(Map<String, dynamic> map) {
+    return WorkPulseJobTitle(
+      id: map['id'] as String,
+      name: map['name'] as String,
+      isActive: map['is_active'] as bool? ?? true,
+    );
+  }
+}
+
 class ManagedEmployeeProfile {
   const ManagedEmployeeProfile({
     required this.id,
@@ -96,10 +116,8 @@ class ManagedEmployeeProfile {
       fullName: map['full_name'] as String,
       email: map['email'] as String,
       role: primaryRole,
-      roles: rolesByProfile[id] ?? _sortedRoles(<String>{
-        'employee',
-        primaryRole,
-      }),
+      roles:
+          rolesByProfile[id] ?? _sortedRoles(<String>{'employee', primaryRole}),
       isActive: map['is_active'] as bool? ?? true,
       departmentId: departmentId,
       departmentName:
@@ -117,12 +135,14 @@ class EmployeeManagementData {
   const EmployeeManagementData({
     required this.employees,
     required this.departments,
+    required this.jobTitles,
     required this.offices,
     required this.supervisors,
   });
 
   final List<ManagedEmployeeProfile> employees;
   final List<WorkPulseDepartment> departments;
+  final List<WorkPulseJobTitle> jobTitles;
   final List<OfficeLocation> offices;
   final List<ManagedEmployeeProfile> supervisors;
 }
@@ -136,6 +156,51 @@ class EmployeeManagementService {
       'job_title, usual_office_location_id, is_active';
 
   final SupabaseClient _client;
+
+  Future<String> createEmployee({
+    required String email,
+    required String temporaryPassword,
+    required String employeeId,
+    required String fullName,
+    required String? jobTitle,
+    required String? departmentId,
+    required String? usualOfficeLocationId,
+    required String? supervisorId,
+    required List<String> roles,
+    required bool isActive,
+  }) async {
+    final FunctionResponse response = await _client.functions.invoke(
+      'create-workpulse-employee',
+      body: <String, dynamic>{
+        'email': email.trim().toLowerCase(),
+        'password': temporaryPassword,
+        'employeeId': employeeId.trim(),
+        'fullName': fullName.trim(),
+        'jobTitle': _blankToNull(jobTitle),
+        'departmentId': departmentId,
+        'usualOfficeLocationId': usualOfficeLocationId,
+        'supervisorId': supervisorId,
+        'roles': _sortedRoles(<String>{'employee', ...roles}),
+        'isActive': isActive,
+      },
+    );
+    final dynamic responseData = response.data;
+    final Map<String, dynamic> data = responseData is Map
+        ? Map<String, dynamic>.from(responseData)
+        : <String, dynamic>{};
+    if (response.status < 200 || response.status >= 300) {
+      throw StateError(
+        data['error'] as String? ?? 'Unable to create the employee account.',
+      );
+    }
+    final String? profileId = data['id'] as String?;
+    if (profileId == null || profileId.isEmpty) {
+      throw StateError(
+        'The employee account was created without a profile ID.',
+      );
+    }
+    return profileId;
+  }
 
   Future<List<WorkPulseDepartment>> fetchDepartments() async {
     final List<dynamic> rows = await _client
@@ -152,11 +217,27 @@ class EmployeeManagementService {
         .toList(growable: false);
   }
 
+  Future<List<WorkPulseJobTitle>> fetchJobTitles() async {
+    final List<dynamic> rows = await _client
+        .from('job_titles')
+        .select('id, name, is_active')
+        .order('is_active', ascending: false)
+        .order('name', ascending: true);
+    return rows
+        .map(
+          (dynamic row) => WorkPulseJobTitle.fromMap(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList(growable: false);
+  }
+
   Future<EmployeeManagementData> fetchManagementData({
     required String currentUserId,
     required List<String> currentRoles,
   }) async {
     final List<WorkPulseDepartment> departments = await fetchDepartments();
+    final List<WorkPulseJobTitle> jobTitles = await fetchJobTitles();
 
     final List<OfficeLocation> offices = await OfficeLocationService(
       client: _client,
@@ -231,6 +312,7 @@ class EmployeeManagementService {
     return EmployeeManagementData(
       employees: employees,
       departments: departments,
+      jobTitles: jobTitles,
       offices: offices,
       supervisors: supervisors,
     );
@@ -321,6 +403,32 @@ class EmployeeManagementService {
         .select('id, name, is_active')
         .single();
     return WorkPulseDepartment.fromMap(row);
+  }
+
+  Future<WorkPulseJobTitle> createJobTitle(String name) async {
+    final Map<String, dynamic> row = await _client
+        .from('job_titles')
+        .insert(<String, dynamic>{
+          'name': name.trim(),
+          'created_by': _client.auth.currentUser?.id,
+        })
+        .select('id, name, is_active')
+        .single();
+    return WorkPulseJobTitle.fromMap(row);
+  }
+
+  Future<WorkPulseJobTitle> updateJobTitle({
+    required WorkPulseJobTitle jobTitle,
+    required String name,
+    required bool isActive,
+  }) async {
+    final Map<String, dynamic> row = await _client
+        .from('job_titles')
+        .update(<String, dynamic>{'name': name.trim(), 'is_active': isActive})
+        .eq('id', jobTitle.id)
+        .select('id, name, is_active')
+        .single();
+    return WorkPulseJobTitle.fromMap(row);
   }
 
   String? _blankToNull(String? value) {

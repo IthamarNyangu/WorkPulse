@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:pulseclock/features/auth/data/auth_service.dart';
 import 'package:pulseclock/features/auth/session/workpulse_session.dart';
 import 'package:pulseclock/features/employees/data/employee_management_service.dart';
-import 'package:pulseclock/features/employees/department_management_screen.dart';
+import 'package:pulseclock/features/employees/employee_create_screen.dart';
 import 'package:pulseclock/features/employees/employee_details_screen.dart';
+import 'package:pulseclock/features/employees/organisation_setup_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
@@ -57,6 +58,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   bool _hasStartedLoading = false;
   String? _errorMessage;
   String _currentRole = 'employee';
+  List<String> _currentRoles = const <String>['employee'];
   String _searchQuery = '';
   _EmployeeStatusFilter _statusFilter = _EmployeeStatusFilter.all;
   int _page = 0;
@@ -160,6 +162,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       }
       setState(() {
         _currentRole = profile.effectiveRole;
+        _currentRoles = profile.roles;
         _data = data;
         _page = 0;
         _isLoading = false;
@@ -196,6 +199,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
             ) => EmployeeDetailsScreen(
               employee: employee,
               departments: data.departments,
+              jobTitles: data.jobTitles,
               offices: data.offices,
               supervisors: data.supervisors,
               currentRole: _currentRole,
@@ -209,7 +213,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
     }
   }
 
-  Future<void> _openDepartments() async {
+  Future<void> _openOrganisationSetup() async {
     await Navigator.of(context).push<void>(
       PageRouteBuilder<void>(
         pageBuilder:
@@ -217,12 +221,30 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
               BuildContext context,
               Animation<double> animation,
               Animation<double> secondaryAnimation,
-            ) => const DepartmentManagementScreen(),
+            ) => const OrganisationSetupScreen(),
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
       ),
     );
     await _loadEmployees();
+  }
+
+  Future<void> _openCreateEmployee() async {
+    final EmployeeManagementData? data = _data;
+    if (data == null) return;
+    final bool? created = await Navigator.of(context).push<bool>(
+      PageRouteBuilder<bool>(
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) => EmployeeCreateScreen(data: data, currentRoles: _currentRoles),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+    if (created == true) await _loadEmployees();
   }
 
   void _updateFilter(_EmployeeStatusFilter filter) {
@@ -300,7 +322,9 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
         children: [
           if (_canManageDepartments) ...[
-            _DepartmentNavigationCard(onTap: _openDepartments),
+            _AddEmployeeCard(onTap: _openCreateEmployee),
+            const SizedBox(height: 10),
+            _OrganisationSetupCard(onTap: _openOrganisationSetup),
             const SizedBox(height: 12),
           ],
           TextField(
@@ -448,8 +472,51 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   }
 }
 
-class _DepartmentNavigationCard extends StatelessWidget {
-  const _DepartmentNavigationCard({required this.onTap});
+class _AddEmployeeCard extends StatelessWidget {
+  const _AddEmployeeCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: PulseClockColors.actionBlue,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.person_add_alt_1_rounded,
+                color: PulseClockColors.surface,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Add Employee',
+                  style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    color: PulseClockColors.surface,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: PulseClockColors.surface,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OrganisationSetupCard extends StatelessWidget {
+  const _OrganisationSetupCard({required this.onTap});
 
   final VoidCallback onTap;
 
@@ -469,13 +536,13 @@ class _DepartmentNavigationCard extends StatelessWidget {
           child: Row(
             children: [
               const Icon(
-                Icons.account_tree_outlined,
+                Icons.tune_rounded,
                 color: PulseClockColors.reportAction,
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Manage Departments',
+                  'Organisation Setup',
                   style: PulseClockTextStyles.cardSubtitle.copyWith(
                     color: PulseClockColors.textPrimary,
                     fontWeight: FontWeight.w800,
