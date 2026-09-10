@@ -178,6 +178,22 @@ $$;
 
 grant execute on function public.can_manage_employee(uuid) to authenticated;
 
+create or replace function public.list_visible_profile_roles()
+returns table (profile_id uuid, role text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select assigned_role.profile_id, assigned_role.role
+  from public.profile_roles assigned_role
+  where assigned_role.profile_id = auth.uid()
+     or public.can_manage_employee(assigned_role.profile_id)
+$$;
+
+revoke all on function public.list_visible_profile_roles() from public;
+grant execute on function public.list_visible_profile_roles() to authenticated;
+
 -- Re-apply scoped visibility policies so this migration is safe to run even
 -- when older role migrations were applied in a different order.
 drop policy if exists "profiles_select_reviewer" on public.profiles;
@@ -262,7 +278,7 @@ begin
 
   target_roles := public.profile_effective_roles(p_profile_id);
 
-  select coalesce(array_agg(distinct role), array[]::text[])
+  select coalesce(array_agg(distinct selected_role.role), array[]::text[])
   into requested_roles
   from unnest(coalesce(p_roles, array[]::text[])) selected_role(role)
   where selected_role.role in ('employee', 'supervisor', 'hr', 'admin');
@@ -277,11 +293,11 @@ begin
 
   if caller_role <> 'admin'
      and (
-       select array_agg(target_role order by target_role)
-       from unnest(target_roles) target_role
+       select array_agg(existing_role.role order by existing_role.role)
+       from unnest(target_roles) existing_role(role)
      ) is distinct from (
-       select array_agg(requested_role order by requested_role)
-       from unnest(requested_roles) requested_role
+       select array_agg(new_role.role order by new_role.role)
+       from unnest(requested_roles) new_role(role)
      ) then
     raise exception 'Only administrators can change employee access roles.';
   end if;
@@ -415,15 +431,15 @@ begin
       and not (role = any(requested_roles));
 
     insert into public.profile_roles (profile_id, role, assigned_by)
-    select p_profile_id, requested_role, auth.uid()
-    from unnest(requested_roles) requested_role
+    select p_profile_id, requested_role.role, auth.uid()
+    from unnest(requested_roles) requested_role(role)
     on conflict (profile_id, role) do nothing;
   end if;
 
   update public.employee_supervisor_assignments
   set
     is_active = false,
-    effective_to = current_date
+    effective_to = greatest(current_date, effective_from)
   where employee_id = p_profile_id
     and is_active = true
     and is_primary = true
@@ -485,3 +501,6 @@ grant execute on function public.update_employee_profile(
 -- Refresh legacy primary roles from profile_roles after the backfill.
 update public.profiles profile
 set role = public.workpulse_highest_role(public.profile_effective_roles(profile.id));
+
+-- Ensure PostgREST immediately sees the latest RPC definition.
+notify pgrst, 'reload schema';

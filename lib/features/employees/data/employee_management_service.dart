@@ -267,9 +267,9 @@ class EmployeeManagementService {
     List<Map<String, dynamic>> profileMaps,
   ) async {
     try {
-      final List<dynamic> rows = await _client
-          .from('profile_roles')
-          .select('profile_id, role');
+      final List<dynamic> rows = await _client.rpc<List<dynamic>>(
+        'list_visible_profile_roles',
+      );
       final Map<String, Set<String>> grouped = <String, Set<String>>{};
       for (final dynamic rawRow in rows) {
         final Map<String, dynamic> row = Map<String, dynamic>.from(
