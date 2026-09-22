@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pulseclock/features/attendance/home/pulse_clock_home_screen.dart';
 import 'package:pulseclock/features/auth/data/auth_service.dart';
 import 'package:pulseclock/features/auth/presentation/login_screen.dart';
+import 'package:pulseclock/features/auth/presentation/welcome_screen.dart';
 import 'package:pulseclock/features/auth/session/workpulse_session.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -18,6 +19,7 @@ class _SupabaseAuthGateState extends State<SupabaseAuthGate> {
   String? _profileUserId;
   Future<WorkPulseUserProfile?>? _profileFuture;
   WorkPulseSessionController? _sessionController;
+  bool _showSignIn = false;
 
   @override
   void initState() {
@@ -104,7 +106,12 @@ class _SupabaseAuthGateState extends State<SupabaseAuthGate> {
           );
         }
 
-        return const LoginScreen();
+        if (!_showSignIn) {
+          return WelcomeScreen(
+            onSignIn: () => setState(() => _showSignIn = true),
+          );
+        }
+        return LoginScreen(onBack: () => setState(() => _showSignIn = false));
       },
     );
   }

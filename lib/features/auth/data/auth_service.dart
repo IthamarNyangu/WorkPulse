@@ -26,6 +26,10 @@ class AuthService {
     return _client.auth.signInWithPassword(email: email, password: password);
   }
 
+  Future<void> sendPasswordReset({required String email}) {
+    return _client.auth.resetPasswordForEmail(email);
+  }
+
   Future<WorkPulseUserProfile?> fetchCurrentProfile() async {
     final User? user = currentUser;
     if (user == null) {
@@ -136,10 +140,9 @@ class WorkPulseUserProfile {
     Map<String, dynamic> map, {
     List<String>? roles,
   }) {
-    final List<String> resolvedRoles = roles ?? _sortRoles(<String>{
-      'employee',
-      map['role'] as String? ?? 'employee',
-    });
+    final List<String> resolvedRoles =
+        roles ??
+        _sortRoles(<String>{'employee', map['role'] as String? ?? 'employee'});
     return WorkPulseUserProfile(
       id: map['id'] as String,
       employeeId: map['employee_id'] as String,
