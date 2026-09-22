@@ -159,28 +159,24 @@ class ApprovalService {
     required String requestId,
     String? reviewerNote,
   }) async {
-    final WorkPulseUserProfile reviewer = await _requireReviewerProfile();
-    await _updateRequestStatus(
-      tableName: leaveTableName,
-      requestId: requestId,
-      nextStatus: 'approved',
-      reviewerId: reviewer.id,
-      reviewerNote: reviewerNote,
-    );
+    await _requireReviewerProfile();
+    await _client.rpc('review_leave_request', params: <String, dynamic>{
+      'p_request_id': requestId,
+      'p_decision': 'approved',
+      'p_note': _blankToNull(reviewerNote),
+    });
   }
 
   Future<void> rejectLeave({
     required String requestId,
     String? reviewerNote,
   }) async {
-    final WorkPulseUserProfile reviewer = await _requireReviewerProfile();
-    await _updateRequestStatus(
-      tableName: leaveTableName,
-      requestId: requestId,
-      nextStatus: 'rejected',
-      reviewerId: reviewer.id,
-      reviewerNote: reviewerNote,
-    );
+    await _requireReviewerProfile();
+    await _client.rpc('review_leave_request', params: <String, dynamic>{
+      'p_request_id': requestId,
+      'p_decision': 'rejected',
+      'p_note': _blankToNull(reviewerNote),
+    });
   }
 
   Future<void> approveCorrection({
@@ -454,6 +450,9 @@ class LeaveApprovalItem {
     required this.status,
     this.reviewedAt,
     this.reviewerNote,
+    this.workflowStage,
+    this.escalatedAt,
+    this.supervisorLockedAt,
   });
 
   final String id;
@@ -467,6 +466,19 @@ class LeaveApprovalItem {
   final LeaveRequestStatus status;
   final DateTime? reviewedAt;
   final String? reviewerNote;
+  final String? workflowStage;
+  final DateTime? escalatedAt;
+  final DateTime? supervisorLockedAt;
+
+  bool get isOverdue =>
+      status == LeaveRequestStatus.pendingApproval &&
+      !DateTime.now().isBefore(startDate);
+
+  String get approvalOwnerLabel => workflowStage == 'hr_pending'
+      ? 'Awaiting HR approval'
+      : escalatedAt != null
+      ? 'Escalated to HR'
+      : 'Awaiting supervisor approval';
 }
 
 class CorrectionApprovalItem {
@@ -528,6 +540,9 @@ LeaveApprovalItem _leaveApprovalFromMap(
     status: _leaveStatusFromValue(map['status'] as String),
     reviewedAt: _parseDateTime(map['reviewed_at']),
     reviewerNote: map['reviewer_note'] as String?,
+    workflowStage: map['workflow_stage'] as String?,
+    escalatedAt: _parseDateTime(map['escalated_at']),
+    supervisorLockedAt: _parseDateTime(map['supervisor_locked_at']),
   );
 }
 

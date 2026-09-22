@@ -557,6 +557,9 @@ class LeaveRequest {
     required this.submittedAt,
     this.durationDays,
     this.reviewerNote,
+    this.workflowStage,
+    this.escalatedAt,
+    this.supervisorLockedAt,
   });
 
   final String id;
@@ -568,6 +571,19 @@ class LeaveRequest {
   final DateTime submittedAt;
   final int? durationDays;
   final String? reviewerNote;
+  final String? workflowStage;
+  final DateTime? escalatedAt;
+  final DateTime? supervisorLockedAt;
+
+  bool get isApprovalOverdue =>
+      status == LeaveRequestStatus.pendingApproval &&
+      !DateTime.now().isBefore(startDate);
+
+  String get approvalOwnerLabel => workflowStage == 'hr_pending'
+      ? 'Awaiting HR approval'
+      : escalatedAt != null
+      ? 'Escalated to HR'
+      : 'Awaiting supervisor approval';
 
   LeaveRequest copyWith({
     String? id,
@@ -579,6 +595,9 @@ class LeaveRequest {
     DateTime? submittedAt,
     int? durationDays,
     String? reviewerNote,
+    String? workflowStage,
+    DateTime? escalatedAt,
+    DateTime? supervisorLockedAt,
   }) {
     return LeaveRequest(
       id: id ?? this.id,
@@ -590,6 +609,9 @@ class LeaveRequest {
       submittedAt: submittedAt ?? this.submittedAt,
       durationDays: durationDays ?? this.durationDays,
       reviewerNote: reviewerNote ?? this.reviewerNote,
+      workflowStage: workflowStage ?? this.workflowStage,
+      escalatedAt: escalatedAt ?? this.escalatedAt,
+      supervisorLockedAt: supervisorLockedAt ?? this.supervisorLockedAt,
     );
   }
 }

@@ -675,6 +675,24 @@ class _LeaveApprovalCard extends StatelessWidget {
                 ? 'Single Day'
                 : '${request.durationDays} Days',
           ),
+          const SizedBox(height: 8),
+          DetailInfoRow(
+            label: 'Workflow',
+            value: request.approvalOwnerLabel,
+          ),
+          if (request.isOverdue) ...<Widget>[
+            const SizedBox(height: 8),
+            _ApprovalTextBlock(
+              title: request.supervisorLockedAt != null
+                  ? 'HR action required'
+                  : 'Approval overdue',
+              value: request.supervisorLockedAt != null
+                  ? 'The supervisor review window has closed. HR or an administrator must resolve this request.'
+                  : 'The requested leave period has started and this request should be resolved promptly.',
+              accentColor: const Color(0xFFB42318),
+              backgroundColor: const Color(0xFFFDF4F4),
+            ),
+          ],
           const SizedBox(height: 12),
           _ApprovalTextBlock(title: 'Reason', value: request.reason),
           const SizedBox(height: 12),

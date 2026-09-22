@@ -386,6 +386,21 @@ class LeaveRequestListCard extends StatelessWidget {
                       color: PulseClockColors.textSecondary.withOpacity(0.9),
                     ),
                   ),
+                  if (request.status == LeaveRequestStatus.pendingApproval) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      request.isApprovalOverdue
+                          ? 'Approval overdue • ${request.approvalOwnerLabel}'
+                          : request.approvalOwnerLabel,
+                      style: PulseClockTextStyles.cardSubtitle.copyWith(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: request.isApprovalOverdue
+                            ? const Color(0xFFB42318)
+                            : PulseClockColors.statusPendingAccent,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

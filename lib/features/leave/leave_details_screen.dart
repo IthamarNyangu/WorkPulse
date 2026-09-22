@@ -244,6 +244,8 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
 
     final bool isPending = request.status == LeaveRequestStatus.pendingApproval;
     final bool isRejected = request.status == LeaveRequestStatus.rejected;
+    final bool leaveHasStarted =
+        !DateTime.now().isBefore(request.startDate);
     final bool isSingleDay = _isSameDay(request.startDate, request.endDate);
     final String? reviewerNote = request.reviewerNote?.trim();
 
@@ -297,8 +299,17 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
                       const SizedBox(height: 10),
                       DetailInfoRow(
                         label: 'Status',
-                        value: request.status.label,
+                        value: request.isApprovalOverdue
+                            ? 'Approval Overdue'
+                            : request.status.label,
                       ),
+                      if (isPending) ...<Widget>[
+                        const SizedBox(height: 10),
+                        DetailInfoRow(
+                          label: 'Current Owner',
+                          value: request.approvalOwnerLabel,
+                        ),
+                      ],
                       const SizedBox(height: 12),
                       const Divider(color: PulseClockColors.cardBorder),
                       const SizedBox(height: 12),
@@ -337,7 +348,7 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
                     ],
                   ),
                 ),
-                if (isPending) ...<Widget>[
+                if (isPending && !leaveHasStarted) ...<Widget>[
                   const SizedBox(height: 14),
                   SizedBox(
                     width: double.infinity,
@@ -398,6 +409,18 @@ class _LeaveDetailsScreenState extends State<LeaveDetailsScreen> {
                               ),
                             )
                           : const Text('Delete Request'),
+                    ),
+                  ),
+                ],
+                if (isPending && leaveHasStarted) ...<Widget>[
+                  const SizedBox(height: 14),
+                  SurfaceCard(
+                    child: Text(
+                      'This leave period has started, so the request can no longer be edited or cancelled. Contact HR if it needs to be withdrawn. The request remains open for approval.',
+                      style: PulseClockTextStyles.cardSubtitle.copyWith(
+                        color: const Color(0xFFB42318),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],

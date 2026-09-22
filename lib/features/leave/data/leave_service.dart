@@ -169,6 +169,38 @@ class LeaveService {
       endDate: safeEndDate,
     );
 
+    try {
+      final Map<String, dynamic> leaveTypeRow = await _client
+          .from('leave_types')
+          .select('id')
+          .eq('legacy_value', _leaveTypeValue(type))
+          .eq('is_active', true)
+          .limit(1)
+          .single();
+      final dynamic requestId = await _client.rpc(
+        'submit_leave_request',
+        params: <String, dynamic>{
+          'p_leave_type_id': leaveTypeRow['id'],
+          'p_start_date': _dateOnlyLabel(safeStartDate),
+          'p_end_date': _dateOnlyLabel(safeEndDate),
+          'p_reason': reason,
+        },
+      );
+      final Map<String, dynamic> row = await _client
+          .from(tableName)
+          .select()
+          .eq('id', requestId)
+          .single();
+      return _leaveRequestFromMap(row);
+    } on PostgrestException catch (error) {
+      final String message = error.message.toLowerCase();
+      final bool legacyBackend =
+          error.code == 'PGRST202' ||
+          message.contains('submit_leave_request') &&
+              (message.contains('not found') || message.contains('schema cache'));
+      if (!legacyBackend) rethrow;
+    }
+
     final Map<String, dynamic> row = await _client
         .from(tableName)
         .insert(<String, dynamic>{
@@ -225,14 +257,14 @@ class LeaveService {
   }
 
   Future<void> deletePendingLeaveRequest({required String requestId}) async {
-    final String userId = _requireCurrentUserId();
-
-    await _client
-        .from(tableName)
-        .delete()
-        .eq('id', requestId)
-        .eq('user_id', userId)
-        .eq('status', 'pending');
+    _requireCurrentUserId();
+    await _client.rpc(
+      'cancel_leave_request',
+      params: <String, dynamic>{
+        'p_request_id': requestId,
+        'p_reason': 'Cancelled by requester before leave began',
+      },
+    );
   }
 
   String _requireCurrentUserId() {
@@ -351,7 +383,15 @@ LeaveRequest _leaveRequestFromMap(Map<String, dynamic> map) {
     status: _leaveStatusFromValue(map['status'] as String),
     submittedAt: DateTime.parse(map['created_at'] as String).toLocal(),
     reviewerNote: map['reviewer_note'] as String?,
+    workflowStage: map['workflow_stage'] as String?,
+    escalatedAt: _parseOptionalDateTime(map['escalated_at']),
+    supervisorLockedAt: _parseOptionalDateTime(map['supervisor_locked_at']),
   );
+}
+
+DateTime? _parseOptionalDateTime(dynamic value) {
+  if (value is! String || value.isEmpty) return null;
+  return DateTime.parse(value).toLocal();
 }
 
 LeaveType _leaveTypeFromValue(String value) {
