@@ -490,45 +490,60 @@ class HomeTabContent extends StatelessWidget {
         ? primaryActionFor(status)
         : null;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        PulseClockDimensions.horizontalPadding,
-        PulseClockDimensions.topPadding,
-        PulseClockDimensions.horizontalPadding,
-        28,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          HeaderSection(
-            employeeName: employeeName,
-            onNotificationsPressed: onNotificationsPressed,
-            unreadNotificationCount: unreadNotifications,
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool compactHeight = constraints.maxHeight < 680;
+        return SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            PulseClockDimensions.horizontalPadding,
+            compactHeight ? 14 : 18,
+            PulseClockDimensions.horizontalPadding,
+            22,
           ),
-          const SizedBox(height: 50),
-          LiveTimeSection(now: now),
-          const SizedBox(height: 20),
-          StatusCardSection(model: statusCard),
-          if (primaryAction != null) ...<Widget>[
-            const SizedBox(height: 16),
-            PrimaryActionButtonSection(
-              model: primaryAction,
-              onPressed: onPrimaryActionPressed,
-              showIcon: false,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight - (compactHeight ? 36 : 40),
             ),
-          ],
-          const SizedBox(height: 24),
-          Text(
-            "Today's Summary",
-            style: PulseClockTextStyles.sectionTitleOnBackground.copyWith(
-              fontSize: 18,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                HeaderSection(
+                  employeeName: employeeName,
+                  onNotificationsPressed: onNotificationsPressed,
+                  unreadNotificationCount: unreadNotifications,
+                ),
+                SizedBox(height: compactHeight ? 24 : 32),
+                LiveTimeSection(now: now),
+                SizedBox(height: compactHeight ? 14 : 18),
+                StatusCardSection(model: statusCard),
+                if (primaryAction != null) ...<Widget>[
+                  const SizedBox(height: 12),
+                  PrimaryActionButtonSection(
+                    model: primaryAction,
+                    onPressed: onPrimaryActionPressed,
+                    showIcon: false,
+                  ),
+                ],
+                SizedBox(height: compactHeight ? 18 : 22),
+                const Text(
+                  "Today's Summary",
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    height: 1.2,
+                    letterSpacing: -0.2,
+                    color: PulseClockColors.surface,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SummaryCardsRow(summary: summary, status: status),
+                const SizedBox(height: 4),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          SummaryCardsRow(summary: summary, status: status),
-          const Spacer(),
-        ],
-      ),
+        );
+      },
     );
   }
 }

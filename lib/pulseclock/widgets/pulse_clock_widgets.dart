@@ -24,11 +24,27 @@ class HeaderSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('WorkPulse', style: PulseClockTextStyles.headerTitle),
-              const SizedBox(height: 6),
+              const Text(
+                'WorkPulse',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 31,
+                  fontWeight: FontWeight.w700,
+                  height: 1.08,
+                  letterSpacing: -0.65,
+                  color: PulseClockColors.surface,
+                ),
+              ),
+              const SizedBox(height: 5),
               Text(
                 'Welcome back, $employeeName',
-                style: PulseClockTextStyles.headerSubtitle,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w500,
+                  height: 1.35,
+                  color: Color(0xFFD8DCE5),
+                ),
               ),
             ],
           ),
@@ -56,22 +72,22 @@ class _HeaderNotificationButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final int clampedUnreadCount = unreadCount > 99 ? 99 : unreadCount;
     return SizedBox(
-      width: 46,
-      height: 46,
+      width: 42,
+      height: 42,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
             child: Material(
-              color: const Color(0x22000000),
-              borderRadius: BorderRadius.circular(14),
+              color: const Color(0x18000000),
+              borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 onTap: onPressed,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(12),
                 child: const Icon(
                   Icons.notifications_none_rounded,
                   color: PulseClockColors.surface,
-                  size: 24,
+                  size: 23,
                 ),
               ),
             ),
@@ -92,6 +108,7 @@ class _HeaderNotificationButton extends StatelessWidget {
                 child: Text(
                   clampedUnreadCount.toString(),
                   style: PulseClockTextStyles.cardSubtitle.copyWith(
+                    fontFamily: 'Inter',
                     color: PulseClockColors.surface,
                     fontWeight: FontWeight.w700,
                     fontSize: 11,
@@ -120,31 +137,50 @@ class LiveTimeSection extends StatelessWidget {
           children: [
             const Icon(
               Icons.calendar_today_outlined,
-              size: 18,
+              size: 16,
               color: PulseClockColors.onBackgroundSecondary,
             ),
             const SizedBox(width: 8),
             Text(
               weekdayName(now),
-              style: PulseClockTextStyles.weekdayOnBackground,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFFD5D9E2),
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         SizedBox(
           width: double.infinity,
           child: Text(
             timeLabel(now),
-            style: PulseClockTextStyles.timeOnBackground,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 56,
+              fontWeight: FontWeight.w700,
+              height: 0.98,
+              letterSpacing: -1.5,
+              color: PulseClockColors.surface,
+            ),
             textAlign: TextAlign.center,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 5),
         SizedBox(
           width: double.infinity,
           child: Text(
             dateLabel(now),
-            style: PulseClockTextStyles.dateOnBackground,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 23,
+              fontWeight: FontWeight.w600,
+              height: 1.15,
+              letterSpacing: -0.3,
+              color: PulseClockColors.surface,
+            ),
             textAlign: TextAlign.center,
           ),
         ),
@@ -160,32 +196,52 @@ class StatusCardSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SurfaceCard(
-      borderRadius: 12,
-      padding: const EdgeInsets.all(14),
-      color: model.backgroundColor,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: PulseClockColors.surface.withValues(alpha: 0.97),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFDCE2EA)),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(model.icon, color: model.accentColor, size: 22),
-          const SizedBox(width: 12),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: model.backgroundColor,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Icon(model.icon, color: model.accentColor, size: 18),
+          ),
+          const SizedBox(width: 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   model.title,
-                  style: PulseClockTextStyles.cardTitle.copyWith(
-                    color: model.accentColor,
-                    fontSize: 22,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    color: PulseClockColors.textPrimary,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w600,
+                    height: 1.2,
+                    letterSpacing: -0.2,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   model.subtitle,
-                  style: PulseClockTextStyles.cardSubtitle.copyWith(
-                    color: model.accentColor.withOpacity(0.8),
-                    fontWeight: FontWeight.w600,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    color: PulseClockColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    height: 1.35,
                   ),
                 ),
               ],
@@ -220,17 +276,20 @@ class _PrimaryActionButtonSectionState
 
   @override
   Widget build(BuildContext context) {
+    final Color buttonColor = widget.model.label == 'Clock Out'
+        ? const Color(0xFFC81E3A)
+        : widget.model.backgroundColor;
     final ButtonStyle baseStyle = ElevatedButton.styleFrom(
       foregroundColor: widget.model.foregroundColor,
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 18),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PulseClockDimensions.cardRadius),
-        side: BorderSide(
-          color: PulseClockColors.surface.withOpacity(0.35),
-          width: 1.2,
-        ),
+      minimumSize: const Size.fromHeight(52),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      textStyle: const TextStyle(
+        fontFamily: 'Inter',
+        fontSize: 17,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.1,
       ),
-      textStyle: PulseClockTextStyles.primaryAction,
     );
 
     return SizedBox(
@@ -251,7 +310,7 @@ class _PrimaryActionButtonSectionState
           }
         },
         child: AnimatedScale(
-          scale: _isHovered ? 1.012 : 1,
+          scale: _isHovered ? 1.006 : 1,
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOutCubic,
           child: widget.showIcon
@@ -268,41 +327,35 @@ class _PrimaryActionButtonSectionState
                       Set<WidgetState> states,
                     ) {
                       if (states.contains(WidgetState.hovered)) {
-                        return _brightenColor(
-                          widget.model.backgroundColor,
-                          0.06,
-                        );
+                        return _brightenColor(buttonColor, 0.06);
                       }
                       if (states.contains(WidgetState.pressed)) {
-                        return _brightenColor(
-                          widget.model.backgroundColor,
-                          -0.03,
-                        );
+                        return _brightenColor(buttonColor, -0.03);
                       }
-                      return widget.model.backgroundColor;
+                      return buttonColor;
                     }),
                     elevation: WidgetStateProperty.resolveWith((
                       Set<WidgetState> states,
                     ) {
                       if (states.contains(WidgetState.pressed)) {
-                        return 6;
+                        return 1;
                       }
                       if (states.contains(WidgetState.hovered)) {
-                        return 14;
+                        return 2;
                       }
-                      return 10;
+                      return 1;
                     }),
                     shadowColor: WidgetStateProperty.all(
-                      const Color(0x5A000000),
+                      const Color(0x30000000),
                     ),
                     overlayColor: WidgetStateProperty.resolveWith((
                       Set<WidgetState> states,
                     ) {
                       if (states.contains(WidgetState.hovered)) {
-                        return Colors.white.withOpacity(0.09);
+                        return Colors.white.withValues(alpha: 0.09);
                       }
                       if (states.contains(WidgetState.pressed)) {
-                        return Colors.black.withOpacity(0.08);
+                        return Colors.black.withValues(alpha: 0.08);
                       }
                       return null;
                     }),
@@ -315,41 +368,35 @@ class _PrimaryActionButtonSectionState
                       Set<WidgetState> states,
                     ) {
                       if (states.contains(WidgetState.hovered)) {
-                        return _brightenColor(
-                          widget.model.backgroundColor,
-                          0.06,
-                        );
+                        return _brightenColor(buttonColor, 0.06);
                       }
                       if (states.contains(WidgetState.pressed)) {
-                        return _brightenColor(
-                          widget.model.backgroundColor,
-                          -0.03,
-                        );
+                        return _brightenColor(buttonColor, -0.03);
                       }
-                      return widget.model.backgroundColor;
+                      return buttonColor;
                     }),
                     elevation: WidgetStateProperty.resolveWith((
                       Set<WidgetState> states,
                     ) {
                       if (states.contains(WidgetState.pressed)) {
-                        return 6;
+                        return 1;
                       }
                       if (states.contains(WidgetState.hovered)) {
-                        return 14;
+                        return 2;
                       }
-                      return 10;
+                      return 1;
                     }),
                     shadowColor: WidgetStateProperty.all(
-                      const Color(0x5A000000),
+                      const Color(0x30000000),
                     ),
                     overlayColor: WidgetStateProperty.resolveWith((
                       Set<WidgetState> states,
                     ) {
                       if (states.contains(WidgetState.hovered)) {
-                        return Colors.white.withOpacity(0.09);
+                        return Colors.white.withValues(alpha: 0.09);
                       }
                       if (states.contains(WidgetState.pressed)) {
-                        return Colors.black.withOpacity(0.08);
+                        return Colors.black.withValues(alpha: 0.08);
                       }
                       return null;
                     }),
@@ -382,20 +429,41 @@ class SummaryCardsRow extends StatelessWidget {
         ? 'Clocked In'
         : 'Clock In';
 
-    return Row(
-      children: [
-        Expanded(
-          child: SummaryCard(label: clockInLabel, value: summary.punchIn),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: SummaryCard(label: 'Clock Out', value: summary.punchOut),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: SummaryCard(label: 'Work Hours', value: summary.workHours),
-        ),
-      ],
+    return Container(
+      width: double.infinity,
+      height: 94,
+      decoration: BoxDecoration(
+        color: PulseClockColors.surface.withValues(alpha: 0.98),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFDCE2EA)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SummaryCard(label: clockInLabel, value: summary.punchIn),
+          ),
+          const _SummaryDivider(),
+          Expanded(
+            child: SummaryCard(label: 'Clock Out', value: summary.punchOut),
+          ),
+          const _SummaryDivider(),
+          Expanded(
+            child: SummaryCard(label: 'Work Hours', value: summary.workHours),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryDivider extends StatelessWidget {
+  const _SummaryDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 46,
+      child: VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE2E7EE)),
     );
   }
 }
@@ -408,27 +476,40 @@ class SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 110,
-      child: SurfaceCard(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: PulseClockTextStyles.summaryLabel),
-            const SizedBox(height: 10),
-            Expanded(
-              child: Align(
-                alignment: Alignment.bottomLeft,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(value, style: PulseClockTextStyles.summaryValue),
-                ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: PulseClockColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 25,
+                fontWeight: FontWeight.w600,
+                height: 1,
+                letterSpacing: -0.4,
+                color: PulseClockColors.textPrimary,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -460,8 +541,20 @@ class PulseBottomNavigation extends StatelessWidget {
         backgroundColor: PulseClockColors.surface,
         selectedItemColor: PulseClockColors.navSelected,
         unselectedItemColor: PulseClockColors.navUnselected,
-        selectedFontSize: 12,
-        unselectedFontSize: 12,
+        selectedFontSize: 11,
+        unselectedFontSize: 11,
+        selectedIconTheme: const IconThemeData(size: 23),
+        unselectedIconTheme: const IconThemeData(size: 22),
+        selectedLabelStyle: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+        unselectedLabelStyle: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
         enableFeedback: false,
         items: const [
           BottomNavigationBarItem(
@@ -477,7 +570,7 @@ class PulseBottomNavigation extends StatelessWidget {
             label: 'Requests',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.location_on_outlined),
+            icon: Icon(Icons.person_outline_rounded),
             label: 'Profile',
           ),
         ],
