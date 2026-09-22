@@ -4,7 +4,6 @@ import 'package:pulseclock/features/auth/session/workpulse_session.dart';
 import 'package:pulseclock/features/employees/data/employee_management_service.dart';
 import 'package:pulseclock/features/employees/employee_create_screen.dart';
 import 'package:pulseclock/features/employees/employee_details_screen.dart';
-import 'package:pulseclock/features/employees/organisation_setup_screen.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
@@ -213,22 +212,6 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
     }
   }
 
-  Future<void> _openOrganisationSetup() async {
-    await Navigator.of(context).push<void>(
-      PageRouteBuilder<void>(
-        pageBuilder:
-            (
-              BuildContext context,
-              Animation<double> animation,
-              Animation<double> secondaryAnimation,
-            ) => const OrganisationSetupScreen(),
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-      ),
-    );
-    await _loadEmployees();
-  }
-
   Future<void> _openCreateEmployee() async {
     final EmployeeManagementData? data = _data;
     if (data == null) return;
@@ -323,8 +306,6 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
         children: [
           if (_canManageDepartments) ...[
             _AddEmployeeCard(onTap: _openCreateEmployee),
-            const SizedBox(height: 10),
-            _OrganisationSetupCard(onTap: _openOrganisationSetup),
             const SizedBox(height: 12),
           ],
           TextField(
@@ -506,52 +487,6 @@ class _AddEmployeeCard extends StatelessWidget {
               const Icon(
                 Icons.chevron_right_rounded,
                 color: PulseClockColors.surface,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OrganisationSetupCard extends StatelessWidget {
-  const _OrganisationSetupCard({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: PulseClockColors.reportActionSoft,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: PulseClockColors.reportActionBorder),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.tune_rounded,
-                color: PulseClockColors.reportAction,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Organisation Setup',
-                  style: PulseClockTextStyles.cardSubtitle.copyWith(
-                    color: PulseClockColors.textPrimary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: PulseClockColors.textSecondary,
               ),
             ],
           ),
