@@ -19,7 +19,7 @@ class CorrectionListScreen extends StatefulWidget {
 }
 
 class _CorrectionListScreenState extends State<CorrectionListScreen> {
-  static const int _pageSize = 4;
+  static const int _pageSize = 5;
 
   final WorkPulseMockStore _store = WorkPulseMockStore.instance;
   final Set<String> _expandedRecordIds = <String>{};
