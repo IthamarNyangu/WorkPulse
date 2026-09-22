@@ -14,24 +14,152 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginOptions extends StatelessWidget {
+  const _LoginOptions({
+    required this.compact,
+    required this.rememberEmail,
+    required this.enabled,
+    required this.onRememberChanged,
+    required this.onForgotPassword,
+  });
+
+  final bool compact;
+  final bool rememberEmail;
+  final bool enabled;
+  final ValueChanged<bool> onRememberChanged;
+  final VoidCallback onForgotPassword;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget remember = InkWell(
+      onTap: enabled ? () => onRememberChanged(!rememberEmail) : null,
+      borderRadius: BorderRadius.circular(8),
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: 32,
+            height: 36,
+            child: Checkbox(
+              value: rememberEmail,
+              onChanged: enabled
+                  ? (bool? value) => onRememberChanged(value ?? false)
+                  : null,
+              activeColor: PulseClockColors.actionBlue,
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+          const SizedBox(width: 3),
+          const Expanded(
+            child: Text(
+              'Remember my email',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: PulseClockColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    final Widget forgot = TextButton(
+      onPressed: enabled ? onForgotPassword : null,
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        minimumSize: const Size(0, 36),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        textStyle: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      child: const Text('Forgot password?'),
+    );
+
+    if (compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          remember,
+          Align(alignment: Alignment.centerRight, child: forgot),
+        ],
+      );
+    }
+    return Row(
+      children: <Widget>[
+        Expanded(child: remember),
+        const SizedBox(width: 8),
+        forgot,
+      ],
+    );
+  }
+}
+
+class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   static const String _rememberedEmailKey = 'workpulse_remembered_email';
 
   final AuthService _authService = AuthService();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final ScrollController _scrollController = ScrollController();
+  final FocusNode _emailFocusNode = FocusNode();
+  final FocusNode _passwordFocusNode = FocusNode();
   late final TextEditingController _emailController;
   late final TextEditingController _passwordController;
   bool _rememberEmail = false;
   bool _obscurePassword = true;
   bool _isSubmitting = false;
+  bool _keyboardWasVisible = false;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _emailController = TextEditingController();
     _passwordController = TextEditingController();
+    _emailFocusNode.addListener(_handleFieldFocus);
+    _passwordFocusNode.addListener(_handleFieldFocus);
     _restoreRememberedEmail();
+  }
+
+  @override
+  void didChangeMetrics() {
+    if (!mounted) return;
+    final bool keyboardIsVisible = View.of(context).viewInsets.bottom > 0;
+    if (keyboardIsVisible) {
+      _keyboardWasVisible = true;
+      return;
+    }
+    if (!_keyboardWasVisible) return;
+    _keyboardWasVisible = false;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {});
+  }
+
+  void _handleFieldFocus() {
+    if (mounted) setState(() {});
+    if (!_emailFocusNode.hasFocus && !_passwordFocusNode.hasFocus) return;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _scrollFormForKeyboard(),
+    );
+    Future<void>.delayed(
+      const Duration(milliseconds: 320),
+      _scrollFormForKeyboard,
+    );
+  }
+
+  void _scrollFormForKeyboard() {
+    if (!mounted || !_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   Future<void> _restoreRememberedEmail() async {
@@ -46,6 +174,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _emailFocusNode.removeListener(_handleFieldFocus);
+    _passwordFocusNode.removeListener(_handleFieldFocus);
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    _scrollController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -145,14 +279,28 @@ class _LoginScreenState extends State<LoginScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
               ),
-              title: const Text('Reset password'),
+              title: const Text(
+                'Reset password',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: PulseClockColors.textPrimary,
+                ),
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
                     'Enter your work email and we’ll send password reset instructions.',
-                    style: PulseClockTextStyles.cardSubtitle,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                      height: 1.4,
+                      color: PulseClockColors.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -160,6 +308,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     enabled: !sending,
                     keyboardType: TextInputType.emailAddress,
                     autofillHints: const <String>[AutofillHints.email],
+                    style: _fieldTextStyle,
                     decoration: _inputDecoration(
                       label: 'Work email',
                       icon: Icons.mail_outline_rounded,
@@ -170,6 +319,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text(
                       dialogError!,
                       style: PulseClockTextStyles.cardSubtitle.copyWith(
+                        fontFamily: 'Inter',
                         color: const Color(0xFFB42318),
                         fontWeight: FontWeight.w600,
                       ),
@@ -227,18 +377,25 @@ class _LoginScreenState extends State<LoginScreen> {
         child: SafeArea(
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
+              final bool compactWidth = constraints.maxWidth < 360;
+              final bool compactHeight = constraints.maxHeight < 720;
+              final bool keyboardVisible =
+                  _emailFocusNode.hasFocus ||
+                  _passwordFocusNode.hasFocus ||
+                  MediaQuery.viewInsetsOf(context).bottom > 0;
               return SingleChildScrollView(
+                controller: _scrollController,
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: EdgeInsets.fromLTRB(
+                  compactWidth ? 12 : 14,
+                  6,
+                  compactWidth ? 12 : 14,
                   20,
-                  8,
-                  20,
-                  24 + MediaQuery.viewInsetsOf(context).bottom,
                 ),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    minHeight: constraints.maxHeight - 32,
+                    minHeight: constraints.maxHeight - 26,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,36 +406,66 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: PulseClockColors.surface,
                         tooltip: 'Back',
                       ),
-                      const SizedBox(height: 10),
-                      Center(
-                        child: Column(
-                          children: <Widget>[
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(14),
-                              child: Image.asset(
-                                'assets/branding/workpulse_app_icon.png',
-                                width: 56,
-                                height: 56,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'WorkPulse',
-                              style: PulseClockTextStyles.headerTitle.copyWith(
-                                fontSize: 28,
-                              ),
-                            ),
-                          ],
-                        ),
+                      SizedBox(
+                        height: keyboardVisible
+                            ? 2
+                            : compactHeight
+                            ? 10
+                            : 38,
                       ),
-                      const SizedBox(height: 22),
+                      if (!keyboardVisible)
+                        Center(
+                          child: Column(
+                            children: <Widget>[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.asset(
+                                  'assets/branding/workpulse_app_icon.png',
+                                  width: 46,
+                                  height: 46,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'WorkPulse',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 25,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.35,
+                                  color: PulseClockColors.surface,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      SizedBox(
+                        height: keyboardVisible
+                            ? 6
+                            : compactHeight
+                            ? 14
+                            : 18,
+                      ),
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.all(22),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: compactWidth ? 14 : 16,
+                          vertical: keyboardVisible
+                              ? 14
+                              : compactHeight
+                              ? 18
+                              : 20,
+                        ),
                         decoration: BoxDecoration(
                           color: PulseClockColors.surface,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: PulseClockShadows.soft,
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: const <BoxShadow>[
+                            BoxShadow(
+                              color: Color(0x18000000),
+                              blurRadius: 18,
+                              offset: Offset(0, 8),
+                            ),
+                          ],
                         ),
                         child: AutofillGroup(
                           child: Form(
@@ -286,19 +473,32 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
-                                Text(
+                                const Text(
                                   'Welcome back',
-                                  style: PulseClockTextStyles.cardTitle
-                                      .copyWith(fontSize: 28),
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.12,
+                                    letterSpacing: -0.6,
+                                    color: PulseClockColors.textPrimary,
+                                  ),
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
+                                const SizedBox(height: 5),
+                                const Text(
                                   'Sign in with your organisation account.',
-                                  style: PulseClockTextStyles.cardSubtitle,
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w400,
+                                    height: 1.4,
+                                    color: PulseClockColors.textSecondary,
+                                  ),
                                 ),
-                                const SizedBox(height: 22),
+                                SizedBox(height: compactHeight ? 16 : 20),
                                 TextFormField(
                                   controller: _emailController,
+                                  focusNode: _emailFocusNode,
                                   enabled: !_isSubmitting,
                                   keyboardType: TextInputType.emailAddress,
                                   textInputAction: TextInputAction.next,
@@ -307,6 +507,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     AutofillHints.email,
                                   ],
                                   autocorrect: false,
+                                  style: _fieldTextStyle,
                                   validator: (String? value) =>
                                       _looksLikeEmail(value?.trim() ?? '')
                                       ? null
@@ -316,15 +517,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                     icon: Icons.mail_outline_rounded,
                                   ),
                                 ),
-                                const SizedBox(height: 14),
+                                const SizedBox(height: 12),
                                 TextFormField(
                                   controller: _passwordController,
+                                  focusNode: _passwordFocusNode,
                                   enabled: !_isSubmitting,
                                   obscureText: _obscurePassword,
                                   textInputAction: TextInputAction.done,
                                   autofillHints: const <String>[
                                     AutofillHints.password,
                                   ],
+                                  style: _fieldTextStyle,
                                   validator: (String? value) =>
                                       value == null || value.isEmpty
                                       ? 'Enter your password.'
@@ -347,45 +550,20 @@ class _LoginScreenState extends State<LoginScreen> {
                                             _obscurePassword
                                                 ? Icons.visibility_outlined
                                                 : Icons.visibility_off_outlined,
+                                            size: 20,
+                                            color: const Color(0xFF718096),
                                           ),
                                         ),
                                       ),
                                 ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: <Widget>[
-                                    Checkbox(
-                                      value: _rememberEmail,
-                                      onChanged: _isSubmitting
-                                          ? null
-                                          : (bool? value) => setState(
-                                              () => _rememberEmail =
-                                                  value ?? false,
-                                            ),
-                                      activeColor: PulseClockColors.actionBlue,
-                                    ),
-                                    Expanded(
-                                      child: GestureDetector(
-                                        onTap: _isSubmitting
-                                            ? null
-                                            : () => setState(
-                                                () => _rememberEmail =
-                                                    !_rememberEmail,
-                                              ),
-                                        child: Text(
-                                          'Remember my email',
-                                          style:
-                                              PulseClockTextStyles.cardSubtitle,
-                                        ),
-                                      ),
-                                    ),
-                                    TextButton(
-                                      onPressed: _isSubmitting
-                                          ? null
-                                          : _showForgotPassword,
-                                      child: const Text('Forgot password?'),
-                                    ),
-                                  ],
+                                const SizedBox(height: 6),
+                                _LoginOptions(
+                                  compact: compactWidth,
+                                  rememberEmail: _rememberEmail,
+                                  enabled: !_isSubmitting,
+                                  onRememberChanged: (bool value) =>
+                                      setState(() => _rememberEmail = value),
+                                  onForgotPassword: _showForgotPassword,
                                 ),
                                 if (_errorMessage != null) ...<Widget>[
                                   const SizedBox(height: 4),
@@ -400,15 +578,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                       _errorMessage!,
                                       style: PulseClockTextStyles.cardSubtitle
                                           .copyWith(
+                                            fontFamily: 'Inter',
                                             color: const Color(0xFFB42318),
                                             fontWeight: FontWeight.w600,
                                           ),
                                     ),
                                   ),
                                 ],
-                                const SizedBox(height: 14),
+                                const SizedBox(height: 12),
                                 SizedBox(
                                   width: double.infinity,
+                                  height: 50,
                                   child: ElevatedButton(
                                     onPressed: _isSubmitting ? null : _login,
                                     style: ElevatedButton.styleFrom(
@@ -418,17 +598,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                       disabledBackgroundColor: PulseClockColors
                                           .actionBlue
                                           .withValues(alpha: 0.55),
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 15,
+                                      elevation: 0,
+                                      textStyle: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                      textStyle: PulseClockTextStyles
-                                          .contextAction
-                                          .copyWith(
-                                            color: PulseClockColors.surface,
-                                            fontSize: 17,
-                                          ),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
+                                        borderRadius: BorderRadius.circular(11),
                                       ),
                                     ),
                                     child: _isSubmitting
@@ -448,12 +625,16 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 14),
                       Center(
-                        child: Text(
+                        child: const Text(
                           'Need access? Contact your HR team.',
-                          style: PulseClockTextStyles.headerSubtitle.copyWith(
+                          style: TextStyle(
+                            fontFamily: 'Inter',
                             fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            height: 1.35,
+                            color: Color(0xFFC9CED8),
                           ),
                         ),
                       ),
@@ -474,27 +655,60 @@ class _LoginScreenState extends State<LoginScreen> {
   }) {
     return InputDecoration(
       labelText: label,
-      prefixIcon: Icon(icon),
+      prefixIcon: Icon(icon, size: 20, color: const Color(0xFF718096)),
+      prefixIconConstraints: const BoxConstraints(minWidth: 46),
       filled: true,
-      fillColor: PulseClockColors.surfaceMuted,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+      fillColor: const Color(0xFFF8FAFC),
+      labelStyle: const TextStyle(
+        fontFamily: 'Inter',
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+        color: PulseClockColors.textSecondary,
+      ),
+      floatingLabelStyle: const TextStyle(
+        fontFamily: 'Inter',
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: PulseClockColors.actionBlue,
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: PulseClockColors.cardBorder),
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFD7DEE8)),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: PulseClockColors.cardBorder),
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFD7DEE8)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         borderSide: const BorderSide(
           color: PulseClockColors.actionBlue,
           width: 1.4,
         ),
       ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFD92D20)),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFD92D20), width: 1.4),
+      ),
+      errorStyle: const TextStyle(
+        fontFamily: 'Inter',
+        fontSize: 12,
+        fontWeight: FontWeight.w400,
+      ),
     );
   }
+
+  static const TextStyle _fieldTextStyle = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 15,
+    fontWeight: FontWeight.w400,
+    color: PulseClockColors.textPrimary,
+  );
 
   bool _looksLikeEmail(String value) {
     return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value);
