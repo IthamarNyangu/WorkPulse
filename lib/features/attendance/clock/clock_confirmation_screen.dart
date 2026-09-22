@@ -11,7 +11,6 @@ import 'package:pulseclock/features/attendance/location/workpulse_location_servi
 import 'package:pulseclock/pulseclock/models/pulse_clock_models.dart';
 import 'package:pulseclock/pulseclock/styles.dart';
 import 'package:pulseclock/pulseclock/utils/pulse_clock_formatters.dart';
-import 'package:pulseclock/pulseclock/widgets/pulse_clock_widgets.dart';
 
 class ClockConfirmationScreen extends StatefulWidget {
   const ClockConfirmationScreen({super.key, required this.mode});
@@ -335,7 +334,15 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
       resizeToAvoidBottomInset: true,
       backgroundColor: PulseClockColors.appBackgroundSolid,
       appBar: AppBar(
-        title: Text(widget.mode.title),
+        title: Text(
+          widget.mode.title,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 23,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -0.3,
+          ),
+        ),
         backgroundColor: PulseClockColors.surface,
         foregroundColor: PulseClockColors.textPrimary,
         surfaceTintColor: Colors.transparent,
@@ -362,9 +369,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
 
               return SingleChildScrollView(
                 controller: _scrollController,
-                physics: isKeyboardOpen
-                    ? const ClampingScrollPhysics()
-                    : const NeverScrollableScrollPhysics(),
+                physics: const ClampingScrollPhysics(),
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.manual,
                 padding: EdgeInsets.only(bottom: isKeyboardOpen ? 16 : 0),
@@ -373,7 +378,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(
                       PulseClockDimensions.horizontalPadding,
-                      22,
+                      18,
                       PulseClockDimensions.horizontalPadding,
                       12,
                     ),
@@ -381,7 +386,7 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         ConfirmationDateTimeHeader(now: now),
-                        const SizedBox(height: 22),
+                        const SizedBox(height: 18),
                         ClockMapPlaceholderCard(
                           result: _locationResult,
                           isLoading: _isLoadingLocation,
@@ -392,16 +397,19 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
                           _LocationRequiredNotice(mode: widget.mode),
                         ],
                         const SizedBox(height: 10),
-                        SurfaceCard(
+                        Container(
                           key: _commentCardKey,
-                          padding: const EdgeInsets.all(14),
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Comment (Optional)',
-                                style: PulseClockTextStyles.cardTitle.copyWith(
-                                  fontSize: 18,
+                                'Comment (optional)',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: PulseClockColors.onBackgroundPrimary,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -418,27 +426,34 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
                                   hintText:
                                       'Add a note for this attendance action',
                                   hintStyle: const TextStyle(
+                                    fontFamily: 'Inter',
                                     color: PulseClockColors.textSecondary,
+                                    fontSize: 14,
                                   ),
                                   filled: true,
                                   fillColor: PulseClockColors.surfaceMuted,
-                                  contentPadding: const EdgeInsets.all(12),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 12,
+                                  ),
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(10),
                                     borderSide: const BorderSide(
                                       color: PulseClockColors.cardBorder,
                                     ),
                                   ),
                                   enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(10),
                                     borderSide: const BorderSide(
                                       color: PulseClockColors.cardBorder,
                                     ),
                                   ),
                                   focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(10),
                                     borderSide: BorderSide(
-                                      color: widget.mode.color,
+                                      color: _confirmationActionColor(
+                                        widget.mode,
+                                      ),
                                       width: 1.4,
                                     ),
                                   ),
@@ -447,30 +462,36 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
                             ],
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
                             onPressed: _canConfirm ? _confirm : null,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: widget.mode.color,
+                              backgroundColor: _confirmationActionColor(
+                                widget.mode,
+                              ),
                               foregroundColor: PulseClockColors.surface,
                               disabledBackgroundColor: _hasRequiredLocation
-                                  ? widget.mode.color.withOpacity(0.65)
-                                  : PulseClockColors.textSecondary.withOpacity(
-                                      0.35,
+                                  ? _confirmationActionColor(
+                                      widget.mode,
+                                    ).withValues(alpha: 0.65)
+                                  : PulseClockColors.textSecondary.withValues(
+                                      alpha: 0.35,
                                     ),
                               disabledForegroundColor: PulseClockColors.surface,
                               textStyle: PulseClockTextStyles.primaryAction
-                                  .copyWith(fontSize: 18),
+                                  .copyWith(
+                                    fontFamily: 'Inter',
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                               padding: const EdgeInsets.symmetric(
-                                vertical: 13,
+                                vertical: 12,
                                 horizontal: 18,
                               ),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  PulseClockDimensions.cardRadius,
-                                ),
+                                borderRadius: BorderRadius.circular(14),
                               ),
                             ),
                             child: _ConfirmButtonContent(
@@ -479,32 +500,31 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
                             ),
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         SizedBox(
                           width: double.infinity,
-                          child: OutlinedButton(
+                          child: TextButton(
                             onPressed: _isSubmitting
                                 ? null
                                 : () => Navigator.of(context).pop(),
-                            style: OutlinedButton.styleFrom(
+                            style: TextButton.styleFrom(
                               foregroundColor:
                                   PulseClockColors.onBackgroundPrimary,
                               backgroundColor: const Color(0x22000000),
-                              side: BorderSide.none,
                               disabledForegroundColor: PulseClockColors
                                   .onBackgroundSecondary
-                                  .withOpacity(0.75),
+                                  .withValues(alpha: 0.75),
                               disabledBackgroundColor: const Color(0x16000000),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              padding: const EdgeInsets.symmetric(vertical: 9),
                               textStyle: PulseClockTextStyles.contextAction
                                   .copyWith(
                                     color: PulseClockColors.onBackgroundPrimary,
-                                    fontSize: 15,
+                                    fontFamily: 'Inter',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
                                   ),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  PulseClockDimensions.cardRadius,
-                                ),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                             ),
                             child: const Text('Cancel'),
@@ -521,6 +541,12 @@ class _ClockConfirmationScreenState extends State<ClockConfirmationScreen>
       ),
     );
   }
+}
+
+Color _confirmationActionColor(ClockActionMode mode) {
+  return mode == ClockActionMode.clockIn
+      ? PulseClockColors.statusOnDutyAccent
+      : const Color(0xFFC81E3A);
 }
 
 String _friendlyPostgrestError(PostgrestException error) {
@@ -540,18 +566,33 @@ class _LocationRequiredNotice extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
       decoration: BoxDecoration(
-        color: PulseClockColors.statusMissedBg.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(12),
+        color: PulseClockColors.statusMissedBg.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        'Location is required before you can ${mode.confirmLabel.toLowerCase()}. Turn on phone location, then tap Retry.',
-        style: PulseClockTextStyles.cardSubtitle.copyWith(
-          color: PulseClockColors.statusMissedAccent,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-        ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.location_off_outlined,
+            size: 17,
+            color: PulseClockColors.statusMissedAccent,
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              'Location is required before you can ${mode.confirmLabel.toLowerCase()}. Turn on phone location, then tap Retry.',
+              style: PulseClockTextStyles.cardSubtitle.copyWith(
+                fontFamily: 'Inter',
+                color: PulseClockColors.statusMissedAccent,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -583,8 +624,8 @@ class _ConfirmButtonContent extends StatelessWidget {
             ),
           )
         else
-          Icon(mode.icon, size: 24),
-        const SizedBox(width: 10),
+          Icon(mode.icon, size: 21),
+        const SizedBox(width: 8),
         Text(mode.confirmLabel),
       ],
     );
@@ -603,18 +644,24 @@ class ConfirmationDateTimeHeader extends StatelessWidget {
         children: [
           Text(
             timeLabel(now),
-            style: PulseClockTextStyles.timeOnBackground.copyWith(
-              fontSize: 31,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 40,
+              fontWeight: FontWeight.w700,
+              height: 1.05,
               color: PulseClockColors.onBackgroundPrimary,
-              letterSpacing: -0.6,
+              letterSpacing: -1.1,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
             fullDateLabel(now),
-            style: PulseClockTextStyles.weekdayOnBackground.copyWith(
+            style: const TextStyle(
+              fontFamily: 'Inter',
               color: PulseClockColors.onBackgroundPrimary,
-              fontSize: 15,
+              fontSize: 17,
+              fontWeight: FontWeight.w500,
+              height: 1.25,
             ),
           ),
         ],
@@ -643,44 +690,51 @@ class ClockMapPlaceholderCard extends StatelessWidget {
         ? _locationStatusColor(snapshot.status)
         : PulseClockColors.statusPendingAccent;
 
-    return SurfaceCard(
-      padding: const EdgeInsets.all(8),
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCFDFE),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: PulseClockColors.cardBorder, width: 1),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(
-                'Location Verification',
-                style: PulseClockTextStyles.cardSubtitle.copyWith(
-                  color: PulseClockColors.textSecondary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+              const Expanded(
+                child: Text(
+                  'Location Verification',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: PulseClockColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               if (!isLoading && onRetry != null)
-                OutlinedButton.icon(
+                TextButton.icon(
                   onPressed: onRetry,
                   icon: const Icon(Icons.refresh_rounded, size: 16),
                   label: const Text('Retry'),
-                  style: OutlinedButton.styleFrom(
+                  style: TextButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
                       vertical: 4,
                     ),
                     foregroundColor: PulseClockColors.actionBlue,
-                    side: const BorderSide(
-                      color: PulseClockColors.actionBlue,
-                      width: 1,
-                    ),
                     textStyle: PulseClockTextStyles.cardSubtitle.copyWith(
+                      fontFamily: 'Inter',
                       fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
                 ),
@@ -695,21 +749,38 @@ class ClockMapPlaceholderCard extends StatelessWidget {
           const SizedBox(height: 10),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
+              color: statusColor.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Text(
-              hasLocation
-                  ? _locationStatusMessage(snapshot)
-                  : (result?.message ??
-                        'GPS status will be attached when available.'),
-              style: PulseClockTextStyles.cardSubtitle.copyWith(
-                color: statusColor,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  hasLocation && snapshot.isInsideGeofence
+                      ? Icons.check_circle_outline_rounded
+                      : Icons.info_outline_rounded,
+                  size: 17,
+                  color: statusColor,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    hasLocation
+                        ? _locationStatusMessage(snapshot)
+                        : (result?.message ??
+                              'GPS status will be attached when available.'),
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: statusColor,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 13,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -738,7 +809,7 @@ class _MapPreview extends StatelessWidget {
         : LatLng(latitude, longitude);
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(7),
+      borderRadius: BorderRadius.circular(9),
       child: Container(
         height: 154,
         color: PulseClockColors.surfaceMuted,
@@ -771,9 +842,11 @@ class _MapPreview extends StatelessWidget {
                               .clamp(8.0, 100.0)
                               .toDouble(),
                           useRadiusInMeter: true,
-                          color: PulseClockColors.actionBlue.withOpacity(0.12),
-                          borderColor: PulseClockColors.actionBlue.withOpacity(
-                            0.42,
+                          color: PulseClockColors.actionBlue.withValues(
+                            alpha: 0.12,
+                          ),
+                          borderColor: PulseClockColors.actionBlue.withValues(
+                            alpha: 0.42,
                           ),
                           borderStrokeWidth: 1.2,
                         ),
@@ -805,7 +878,7 @@ class _MapPreview extends StatelessWidget {
             if (isLoading)
               Positioned.fill(
                 child: ColoredBox(
-                  color: PulseClockColors.surface.withOpacity(0.62),
+                  color: PulseClockColors.surface.withValues(alpha: 0.62),
                   child: const Center(
                     child: SizedBox(
                       width: 28,
@@ -821,7 +894,7 @@ class _MapPreview extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                 decoration: BoxDecoration(
-                  color: PulseClockColors.surface.withOpacity(0.85),
+                  color: PulseClockColors.surface.withValues(alpha: 0.85),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
@@ -843,7 +916,7 @@ class _MapPreview extends StatelessWidget {
                     horizontal: 6,
                     vertical: 3,
                   ),
-                  color: PulseClockColors.surface.withOpacity(0.82),
+                  color: PulseClockColors.surface.withValues(alpha: 0.82),
                   child: Text(
                     '(c) OpenStreetMap contributors',
                     style: PulseClockTextStyles.cardSubtitle.copyWith(

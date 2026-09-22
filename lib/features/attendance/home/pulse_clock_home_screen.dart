@@ -514,7 +514,7 @@ class HomeTabContent extends StatelessWidget {
                 ),
                 SizedBox(height: compactHeight ? 24 : 32),
                 LiveTimeSection(now: now),
-                SizedBox(height: compactHeight ? 14 : 18),
+                SizedBox(height: compactHeight ? 26 : 32),
                 StatusCardSection(model: statusCard),
                 if (primaryAction != null) ...<Widget>[
                   const SizedBox(height: 12),
