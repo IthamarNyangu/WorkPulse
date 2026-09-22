@@ -161,29 +161,24 @@ class _NotificationPreferencesScreenState
     }
   }
 
-  String get _smartLocationStatus {
-    if (_preferences?.smartLocationEnabled != true) {
-      return 'Off. No background geofences are registered.';
-    }
-    if (_reminders.backgroundLocationPermissionRequired) {
-      return 'Android background location permission is required.';
-    }
-    if (_reminders.backgroundLocationReady) {
-      final int offices = _reminders.registeredBackgroundOffices;
-      return 'Active for $offices approved ${offices == 1 ? 'office' : 'offices'}.';
-    }
-    return 'Preparing smart location reminders...';
-  }
-
   @override
   Widget build(BuildContext context) {
     final NotificationPreferences? preferences = _preferences;
     return Scaffold(
       backgroundColor: PulseClockColors.appBackgroundSolid,
       appBar: AppBar(
-        title: const Text('Notification Settings'),
+        title: const Text(
+          'Notification Settings',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 23,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -0.3,
+          ),
+        ),
         backgroundColor: PulseClockColors.surface,
         foregroundColor: PulseClockColors.textPrimary,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),
       body: Container(
@@ -205,108 +200,133 @@ class _NotificationPreferencesScreenState
                       ? const CircularProgressIndicator(color: Colors.white)
                       : _LoadError(message: _error!, onRetry: _load),
                 )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-                      child: Text(
-                        'Choose how WorkPulse reminds you.',
-                        style: PulseClockTextStyles.headerSubtitle,
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+                        child: const Text(
+                          'Choose how WorkPulse reminds you.',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: PulseClockColors.onBackgroundSecondary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w400,
+                            height: 1.35,
+                          ),
+                        ),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: SurfaceCard(
-                        padding: EdgeInsets.zero,
-                        borderRadius: 14,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                          _PreferenceSwitch(
-                            icon: Icons.schedule_rounded,
-                            title: 'Basic Attendance Reminders',
-                            subtitle:
-                                'Scheduled Clock In, Clock Out, and missed attendance reminders.',
-                            value: preferences.basicAttendanceEnabled,
-                            enabled: !_saving,
-                            onChanged: (bool value) => _save(
-                              preferences.copyWith(
-                                basicAttendanceEnabled: value,
-                              ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFCFDFE),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: PulseClockColors.cardBorder,
                             ),
                           ),
-                          const Divider(height: 1),
-                          _PreferenceSwitch(
-                            icon: Icons.location_on_outlined,
-                            title: 'Smart Location Reminders',
-                            subtitle: _smartLocationStatus,
-                            value: preferences.smartLocationEnabled,
-                            enabled: !_saving,
-                            onChanged: _enableSmartLocation,
-                          ),
-                          if (preferences.smartLocationEnabled &&
-                              _reminders
-                                  .backgroundLocationPermissionRequired) ...<
-                            Widget
-                          >[
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(60, 0, 16, 8),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: OutlinedButton(
-                                  onPressed:
-                                      _reminders.openBackgroundLocationSettings,
-                                  child: const Text('Open Android Settings'),
+                          clipBehavior: Clip.antiAlias,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              NotificationPreferenceRow(
+                                icon: Icons.schedule_outlined,
+                                title: 'Basic Attendance Reminders',
+                                subtitle:
+                                    'Clock in, clock out and missed attendance reminders.',
+                                value: preferences.basicAttendanceEnabled,
+                                enabled: !_saving,
+                                onChanged: (bool value) => _save(
+                                  preferences.copyWith(
+                                    basicAttendanceEnabled: value,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                          const Divider(height: 1),
-                          _PreferenceSwitch(
-                            icon: Icons.task_alt_rounded,
-                            title: 'Request Updates',
-                            subtitle:
-                                'Leave and attendance correction approval updates.',
-                            value: preferences.requestUpdatesEnabled,
-                            enabled: !_saving,
-                            onChanged: (bool value) => _save(
-                              preferences.copyWith(
-                                requestUpdatesEnabled: value,
+                              const _SettingsDivider(),
+                              NotificationPreferenceRow(
+                                icon: Icons.location_on_outlined,
+                                title: 'Smart Location Reminders',
+                                subtitle:
+                                    'Reminders for your approved work locations.',
+                                value: preferences.smartLocationEnabled,
+                                enabled: !_saving,
+                                onChanged: _enableSmartLocation,
                               ),
+                              if (preferences.smartLocationEnabled &&
+                                  _reminders
+                                      .backgroundLocationPermissionRequired) ...<
+                                Widget
+                              >[
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    60,
+                                    0,
+                                    16,
+                                    8,
+                                  ),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: OutlinedButton(
+                                      onPressed: _reminders
+                                          .openBackgroundLocationSettings,
+                                      child: const Text(
+                                        'Open Android Settings',
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              const _SettingsDivider(),
+                              NotificationPreferenceRow(
+                                icon: Icons.fact_check_outlined,
+                                title: 'Request Updates',
+                                subtitle:
+                                    'Leave and attendance correction updates.',
+                                value: preferences.requestUpdatesEnabled,
+                                enabled: !_saving,
+                                onChanged: (bool value) => _save(
+                                  preferences.copyWith(
+                                    requestUpdatesEnabled: value,
+                                  ),
+                                ),
+                              ),
+                              const _SettingsDivider(),
+                              NotificationPreferenceRow(
+                                icon:
+                                    preferences.pushEnabled &&
+                                        _osNotificationsEnabled
+                                    ? Icons.notifications_active_outlined
+                                    : Icons.notifications_outlined,
+                                title: 'Push Notifications',
+                                subtitle:
+                                    'Allow WorkPulse notifications on this device.',
+                                value: preferences.pushEnabled,
+                                enabled: !_saving,
+                                onChanged: (bool value) => _save(
+                                  preferences.copyWith(pushEnabled: value),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (_error != null) ...<Widget>[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                          child: Text(
+                            _error!,
+                            style: const TextStyle(
+                              color: PulseClockColors.onBackgroundPrimary,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const Divider(height: 1),
-                          _PreferenceSwitch(
-                            icon: Icons.notifications_outlined,
-                            title: 'Push Notifications',
-                            subtitle: preferences.pushEnabled
-                                ? (_osNotificationsEnabled
-                                      ? 'Push delivery is enabled, and Android allows notifications on this device.'
-                                      : 'Push delivery is enabled, but Android blocks notifications on this device.')
-                                : 'Off for your account. Reminders still appear under the WorkPulse bell.',
-                            value: preferences.pushEnabled,
-                            enabled: !_saving,
-                            onChanged: (bool value) =>
-                                _save(preferences.copyWith(pushEnabled: value)),
-                          ),
-                          ],
                         ),
-                      ),
-                    ),
-                    if (_error != null) ...<Widget>[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                        child: Text(
-                          _error!,
-                          style: const TextStyle(
-                            color: PulseClockColors.onBackgroundPrimary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
         ),
       ),
@@ -314,8 +334,9 @@ class _NotificationPreferencesScreenState
   }
 }
 
-class _PreferenceSwitch extends StatelessWidget {
-  const _PreferenceSwitch({
+class NotificationPreferenceRow extends StatelessWidget {
+  const NotificationPreferenceRow({
+    super.key,
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -335,35 +356,58 @@ class _PreferenceSwitch extends StatelessWidget {
   Widget build(BuildContext context) {
     return SwitchListTile.adaptive(
       dense: true,
-      visualDensity: const VisualDensity(vertical: -2),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+      visualDensity: const VisualDensity(vertical: -1),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       secondary: Container(
-        width: 36,
-        height: 36,
+        width: 32,
+        height: 32,
         decoration: BoxDecoration(
-          color: PulseClockColors.actionBlueSoft,
-          borderRadius: BorderRadius.circular(12),
+          color: PulseClockColors.actionBlue.withValues(alpha: 0.09),
+          borderRadius: BorderRadius.circular(9),
         ),
-        child: Icon(icon, color: PulseClockColors.actionBlue),
+        child: Icon(icon, color: PulseClockColors.actionBlue, size: 20),
       ),
       title: Text(
         title,
         style: const TextStyle(
+          fontFamily: 'Inter',
           color: PulseClockColors.textPrimary,
-          fontSize: 15,
-          fontWeight: FontWeight.w700,
+          fontSize: 15.5,
+          fontWeight: FontWeight.w600,
+          height: 1.25,
         ),
       ),
       subtitle: Padding(
         padding: const EdgeInsets.only(top: 2),
         child: Text(
           subtitle,
-          style: PulseClockTextStyles.cardSubtitle.copyWith(fontSize: 13),
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            color: PulseClockColors.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w400,
+            height: 1.35,
+          ),
         ),
       ),
       value: value,
       activeTrackColor: PulseClockColors.actionBlue,
       onChanged: enabled ? onChanged : null,
+    );
+  }
+}
+
+class _SettingsDivider extends StatelessWidget {
+  const _SettingsDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Divider(
+      height: 1,
+      thickness: 0.7,
+      indent: 60,
+      endIndent: 14,
+      color: Color(0xFFE7EAF0),
     );
   }
 }
